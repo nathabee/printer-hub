@@ -17,13 +17,14 @@ Initial Tools:
 * Java (planned)
 * Spring Boot (planned)
 * Arduino (future simulation work)
+ 
 
 
-* installation : 
-sudo apt install minicom
+## info 
 
+### info about screen
 
-* info about screen (universal tool but we do not use it , we use minicom)
+ (universal tool but we do not use it , we use minicom)
 
 sudo  apt install screen
 
@@ -45,6 +46,7 @@ Ctrl + A  then  Z   → show help
 ```
 
 Description :
+
 ```
 Ctrl + A
 then
