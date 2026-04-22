@@ -16,6 +16,11 @@ sudo apt install maven
 mvn --version
 java --version
 
+# make sure minicom is closed
+# verify the port is free:
+sudo lsof /dev/ttyUSB0
+
+ 
 # clean and compile
 mvn clean compile
 
@@ -23,9 +28,6 @@ mvn clean compile
 mvn compile
 
 
-# make sure minicom is closed
-# verify the port is free:
-sudo lsof /dev/ttyUSB0
 
 
 # exec

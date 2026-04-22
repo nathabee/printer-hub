@@ -119,15 +119,16 @@ Output:
 * `docs/interface-discovery.md`
 
 ---
-
-## Stage 2 — Basic Communication Layer
+ 
+## Stage 2 — Logging and Repeated Command Polling
 
 Goals:
 
-* Implement Java serial connection
-* Send G-code commands
-* Read responses
-* Implement command logging
+- Reuse the Java serial connection cleanly
+- Send repeated G-code commands
+- Read and display responses reliably
+- Add simple command/response logging with timestamps
+- Prepare a stable communication layer for later state modeling
 
 ---
 
@@ -232,5 +233,8 @@ M115   (Firmware info)
 # License
 
 Prototype / educational development.
+
+
+MIT License. See `LICENSE`.
  
  

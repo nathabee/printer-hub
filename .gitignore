@@ -1,0 +1,11 @@
+# Maven build output
+/target/
+
+# IDE
+.idea/
+.vscode/
+
+# OS / editor noise
+*.swp
+*~
+.DS_Store
