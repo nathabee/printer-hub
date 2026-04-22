@@ -1,36 +1,41 @@
+# install
 
+## prereauise
 
+### Jenkins CI machine
 
-Initial Tools:
-
-* `minicom` (serial communication testing)
-* Java (planned)
-* Spring Boot (planned)
-* Arduino (future simulation work)
-
-
-
-
-
-
-# dev 
-
+```bash
 sudo apt update
 sudo apt install maven
-sudo apt install minicom
-
 sudo apt install openjdk-21-jdk
+```
+
+Checks:
+
+```bash
+java -version
+mvn -version
+```
+
+### Developer machine
+
+```bash
+sudo apt update
+sudo apt install maven
+sudo apt install openjdk-21-jdk
+sudo apt install minicom
+```
 
 
 
-# all environments : dev + prod
-newgrp dialout
-groups
+### Only for real hardware access
 
+```bash
 sudo usermod -aG dialout $USER
-
-check :
-logout, reconnect :
+logout
 su - $USER
 groups
+```
 
+
+## jenkins

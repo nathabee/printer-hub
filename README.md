@@ -89,12 +89,12 @@ Operating System:
 * Ubuntu Linux
 
 Initial Tools:
-
-* `screen` (serial communication testing)
-* Java (planned)
-* Spring Boot (planned)
+* minicom (manual serial communication testing)
+* Java (implemented)
+* Maven (build and test)
+* Jenkins (CI automation)
+* Spring Boot (future API layer)
 * Arduino (future simulation work)
-
 
 
 ---
@@ -103,90 +103,20 @@ Initial Tools:
 
 ✔ USB communication detected
 ✔ Serial device available (`/dev/ttyUSB0`)
-⬜ First command exchange
-⬜ Firmware identification
-⬜ Java serial interface
+✔ First command exchange
+✔ Firmware identification
+✔ Java serial interface
 ⬜ REST control layer
 
----
 
-# Planned Development Stages
-
-## Stage 1 — Interface Discovery
-
-Goals:
-
-* Identify serial interface
-* Read printer responses
-* Document supported commands
-* Verify firmware behavior
-
-Output:
-
-* `docs/interface-discovery.md`
-
----
+see [ROADMAP](docs/roadmap.md)
+see [VERSION](docs/version.md)
  
-## Stage 2 — Logging and Repeated Command Polling
 
-Goals:
 
-- Reuse the Java serial connection cleanly
-- Send repeated G-code commands
-- Read and display responses reliably
-- Add simple command/response logging with timestamps
-- Prepare a stable communication layer for later state modeling
 
 ---
 
-## Stage 3 — Printer State Model
-
-Goals:
-
-* Define printer states
-* Implement state transitions
-* Validate command sequences
-
-Example states:
-
-```
-DISCONNECTED
-IDLE
-PRINTING
-PAUSED
-ERROR
-```
-
----
-
-## Stage 4 — Remote API Layer
-
-Goals:
-
-* Provide REST endpoints
-* Enable remote control
-* Expose printer status
-
-Example endpoints:
-
-```
-GET  /printer/status
-POST /printer/start
-POST /printer/pause
-POST /printer/stop
-```
-
----
-
-## Stage 5 — Hardware Simulation (Arduino)
-
-Goals:
-
-* Simulate printer responses
-* Test failure conditions
-* Validate robustness
-
----
 
 # Why This Project Matters
 
@@ -213,7 +143,7 @@ printer-hub/
 │   └── interface-discovery.md
 │
 ├── src/
-│   └── (future Java implementation)
+│   └── Java implementation
 │
 └── scripts/
     └── (future helper tools)
