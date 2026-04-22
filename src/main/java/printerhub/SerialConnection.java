@@ -10,23 +10,30 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeoutException;
 
-public class SerialConnection {
+public class SerialConnection implements PrinterPort {
 
-    private static final int BAUD_RATE = 115200;
     private static final int READ_TIMEOUT_MS = 2000;
     private static final int QUIET_PERIOD_MS = 200;
     private static final DateTimeFormatter TS_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private final String portName;
+    private final int baudRate;
+
     private SerialPort port;
     private InputStream in;
     private OutputStream out;
 
-    public void connect(String portName) throws IOException {
+    public SerialConnection(String portName, int baudRate) {
         if (portName == null || portName.isBlank()) {
             throw new IllegalArgumentException("portName must not be blank");
         }
+        this.portName = portName;
+        this.baudRate = baudRate;
+    }
 
+    @Override
+    public boolean connect() throws IOException {
         if (isConnected()) {
             throw new IllegalStateException(
                     "Connection already open on port " + port.getSystemPortName()
@@ -35,7 +42,7 @@ public class SerialConnection {
 
         port = SerialPort.getCommPort(portName);
 
-        port.setBaudRate(BAUD_RATE);
+        port.setBaudRate(baudRate);
         port.setNumDataBits(8);
         port.setNumStopBits(SerialPort.ONE_STOP_BIT);
         port.setParity(SerialPort.NO_PARITY);
@@ -62,8 +69,10 @@ public class SerialConnection {
         }
 
         logInfo("Connected to " + portName);
+        return true;
     }
 
+    @Override
     public void sendCommand(String command) throws IOException {
         ensureConnected();
 
@@ -85,8 +94,9 @@ public class SerialConnection {
             );
         }
     }
-
-    public String readResponse() throws IOException, TimeoutException, InterruptedException {
+ 
+    @Override
+    public String readLine() throws IOException, TimeoutException, InterruptedException {
         ensureConnected();
 
         StringBuilder response = new StringBuilder();
@@ -136,6 +146,7 @@ public class SerialConnection {
         return cleaned;
     }
 
+    @Override
     public void disconnect() {
         closeQuietly(in, "input stream");
         in = null;
@@ -145,10 +156,11 @@ public class SerialConnection {
 
         if (port != null) {
             try {
-                if (port.isOpen() && !port.closePort()) {
-                    logError("Failed to close serial port " + port.getSystemPortName());
-                } else if (port.isOpen()) {
-                    logInfo("Disconnected.");
+                String currentPortName = port.getSystemPortName();
+                boolean wasOpen = port.isOpen();
+
+                if (wasOpen && !port.closePort()) {
+                    logError("Failed to close serial port " + currentPortName);
                 } else {
                     logInfo("Disconnected.");
                 }
@@ -158,6 +170,11 @@ public class SerialConnection {
                 port = null;
             }
         }
+    }
+
+    @Override
+    public String getPortName() {
+        return portName;
     }
 
     public boolean isConnected() {

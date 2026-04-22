@@ -1,11 +1,15 @@
 package printerhub;
 
+import java.io.IOException;
+import java.util.concurrent.TimeoutException;
+
 public class Main {
 
     private static final String DEFAULT_PORT = "/dev/ttyUSB0";
     private static final String DEFAULT_COMMAND = "M105";
     private static final int DEFAULT_REPEAT_COUNT = 3;
     private static final long DEFAULT_DELAY_MS = 2000L;
+    private static final int DEFAULT_BAUD_RATE = 115200;
 
     public static void main(String[] args) {
         String portName = DEFAULT_PORT;
@@ -32,7 +36,9 @@ public class Main {
 
             validateInputs(portName, command, repeatCount, delayMs);
 
-            runPolling(portName, command, repeatCount, delayMs);
+            PrinterPort port = new SerialConnection(portName, DEFAULT_BAUD_RATE);
+            PrinterPoller poller = new PrinterPoller(port, 2000L, delayMs);
+            poller.runPolling(repeatCount, command);
 
         } catch (IllegalArgumentException e) {
             System.err.println("[ERROR] Invalid input: " + e.getMessage());
@@ -44,45 +50,19 @@ public class Main {
             System.err.println("[ERROR] Program interrupted: " + e.getMessage());
             System.exit(3);
 
+        } catch (TimeoutException e) {
+            System.err.println("[ERROR] Printer timeout: " + e.getMessage());
+            System.exit(4);
+
+        } catch (IOException e) {
+            System.err.println("[ERROR] Unexpected failure: " + e.getMessage());
+            e.printStackTrace(System.err);
+            System.exit(1);
+
         } catch (Exception e) {
             System.err.println("[ERROR] Unexpected failure: " + e.getMessage());
             e.printStackTrace(System.err);
             System.exit(1);
-        }
-    }
-
-    private static void runPolling(String portName,
-                                   String command,
-                                   int repeatCount,
-                                   long delayMs) throws Exception {
-
-        SerialConnection serial = new SerialConnection();
-
-        try {
-            serial.connect(portName);
-
-            System.out.println("[INFO] Waiting 2 seconds for printer initialization...");
-            Thread.sleep(2000);
-
-            for (int i = 1; i <= repeatCount; i++) {
-                System.out.println("---- Poll " + i + " of " + repeatCount + " ----");
-
-                serial.sendCommand(command);
-                String response = serial.readResponse();
-
-                if (response == null || response.isBlank()) {
-                    System.err.println(
-                            "[WARN] No response received for command '" + command + "'."
-                    );
-                }
-
-                if (i < repeatCount) {
-                    Thread.sleep(delayMs);
-                }
-            }
-
-        } finally {
-            serial.disconnect();
         }
     }
 
