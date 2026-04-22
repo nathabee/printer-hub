@@ -57,21 +57,64 @@ sudo lsof /dev/ttyUSB0
 
 ### compile and run all
   
+```
 mvn clean compile
 mvn exec:java
 
+```
 
 
 ###  clean and compile and exec
 
+
+```
 mvn clean compile 
 mvn exec:java -Dexec.mainClass="printerhub.Main"
 
-
+```
 
 ### compile and run test
+
+
+```
 mvn clean compile
 mvn test 
+
+```
+
+
+
+### coverage test
+
+
+```
+mvn clean verify
+
+# check outpu on Ubuntu :
+
+xdg-open target/site/jacoco/index.html
+
+
+```
+
+
+### before a commit in github
+
+
+```
+ 
+mvn clean verify
+
+# check outpu on Ubuntu :
+
+xdg-open target/site/jacoco/index.html
+
+
+# If you changed hardware/runtime behavior too
+ 
+mvn exec:java -Dexec.mainClass="printerhub.Main"
+
+
 
 
 ```

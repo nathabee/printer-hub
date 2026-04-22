@@ -1,0 +1,79 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">PrinterHub bee icon</title>
+  <desc id="desc">A geometric bee icon with a stylized 3D printer symbol inside the abdomen.</desc>
+
+  <rect width="512" height="512" fill="none"/>
+
+  <!-- Wings -->
+  <ellipse cx="155" cy="195" rx="68" ry="92" transform="rotate(-34 155 195)" fill="#DDEAFE"/>
+  <ellipse cx="357" cy="195" rx="68" ry="92" transform="rotate(34 357 195)" fill="#DDEAFE"/>
+
+  <!-- Antennae -->
+  <path d="M228 92 C210 58, 188 52, 170 68" fill="none" stroke="#1F2937" stroke-width="12" stroke-linecap="round"/>
+  <path d="M284 92 C302 58, 324 52, 342 68" fill="none" stroke="#1F2937" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="165" cy="70" r="10" fill="#1F2937"/>
+  <circle cx="347" cy="70" r="10" fill="#1F2937"/>
+
+  <!-- Head -->
+  <circle cx="256" cy="136" r="42" fill="#1F2937"/>
+
+  <!-- Thorax -->
+  <ellipse cx="256" cy="220" rx="62" ry="54" fill="#F59E0B"/>
+
+  <!-- Abdomen outer -->
+  <path
+    d="M256 208
+       C332 208, 386 270, 386 344
+       C386 420, 330 470, 256 470
+       C182 470, 126 420, 126 344
+       C126 270, 180 208, 256 208 Z"
+    fill="#1F2937"/>
+
+  <!-- Abdomen inner -->
+  <path
+    d="M256 232
+       C318 232, 362 282, 362 344
+       C362 408, 316 446, 256 446
+       C196 446, 150 408, 150 344
+       C150 282, 194 232, 256 232 Z"
+    fill="#F59E0B"/>
+
+  <!-- Top and bottom stripes -->
+  <rect x="166" y="248" width="180" height="14" rx="7" fill="#1F2937"/>
+  <rect x="166" y="406" width="180" height="14" rx="7" fill="#1F2937"/>
+
+  <!-- Printer window -->
+  <rect x="182" y="272" width="148" height="114" rx="18" fill="#F8FAFC" stroke="#1F2937" stroke-width="8"/>
+
+  <!-- Printer frame -->
+  <rect x="210" y="294" width="92" height="66" rx="8" fill="none" stroke="#1F2937" stroke-width="6"/>
+
+  <!-- Top rail -->
+  <line x1="210" y1="304" x2="302" y2="304" stroke="#1F2937" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Vertical rails -->
+  <line x1="220" y1="304" x2="220" y2="360" stroke="#1F2937" stroke-width="5" stroke-linecap="round"/>
+  <line x1="292" y1="304" x2="292" y2="360" stroke="#1F2937" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Nozzle carriage -->
+  <rect x="245" y="304" width="22" height="14" rx="4" fill="#7C3AED"/>
+  <line x1="256" y1="318" x2="256" y2="334" stroke="#7C3AED" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Printed object -->
+  <rect x="238" y="334" width="36" height="20" rx="4" fill="#F59E0B" stroke="#1F2937" stroke-width="4"/>
+
+  <!-- Print bed -->
+  <line x1="224" y1="360" x2="288" y2="360" stroke="#1F2937" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Small status indicators -->
+  <circle cx="202" cy="286" r="4" fill="#7C3AED"/>
+  <circle cx="216" cy="286" r="4" fill="#7C3AED"/>
+  <circle cx="230" cy="286" r="4" fill="#7C3AED"/>
+
+  <!-- USB / serial hint -->
+  <path d="M318 318 C332 318, 338 326, 338 338 C338 350, 332 358, 318 358" fill="none" stroke="#1F2937" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="344" cy="338" r="5" fill="#1F2937"/>
+
+  <!-- Stinger -->
+  <path d="M256 470 L276 500 L236 500 Z" fill="#1F2937"/>
+</svg>

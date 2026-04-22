@@ -1,4 +1,11 @@
+<p align="center">
+  <img src="docs/assets/media/banner-1544x500.png" alt="PrinterHub banner">
+</p>
+
+
 # PrinterHub
+
+
 
 **PrinterHub** is a Java-based prototype for controlling and monitoring networked 3D printers.
 

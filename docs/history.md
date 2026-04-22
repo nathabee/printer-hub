@@ -35,6 +35,16 @@ Deliverables:
 
 **JaCoCo coverage**
 
+* Added JaCoCo Maven plugin
+* Generated local HTML coverage report
+* Verified coverage on PrinterPoller
+* Identified lower-coverage areas such as Main and hardware-specific SerialConnection
+
+result :
+- Added JaCoCo Maven plugin and generated HTML coverage report.
+- Current coverage baseline is low (12% instructions, 16% branches), with meaningful coverage mainly on PrinterPoller.
+- Main and SerialConnection remain low-coverage areas for future improvement.
+
 
 ### 0.0.6
 
