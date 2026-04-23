@@ -1,19 +1,20 @@
-/*
-File: src/test/java/printerhub/serial/FakeSerialPortAdapter.java
-
-Purpose:
-
-lets SerialConnection run almost unchanged
-simulates low-level serial behavior 
- */
-
-
 package printerhub.serial;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+
+/*
+File: src/main/java/printerhub/serial/SimulatedSerialPortAdapter.java
+
+Purpose:
+
+Runtime simulation adapter for hardware-independent execution.
+Provides built-in default responses for common printer commands,
+while still allowing system-property overrides for tests or demos.
+*/
 
 public class SimulatedSerialPortAdapter implements SerialPortAdapter {
 
@@ -117,11 +118,34 @@ public class SimulatedSerialPortAdapter implements SerialPortAdapter {
         }
 
         if (response == null) {
+            response = defaultResponseFor(command);
+        }
+
+        if (response == null || response.isBlank()) {
             inputStream.clear();
             return;
         }
 
-        inputStream.setResponse(response + System.lineSeparator());
+        inputStream.setResponse(ensureLineTerminated(response));
+    }
+
+    private String defaultResponseFor(String command) {
+        String normalized = command.trim().toUpperCase(Locale.ROOT);
+
+        return switch (normalized) {
+            case "M105" -> "ok T:21.80 /0.00 B:21.52 /0.00 @:0 B@:0";
+            case "M114" -> "X:0.00 Y:0.00 Z:0.00 E:0.00 Count X:0 Y:0 Z:0";
+            case "M115" -> "FIRMWARE_NAME:Marlin SIMULATED SOURCE_CODE_URL:https://marlinfw.org "
+                    + "PROTOCOL_VERSION:1.0 MACHINE_TYPE:Ender-3 V2 Neo EXTRUDER_COUNT:1";
+            default -> "ok";
+        };
+    }
+
+    private String ensureLineTerminated(String response) {
+        if (response.endsWith("\n")) {
+            return response;
+        }
+        return response + System.lineSeparator();
     }
 
     private final class ScriptedOutputStream extends OutputStream {

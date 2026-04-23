@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        string(
+            name: 'JAVA_HOME_OVERRIDE',
+            defaultValue: '',
+            description: 'Optional JAVA_HOME override. Leave empty to use the agent default.'
+        )
+    }
+
     options {
         timestamps()
         disableConcurrentBuilds()
@@ -12,28 +20,39 @@ pipeline {
     }
 
     stages {
+        stage('Environment') {
+            steps {
+                script {
+                    if (params.JAVA_HOME_OVERRIDE?.trim()) {
+                        env.JAVA_HOME = params.JAVA_HOME_OVERRIDE.trim()
+                        env.PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
+                    }
+                }
+
+                sh 'echo "JAVA_HOME=${JAVA_HOME:-<not-set>}"'
+                sh 'which java || true'
+                sh 'which javac || true'
+                sh 'java -version'
+                sh 'javac -version'
+                sh 'mvn -version'
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Environment') {
-            steps {
-                sh 'java -version'
-                sh 'mvn -version'
-            }
-        }
-
         stage('Verify') {
             steps {
-                sh 'mvn clean verify'
+                sh 'mvn -B -ntp clean verify'
             }
         }
 
         stage('Simulated Smoke Run') {
             steps {
-                sh 'mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"'
+                sh 'mvn -B -ntp exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"'
             }
         }
 
@@ -63,6 +82,10 @@ pipeline {
                     if [ -f test.md ]; then
                       cp test.md release/
                     fi
+
+                    if [ -f docs/devops.md ]; then
+                      cp docs/devops.md release/
+                    fi
                 '''
             }
         }
@@ -71,7 +94,6 @@ pipeline {
     post {
         always {
             junit allowEmptyResults: true, testResults: 'target/surefire-reports/*.xml'
-
             archiveArtifacts artifacts: 'target/surefire-reports/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/site/jacoco/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/operator-message-report.md', allowEmptyArchive: true
@@ -83,7 +105,7 @@ pipeline {
         }
 
         failure {
-            echo 'Pipeline failed. Check Maven output, smoke-run logs, and archived reports.'
+            echo 'Pipeline failed. Check Java version, Maven output, smoke-run logs, and archived reports.'
         }
     }
 }
