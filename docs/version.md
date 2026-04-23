@@ -1,8 +1,10 @@
 
-to do 
-0.0.7  Stage 3 — Initial printer state model
+to do  
+see ROADMAP.md
+
+
 done :
-0.0.6  CI, Jenkins
+0.0.6  Jenkins CI and Broader Automated Verification
 0.0.5  JaCoCo coverage 
 0.0.4  Automated test foundation
 0.0.3  Stage 2 — Command logging, repeated polling and error management

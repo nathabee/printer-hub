@@ -1,121 +1,108 @@
-# Developper Guide
+# Developer Guide
 
+Short developer reference for everyday work.
 
-##   File structure and purpose
+Detailed setup and verification are documented in:
 
+- `install.md`
+- `test.md`
+- `docs/devops.md`
 
-### src/main/java/printerhub/Main.java
+---
 
-CLI entry point.
-Parses arguments, validates input, creates the real serial connection, starts polling, and maps failures to exit codes.
+## Main files
 
-### src/main/java/printerhub/PrinterPoller.java
+### `src/main/java/printerhub/Main.java`
 
-Core polling workflow.
-Connects to the printer port, waits for initialization, sends the command repeatedly, reads responses, and disconnects safely.
+Application entry point.  
+Parses arguments, validates input, creates the connection, and maps failures to exit codes.
 
-### src/main/java/printerhub/PrinterPort.java
+### `src/main/java/printerhub/PrinterPoller.java`
 
-Abstraction interface for printer communication.
-Lets the app use either the real serial connection or a fake test implementation.
+Main polling workflow.  
+Connects, waits for initialization, sends commands, reads responses, and disconnects safely.
 
-### src/main/java/printerhub/SerialConnection.java
+### `src/main/java/printerhub/SerialConnection.java`
 
-Real hardware implementation.
-Uses jSerialComm to open /dev/ttyUSB0, send commands, read printer responses, and handle serial I/O errors.
+Real serial communication implementation.  
+Handles open, send, read, and close against the printer port.
 
-### src/test/java/printerhub/FakePrinterPort.java
+### `src/main/java/printerhub/PrinterPort.java`
 
-Fake printer for tests.
-Simulates connect, send, read, timeout, and failure cases without needing a real printer.
+Communication abstraction used by the polling layer.  
+Allows real and fake implementations.
 
-### src/test/java/printerhub/PrinterPollerTest.java
+### `src/main/java/printerhub/serial/`
 
-Automated unit tests for polling logic.
-Verifies normal polling and the main error scenarios.
+Serial adapter layer.  
+Contains the real adapter, simulated runtime adapter, and adapter factory.
 
+### `src/test/java/`
 
+Automated tests and test fakes.  
+Includes polling, serial connection, integration, and robustness tests.
 
-## compile and run
+---
 
+## Daily commands
 
-### install 
+### Compile
 
-- on dev
 ```bash
-# first installation
-sudo apt install maven
-# check version
-mvn --version
-java --version
-
-
-# make sure minicom is closed
-# verify the port is free:
-sudo lsof /dev/ttyUSB0
-```
-
-### compile and run all
-  
-```
 mvn clean compile
-mvn exec:java
+````
 
+### Run tests
+
+```bash
+mvn test
 ```
 
+### Run full verification
 
-###  clean and compile and exec
-
-
-```
-mvn clean compile 
-mvn exec:java -Dexec.mainClass="printerhub.Main"
-
-```
-
-### compile and run test
-
-
-```
-mvn clean compile
-mvn test 
-
-```
-
-
-
-### coverage test
-
-
-```
+```bash
 mvn clean verify
-
-# check outpu on Ubuntu :
-
-xdg-open target/site/jacoco/index.html
-
-
 ```
 
+### Run application in simulated mode
 
-### before a commit in github
-
-
+```bash
+mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"
 ```
- 
+
+### Run application with real hardware
+
+```bash
+mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="/dev/ttyUSB0 M105 3 2000 real"
+```
+
+---
+
+## Before commit
+
+Run:
+
+```bash
 mvn clean verify
-
-# check outpu on Ubuntu :
-
-xdg-open target/site/jacoco/index.html
-
-
-# If you changed hardware/runtime behavior too
- 
-mvn exec:java -Dexec.mainClass="printerhub.Main"
-
-
-
-
 ```
 
+If you changed runtime or hardware-related behavior, also run:
+
+```bash
+mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"
+```
+
+Check generated outputs if needed:
+
+* `target/site/jacoco/index.html`
+* `target/operator-message-report.md`
+
+---
+
+## Notes
+
+* use simulated mode for normal development when real hardware is not needed
+* use real mode only when the device path is correct and the port is available
+* do not duplicate setup instructions here; keep them in `install.md`
+* do not duplicate test details here; keep them in `test.md`
+ 

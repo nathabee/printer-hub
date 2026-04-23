@@ -7,10 +7,10 @@
 
     <groupId>printerhub</groupId>
     <artifactId>printer-hub</artifactId>
-    <version>0.0.5</version>
+    <version>0.0.6</version>
 
     <properties>
-        <maven.compiler.release>17</maven.compiler.release>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.jupiter.version>5.10.2</junit.jupiter.version>
         <jacoco.version>0.8.12</jacoco.version>
@@ -29,6 +29,14 @@
             <version>${junit.jupiter.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>com.github.stefanbirkner</groupId>
+            <artifactId>system-lambda</artifactId>
+            <version>1.2.1</version>
+            <scope>test</scope>
+        </dependency>
+        
     </dependencies>
 
     <build>

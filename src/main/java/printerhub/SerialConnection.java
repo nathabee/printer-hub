@@ -1,6 +1,7 @@
 package printerhub;
 
-import com.fazecast.jSerialComm.SerialPort;
+import printerhub.serial.SerialPortAdapter;
+import printerhub.serial.SerialPortAdapterFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,42 +20,45 @@ public class SerialConnection implements PrinterPort {
 
     private final String portName;
     private final int baudRate;
+    private final SerialPortAdapter port;
 
-    private SerialPort port;
     private InputStream in;
     private OutputStream out;
 
     public SerialConnection(String portName, int baudRate) {
-        if (portName == null || portName.isBlank()) {
-            throw new IllegalArgumentException("portName must not be blank");
-        }
+        validatePortName(portName);
         this.portName = portName;
         this.baudRate = baudRate;
+        this.port = SerialPortAdapterFactory.createReal(portName);
+    }
+
+    public SerialConnection(String portName, int baudRate, SerialPortAdapter portAdapter) {
+        validatePortName(portName);
+        if (portAdapter == null) {
+            throw new IllegalArgumentException(OperationMessages.PORT_ADAPTER_MUST_NOT_BE_NULL);
+        }
+
+        this.portName = portName;
+        this.baudRate = baudRate;
+        this.port = portAdapter;
     }
 
     @Override
     public boolean connect() throws IOException {
         if (isConnected()) {
             throw new IllegalStateException(
-                    "Connection already open on port " + port.getSystemPortName()
+                    OperationMessages.connectionAlreadyOpen(port.getSystemPortName())
             );
         }
 
-        port = SerialPort.getCommPort(portName);
-
         port.setBaudRate(baudRate);
         port.setNumDataBits(8);
-        port.setNumStopBits(SerialPort.ONE_STOP_BIT);
-        port.setParity(SerialPort.NO_PARITY);
-        port.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0);
+        port.setNumStopBits(SerialPortAdapter.ONE_STOP_BIT);
+        port.setParity(SerialPortAdapter.NO_PARITY);
+        port.setComPortTimeouts(SerialPortAdapter.TIMEOUT_NONBLOCKING, 0, 0);
 
         if (!port.openPort()) {
-            port = null;
-            throw new IOException(
-                    "Failed to open serial port '" + portName + "'. " +
-                    "Possible causes: device path is wrong, permission is missing, " +
-                    "or the port is already in use."
-            );
+            throw new IOException(OperationMessages.failedToOpenSerialPort(portName));
         }
 
         try {
@@ -63,7 +67,7 @@ public class SerialConnection implements PrinterPort {
         } catch (Exception e) {
             safelyClosePortOnly();
             throw new IOException(
-                    "Serial port '" + portName + "' opened, but input/output streams could not be initialized.",
+                    OperationMessages.streamInitializationFailed(portName),
                     e
             );
         }
@@ -77,24 +81,24 @@ public class SerialConnection implements PrinterPort {
         ensureConnected();
 
         if (command == null || command.isBlank()) {
-            throw new IllegalArgumentException("command must not be blank");
+            throw new IllegalArgumentException(OperationMessages.COMMAND_MUST_NOT_BE_BLANK);
         }
 
-        String fullCommand = command.trim() + "\n";
+        String trimmedCommand = command.trim();
+        String fullCommand = trimmedCommand + "\n";
 
         try {
             out.write(fullCommand.getBytes(StandardCharsets.UTF_8));
             out.flush();
-            logSent(command.trim());
+            logSent(trimmedCommand);
         } catch (IOException e) {
             throw new IOException(
-                    "Failed to send command '" + command.trim() + "' to port '" +
-                    port.getSystemPortName() + "'.",
+                    OperationMessages.failedToSendCommand(trimmedCommand, port.getSystemPortName()),
                     e
             );
         }
     }
- 
+
     @Override
     public String readLine() throws IOException, TimeoutException, InterruptedException {
         ensureConnected();
@@ -117,8 +121,7 @@ public class SerialConnection implements PrinterPort {
                 }
             } catch (IOException e) {
                 throw new IOException(
-                        "Failed while reading from serial port '" +
-                        port.getSystemPortName() + "'.",
+                        OperationMessages.failedWhileReading(port.getSystemPortName()),
                         e
                 );
             }
@@ -126,8 +129,8 @@ public class SerialConnection implements PrinterPort {
             if (readSomething) {
                 Thread.sleep(50);
             } else {
-                if (response.length() > 0 &&
-                        System.currentTimeMillis() - lastDataTime > QUIET_PERIOD_MS) {
+                if (response.length() > 0
+                        && System.currentTimeMillis() - lastDataTime > QUIET_PERIOD_MS) {
                     break;
                 }
                 Thread.sleep(25);
@@ -138,7 +141,7 @@ public class SerialConnection implements PrinterPort {
 
         if (cleaned.isEmpty()) {
             throw new TimeoutException(
-                    "No response received from printer within " + READ_TIMEOUT_MS + " ms."
+                    OperationMessages.noResponseWithinTimeout(READ_TIMEOUT_MS)
             );
         }
 
@@ -154,21 +157,17 @@ public class SerialConnection implements PrinterPort {
         closeQuietly(out, "output stream");
         out = null;
 
-        if (port != null) {
-            try {
-                String currentPortName = port.getSystemPortName();
-                boolean wasOpen = port.isOpen();
+        try {
+            String currentPortName = port.getSystemPortName();
+            boolean wasOpen = port.isOpen();
 
-                if (wasOpen && !port.closePort()) {
-                    logError("Failed to close serial port " + currentPortName);
-                } else {
-                    logInfo("Disconnected.");
-                }
-            } catch (Exception e) {
-                logError("Error while closing serial port: " + e.getMessage());
-            } finally {
-                port = null;
+            if (wasOpen && !port.closePort()) {
+                logError(OperationMessages.failedToCloseSerialPort(currentPortName));
+            } else if (wasOpen) {
+                logInfo(OperationMessages.DISCONNECTED);
             }
+        } catch (Exception e) {
+            logError(OperationMessages.errorWhileClosingSerialPort(e.getMessage()));
         }
     }
 
@@ -178,27 +177,21 @@ public class SerialConnection implements PrinterPort {
     }
 
     public boolean isConnected() {
-        return port != null && port.isOpen() && in != null && out != null;
+        return port.isOpen() && in != null && out != null;
     }
 
     private void ensureConnected() {
         if (!isConnected()) {
-            throw new IllegalStateException(
-                    "Serial connection is not open. Call connect() before sending commands."
-            );
+            throw new IllegalStateException(OperationMessages.SERIAL_NOT_OPEN);
         }
     }
 
     private void safelyClosePortOnly() {
-        if (port != null) {
-            try {
-                if (port.isOpen()) {
-                    port.closePort();
-                }
-            } catch (Exception ignored) {
-            } finally {
-                port = null;
+        try {
+            if (port.isOpen()) {
+                port.closePort();
             }
+        } catch (Exception ignored) {
         }
     }
 
@@ -207,29 +200,35 @@ public class SerialConnection implements PrinterPort {
             try {
                 closeable.close();
             } catch (Exception e) {
-                logError("Failed to close " + resourceName + ": " + e.getMessage());
+                logError(OperationMessages.failedToCloseResource(resourceName, e.getMessage()));
             }
         }
     }
 
     private void logSent(String message) {
-        System.out.println(timestamp() + " [SEND] " + message);
+        System.out.println(timestamp() + " " + OperationMessages.sentMessage(message));
     }
 
     private void logReceived(String message) {
         String normalized = message.replace("\r", "").replace("\n", " | ");
-        System.out.println(timestamp() + " [RECV] " + normalized);
+        System.out.println(timestamp() + " " + OperationMessages.receivedMessage(normalized));
     }
 
     private void logInfo(String message) {
-        System.out.println(timestamp() + " [INFO] " + message);
+        System.out.println(timestamp() + " " + OperationMessages.infoMessage(message));
     }
 
     private void logError(String message) {
-        System.err.println(timestamp() + " [ERROR] " + message);
+        System.err.println(timestamp() + " " + OperationMessages.errorMessage(message));
     }
 
     private String timestamp() {
         return LocalDateTime.now().format(TS_FORMAT);
+    }
+
+    private static void validatePortName(String portName) {
+        if (portName == null || portName.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PORT_NAME_MUST_NOT_BE_BLANK);
+        }
     }
 }

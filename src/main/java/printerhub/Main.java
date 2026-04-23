@@ -1,5 +1,7 @@
 package printerhub;
 
+import printerhub.serial.SerialPortAdapterFactory;
+
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
@@ -9,13 +11,23 @@ public class Main {
     private static final String DEFAULT_COMMAND = "M105";
     private static final int DEFAULT_REPEAT_COUNT = 3;
     private static final long DEFAULT_DELAY_MS = 2000L;
+    private static final long DEFAULT_INIT_DELAY_MS = 2000L;
     private static final int DEFAULT_BAUD_RATE = 115200;
+    private static final String DEFAULT_MODE = "real";
 
     public static void main(String[] args) {
+        int exitCode = run(args);
+        if (exitCode != 0) {
+            System.exit(exitCode);
+        }
+    }
+
+    static int run(String[] args) {
         String portName = DEFAULT_PORT;
         String command = DEFAULT_COMMAND;
         int repeatCount = DEFAULT_REPEAT_COUNT;
         long delayMs = DEFAULT_DELAY_MS;
+        String mode = DEFAULT_MODE;
 
         try {
             if (args.length >= 1 && !args[0].isBlank()) {
@@ -34,36 +46,56 @@ public class Main {
                 delayMs = parsePositiveLong(args[3], "delayMs");
             }
 
-            validateInputs(portName, command, repeatCount, delayMs);
+            if (args.length >= 5 && !args[4].isBlank()) {
+                mode = args[4].trim();
+            }
 
-            PrinterPort port = new SerialConnection(portName, DEFAULT_BAUD_RATE);
-            PrinterPoller poller = new PrinterPoller(port, 2000L, delayMs);
+            validateInputs(portName, command, repeatCount, delayMs, mode);
+
+            long initDelayMs = resolveInitDelayMs();
+
+            PrinterPort port = new SerialConnection(
+                    portName,
+                    DEFAULT_BAUD_RATE,
+                    SerialPortAdapterFactory.create(portName, mode)
+            );
+
+            PrinterPoller poller = new PrinterPoller(port, initDelayMs, delayMs);
             poller.runPolling(repeatCount, command);
+            return 0;
 
         } catch (IllegalArgumentException e) {
-            System.err.println("[ERROR] Invalid input: " + e.getMessage());
+            System.err.println(OperationMessages.INVALID_INPUT_PREFIX + e.getMessage());
             printUsage();
-            System.exit(2);
+            return 2;
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.err.println("[ERROR] Program interrupted: " + e.getMessage());
-            System.exit(3);
+            System.err.println(OperationMessages.INTERRUPTED_PREFIX + e.getMessage());
+            return 3;
 
         } catch (TimeoutException e) {
-            System.err.println("[ERROR] Printer timeout: " + e.getMessage());
-            System.exit(4);
+            System.err.println(OperationMessages.TIMEOUT_PREFIX + e.getMessage());
+            return 4;
 
         } catch (IOException e) {
-            System.err.println("[ERROR] Unexpected failure: " + e.getMessage());
-            e.printStackTrace(System.err);
-            System.exit(1);
+            System.err.println(OperationMessages.RUNTIME_FAILURE_PREFIX + e.getMessage());
+            /* e.printStackTrace(System.err); */
+            return 1;
 
         } catch (Exception e) {
-            System.err.println("[ERROR] Unexpected failure: " + e.getMessage());
-            e.printStackTrace(System.err);
-            System.exit(1);
+            System.err.println(OperationMessages.RUNTIME_FAILURE_PREFIX + e.getMessage());
+            /* e.printStackTrace(System.err); */
+            return 1;
         }
+    }
+
+    private static long resolveInitDelayMs() {
+        String value = System.getProperty("printerhub.initDelayMs");
+        if (value == null || value.isBlank()) {
+            return DEFAULT_INIT_DELAY_MS;
+        }
+        return parsePositiveLong(value, "initDelayMs");
     }
 
     private static int parsePositiveInt(String value, String fieldName) {
@@ -101,7 +133,8 @@ public class Main {
     private static void validateInputs(String portName,
                                        String command,
                                        int repeatCount,
-                                       long delayMs) {
+                                       long delayMs,
+                                       String mode) {
 
         if (portName == null || portName.isBlank()) {
             throw new IllegalArgumentException("portName must not be blank");
@@ -118,22 +151,46 @@ public class Main {
         if (delayMs <= 0) {
             throw new IllegalArgumentException("delayMs must be greater than 0");
         }
+
+        String normalizedMode = mode == null ? "" : mode.trim().toLowerCase();
+        if (!normalizedMode.equals("real")
+                && !normalizedMode.equals("sim")
+                && !normalizedMode.equals("simulated")) {
+            throw new IllegalArgumentException("mode must be one of: real, sim, simulated");
+        }
     }
 
     private static void printUsage() {
         System.err.println();
         System.err.println("Usage:");
         System.err.println("  mvn exec:java -Dexec.mainClass=\"printerhub.Main\" "
-                + "-Dexec.args=\"<port> <command> <repeatCount> <delayMs>\"");
+                + "-Dexec.args=\"<port> <command> <repeatCount> <delayMs> [mode]\"");
         System.err.println();
-        System.err.println("Example:");
+        System.err.println("Arguments:");
+        System.err.println("  port        serial port path, for example /dev/ttyUSB0");
+        System.err.println("  command     G-code command, for example M105");
+        System.err.println("  repeatCount number of polling attempts, must be > 0");
+        System.err.println("  delayMs     delay between polls in milliseconds, must be > 0");
+        System.err.println("  mode        real | sim | simulated");
+        System.err.println();
+        System.err.println("Examples:");
         System.err.println("  mvn exec:java -Dexec.mainClass=\"printerhub.Main\" "
-                + "-Dexec.args=\"/dev/ttyUSB0 M105 3 2000\"");
+                + "-Dexec.args=\"/dev/ttyUSB0 M105 3 2000 real\"");
+        System.err.println("  mvn exec:java -Dexec.mainClass=\"printerhub.Main\" "
+                + "-Dexec.args=\"SIM_PORT M105 3 100 sim\"");
         System.err.println();
         System.err.println("Defaults:");
         System.err.println("  port        = " + DEFAULT_PORT);
         System.err.println("  command     = " + DEFAULT_COMMAND);
         System.err.println("  repeatCount = " + DEFAULT_REPEAT_COUNT);
         System.err.println("  delayMs     = " + DEFAULT_DELAY_MS);
+        System.err.println("  mode        = " + DEFAULT_MODE);
+        System.err.println();
+        System.err.println("Exit codes:");
+        System.err.println("  0  success");
+        System.err.println("  1  runtime failure");
+        System.err.println("  2  invalid input");
+        System.err.println("  3  interrupted execution");
+        System.err.println("  4  printer timeout / no response");
     }
 }

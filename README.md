@@ -2,38 +2,36 @@
   <img src="docs/assets/media/banner-1544x500.png" alt="PrinterHub banner">
 </p>
 
-
 # PrinterHub
 
+**PrinterHub** is a Java-based prototype for serial communication, polling, and verification of a 3D printer workflow.
 
-
-**PrinterHub** is a Java-based prototype for controlling and monitoring networked 3D printers.
-
-The project explores how embedded printers can be integrated into modern software systems, enabling remote control, telemetry monitoring, and scalable printer management — similar to architectures used in industrial and laboratory environments.
+The project explores how a printer-connected Java application can evolve from direct USB communication toward a more integrated software architecture with testing, CI, simulation, and later remote-control capabilities.
 
 This work is based on hands-on interaction with a real **Creality Ender-3 V2 Neo** printer connected over USB serial.
 
 ---
 
-# Project Goals
+## Project Goals
 
-The long-term objective is to simulate the software layer typically found around connected industrial or bio-printing systems.
+The long-term objective is to build up the software layers typically found around connected printer systems.
 
-Key capabilities to explore:
+Current and planned areas include:
 
-- Serial communication with printer firmware
+- serial communication with printer firmware
 - G-code command handling
-- Printer state monitoring
-- Remote control via REST API
-- Logging and telemetry storage
-- Multi-printer orchestration (future)
-- Hardware simulation using Arduino (future)
+- repeated polling and response logging
+- automated testing and CI verification
+- printer state modeling
+- remote control via REST API
+- hardware simulation using Arduino
+- optional containerized CI execution
 
 ---
 
-# System Concept
+## System Concept
 
-Typical architecture under development:
+Target architecture under exploration:
 
 ```text
 Client Application
@@ -49,11 +47,11 @@ Client Application
  Motors / Sensors / Heaters
 ```
 
-This reflects common industrial device-control patterns.
+The current implemented scope is focused on the `PrinterHub` to serial-interface layer.
 
 ---
 
-# Hardware Setup
+## Hardware Setup
 
 Current test hardware:
 
@@ -65,113 +63,150 @@ Printer:
 Connection:
 
 * USB-C to USB-A cable
-* Linux device path:
-  `/dev/ttyUSB0`
+* Linux device path: `/dev/ttyUSB0`
 
 Detected interface:
 
-```
+```text
 ch341-uart converter detected
 attached to ttyUSB0
 ```
 
-Microcontroller:
+Microcontroller / interface:
 
 * STM32-based control board
 * CH341 USB-to-UART interface
 
 ---
 
-# Software Environment
+## Software Environment
 
-Operating System:
+Operating system:
 
 * Ubuntu Linux
 
-Initial Tools:
-* minicom (manual serial communication testing)
-* Java (implemented)
-* Maven (build and test)
-* Jenkins (CI automation)
-* Spring Boot (future API layer)
-* Arduino (future simulation work)
+Current tools:
 
+* minicom — manual serial communication testing
+* Java 21 — application implementation
+* Maven — build, test, verification
+* Jenkins — CI automation
+
+Planned later:
+
+* Spring Boot — API layer
+* Arduino — hardware simulation support
 
 ---
 
-# Current Status
+## Current Status
 
-✔ USB communication detected
-✔ Serial device available (`/dev/ttyUSB0`)
-✔ First command exchange
-✔ Firmware identification
-✔ Java serial interface
-⬜ REST control layer
-
-
-see [ROADMAP](docs/roadmap.md)
-see [VERSION](docs/version.md)
+Version `0.0.6` is implemented
  
+* [ROADMAP](docs/roadmap.md) 
 
+Not implemented yet:
+
+* printer state model
+* REST API layer
+* remote control
+* hardware simulation with Arduino
+* containerized CI runner
+ 
+---
+
+## DevOps
+
+Basic Continuous Integration (CI) is implemented starting with version `0.0.6`.
+
+Current pipeline capabilities:
+
+- automatic build on commit
+- Maven verification (`mvn clean verify`)
+- execution of automated tests
+- JaCoCo coverage generation
+- archiving of test and coverage reports
+- generation of operator-facing message report
+- hardware-independent verification using simulated runtime
+
+Current DevOps phase coverage:
+
+```text
+Checkout → Build → Test → Integrate → Archive Reports
+```
+
+Not yet implemented:
+
+```text
+Package → Release → Deploy → Runtime Verification Pipeline
+```
+
+Planned next step:
+
+* extend Jenkins pipeline toward structured DevOps workflow
+* add simulated smoke execution
+* prepare release-ready artifact bundle
+
+For details:
+
+* see [`docs/devops.md`](docs/devops.md)
 
 
 ---
 
+## Why This Project Matters
 
-# Why This Project Matters
+Modern industrial or laboratory printers are rarely isolated devices. They are usually part of a larger software environment with monitoring, validation, automation, and operational workflows.
 
-Modern industrial printers — including medical and laboratory systems — are rarely standalone devices. They are components of larger networked environments.
+This project focuses on the path from low-level device communication to more structured software integration, including:
 
-This project explores:
-
-* Device communication
-* System integration
-* Remote operation
-* Reliability engineering
-
-All using real hardware interaction.
+* communication reliability
+* testability
+* CI verification
+* operational message clarity
+* future service integration
 
 ---
 
-# Repository Structure
+## Repository Structure
 
 ```text
 printer-hub/
-│
 ├── README.md
+├── Jenkinsfile
 ├── docs/
-│   └── interface-discovery.md
-│
+│   ├── interface-discovery.md
+│   ├── roadmap.md
+│   └── version.md
 ├── src/
-│   └── Java implementation
-│
-└── scripts/
-    └── (future helper tools)
+│   ├── main/
+│   │   └── java/
+│   └── test/
+│       └── java/
+└── pom.xml
 ```
 
 ---
 
-# Safety Note
+## Safety Note
 
-All communication with the printer initially uses **read-only commands**.
+Real hardware communication currently focuses on safe validation commands and controlled polling behavior.
 
-Movement commands are avoided until communication behavior is fully verified.
+Typical safe commands:
 
-Safe commands:
-
-```
+```text
 M105   (Read temperature)
 M114   (Read position)
 M115   (Firmware info)
 ```
 
+Movement-related or operationally risky commands should only be introduced deliberately after validation of communication behavior and error handling.
+
 ---
 
-# License
+## License
 
 Prototype / educational development.
 
-
 MIT License. See `LICENSE`.
- 
  

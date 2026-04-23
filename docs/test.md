@@ -2,31 +2,79 @@
 
 ## Structure and run
 
-Maven uses the standard Java directory layout:
+Maven uses the standard layout:
 
-- `src/main/java` = production code
-- `src/test/java` = test code
+- `src/main/java` — production code
+- `src/test/java` — test code
 
-Production code:
+Main production classes:
 
-- `Main.java` — CLI entry point
-- `PrinterPoller.java` — polling workflow logic
-- `PrinterPort.java` — communication interface
-- `SerialConnection.java` — real serial hardware implementation
+- `Main.java` — CLI entry point, input validation, usage, exit codes
+- `PrinterPoller.java` — polling workflow
+- `PrinterPort.java` — printer communication abstraction
+- `SerialConnection.java` — serial communication implementation
+- `OperationMessages.java` — operator-facing messages
 
-Test code:
+Serial adapter classes in `printerhub.serial`:
 
-- `FakePrinterPort.java` — fake printer used only for tests
-- `PrinterPollerTest.java` — JUnit test class for polling behavior
+- `SerialPortAdapter.java` — adapter abstraction
+- `JSerialCommPortAdapter.java` — real serial-port adapter
+- `SerialPortAdapterFactory.java` — selects the adapter by mode
+- `SimulatedSerialPortAdapter.java` — runtime simulation adapter
 
-Test code can use production code.  
-Production code must not depend on test code.
+Main test classes:
+
+- `PrinterPollerTest.java` — polling workflow tests
+- `SerialConnectionTest.java` — serial communication tests
+- `MainIntegrationTest.java` — end-to-end flow tests
+- `MainRobustnessTest.java` — invalid-input and defensive-path tests
+- `TestReportWriter.java` — generates the operator-message report
+
+Test helpers:
+
+- `FakePrinterPort.java`
+- `printerhub.serial.FakeSerialPortAdapter.java`
+
+`SimulatedSerialPortAdapter` is in `src/main/java` because simulation is a supported runtime mode, not only a test helper.  
+`FakePrinterPort` and `FakeSerialPortAdapter` remain in `src/test/java` because they are test-only utilities.
+
+Test code may use production code. Production code must not depend on test code.
+
+---
+
+## Runtime modes
+
+The application supports three modes:
+
+| Mode | Adapter | Hardware | Typical command |
+|---|---|---:|---|
+| Real | `JSerialCommPortAdapter` | Yes | `mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="/dev/ttyUSB0 M105 3 2000 real"` |
+| Simulated | `SimulatedSerialPortAdapter` | No | `mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"` |
+| Test | `FakePrinterPort` / `FakeSerialPortAdapter` | No | `mvn test` |
+
+Argument order for `Main`:
+
+```text
+<port> <command> <repeatCount> <delayMs> [mode]
+```
+
+Examples:
+
+```bash
+mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="/dev/ttyUSB0 M105 3 2000 real"
+mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"
+mvn test
+```
+
+---
+
+## Run commands
 
 ### Run automated tests
 
 ```bash
 mvn test
-````
+```
 
 ### Run real application
 
@@ -40,43 +88,193 @@ mvn exec:java
 mvn clean compile
 ```
 
+### Run coverage and reports
+
+```bash
+mvn clean verify
+```
+
+### Inspect coverage report
+
+```bash
+xdg-open target/site/jacoco/index.html
+```
+
+### Inspect operator message report
+
+```bash
+xdg-open target/operator-message-report.md
+```
+
+### Optional XML formatting helper for JaCoCo
+
+```bash
+sudo apt install libxml2-utils
+xmllint --format target/site/jacoco/jacoco.xml > jacoco-pretty.xml
+```
+
+### Optional grep on formatted JaCoCo XML
+
+```bash
+grep -n "printerhub/Main\|printerhub/SerialConnection\|printerhub/PrinterPoller" jacoco-pretty.xml
+```
+
 ---
 
-## Test matrix
+## Test scope
 
-| ID  | Scenario                 | Input / Setup                                  | Expected result                                            | Automated  |
-| --- | ------------------------ | ---------------------------------------------- | ---------------------------------------------------------- | ---------- |
-| T01 | Single poll success      | 1 poll, command `M105`, fake returns `ok ...`  | command sent once, disconnect called                       | Yes        |
-| T02 | Multiple poll success    | 3 polls, fake returns `ok 1`, `ok 2`, `ok 3`   | command sent 3 times, disconnect called                    | Yes        |
-| T03 | Connect returns false    | fake `connectResult = false`                   | `IOException` with connect failure                         | Yes        |
-| T04 | Connect throws exception | fake `connectException = new IOException(...)` | `IOException`, disconnect called                           | Yes        |
-| T05 | Null response            | fake returns `null`                            | `TimeoutException`, disconnect called                      | Yes        |
-| T06 | Blank response           | fake returns blank string                      | `TimeoutException`, disconnect called                      | Yes        |
-| T07 | Read throws exception    | fake `readException = new IOException(...)`    | `IOException`, disconnect called                           | Yes        |
-| T08 | Send throws exception    | fake `sendException = new IOException(...)`    | `IOException`, disconnect called                           | Yes        |
-| T09 | Invalid repeat count     | `repeatCount = 0`                              | `IllegalArgumentException`                                 | Yes        |
-| T10 | Blank command            | command = blank                                | `IllegalArgumentException`                                 | Yes        |
-| T11 | Real printer smoke test  | real `/dev/ttyUSB0`, real Ender printer        | connect, send `M105`, receive `ok ...`, disconnect cleanly | No, manual |
+### `PrinterPollerTest`
+
+Checks polling workflow in isolation.
+
+Flow:
+
+```text
+PrinterPollerTest
+-> PrinterPoller.runPolling(...)
+-> FakePrinterPort
+```
+
+Focus:
+
+* repeat and command validation
+* loop and retry behavior
+* timeout handling
+* disconnect behavior
+* workflow-level operator messages
 
 ---
 
-## Test coverage tool
+### `SerialConnectionTest`
 
-Current automated tests verify the main polling logic and error paths in `PrinterPoller`.
+Checks serial communication behavior in isolation.
 
-Coverage is not yet measured as a percentage.
-To measure code coverage, add a tool such as **JaCoCo** later.
+Flow:
 
-Typical next step:
+```text
+SerialConnectionTest
+-> SerialConnection
+-> FakeSerialPortAdapter
+```
 
-* add JaCoCo to `pom.xml`
-* run `mvn test`
-* open the generated HTML report in `target/site/jacoco/index.html`
+Focus:
 
-Planned next stage:
+* constructor validation
+* connect, send, read, disconnect
+* open/read/write/close failures
+* low-level operator messages
 
-* Jenkins CI
-* automated `mvn test`
-* optional publication of test and coverage reports
+---
 
+### `MainIntegrationTest`
+
+Checks the realistic application path without real hardware.
+
+Flow:
+
+```text
+MainIntegrationTest
+-> Main.run(...)
+-> SerialPortAdapterFactory.create(...)
+-> SimulatedSerialPortAdapter
+-> SerialConnection
+-> PrinterPoller
+```
+
+Focus:
+
+* successful simulated run
+* connect failure exit-code mapping
+* timeout exit-code mapping
+* top-level stdout/stderr behavior
+
+This is the closest automated test to the real application flow.
+
+---
+
+### `MainRobustnessTest`
+
+Checks invalid input and defensive branches at top level.
+
+Flow:
+
+```text
+MainRobustnessTest
+-> Main.run(...)
+-> parse/validate
+-> error handling / exit-code mapping
+```
+
+Focus:
+
+* invalid numeric input
+* invalid mode
+* invalid init-delay property
+* interrupted execution
+* top-level error wording and exit codes
+
+---
+
+## Generated artifacts
+
+Running tests or verification generates:
+
+* `target/site/jacoco/index.html`
+* `target/operator-message-report.md`
+
+### JaCoCo report
+
+Use the JaCoCo report to check:
+
+* which classes are covered
+* which branches remain untested
+* whether new code introduced uncovered paths
+
+Coverage is useful, but it does not replace message review.
+
+### Operator message report
+
+`target/operator-message-report.md` captures selected runtime-visible scenarios for operator review.
+
+For each scenario, check:
+
+* is the exit code correct
+* is the output on the right stream
+* is the wording understandable
+* does the message say what failed
+* does it contain enough context for action or escalation
+
+---
+
+## Release review
+
+It is useful to keep the generated operator message report per release.
+
+Example:
+
+```bash
+cp target/operator-message-report.md docs/reports/operator-message-report-0.0.5.md
+cp target/operator-message-report.md docs/reports/operator-message-report-0.0.6.md
+```
+
+Compare releases with:
+
+```bash
+diff -u docs/reports/operator-message-report-0.0.5.md docs/reports/operator-message-report-0.0.6.md
+```
+
+This helps detect wording regressions, exit-code drift, and loss of useful operator context.
+
+---
+
+## Summary
+
+The test strategy covers four things:
+
+1. polling logic
+2. serial communication behavior
+3. full application flow
+4. top-level robustness and operator-visible messages
+
+That gives better confidence than coverage alone.
  
