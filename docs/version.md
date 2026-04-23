@@ -4,6 +4,7 @@ see ROADMAP.md
 
 
 done :
+0.0.7  DevOps pipeline and release automation
 0.0.6  Jenkins CI and Broader Automated Verification
 0.0.5  JaCoCo coverage 
 0.0.4  Automated test foundation

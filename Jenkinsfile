@@ -7,6 +7,16 @@ pipeline {
             defaultValue: '',
             description: 'Optional JAVA_HOME override. Leave empty to use the agent default.'
         )
+        string(
+            name: 'RELEASE_VERSION',
+            defaultValue: '',
+            description: 'Optional release version, for example 0.0.7. Leave empty for CI-only runs.'
+        )
+        booleanParam(
+            name: 'PUBLISH_GITHUB_RELEASE',
+            defaultValue: false,
+            description: 'Publish the prepared release bundle to GitHub Releases.'
+        )
     }
 
     options {
@@ -17,9 +27,16 @@ pipeline {
 
     environment {
         MAVEN_OPTS = '-Djava.awt.headless=true'
+        GITHUB_REPO = 'nathabee/printer-hub'
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Environment') {
             steps {
                 script {
@@ -35,12 +52,6 @@ pipeline {
                 sh 'java -version'
                 sh 'javac -version'
                 sh 'mvn -version'
-            }
-        }
-
-        stage('Checkout') {
-            steps {
-                checkout scm
             }
         }
 
@@ -79,14 +90,91 @@ pipeline {
                       cp README.md release/
                     fi
 
-                    if [ -f test.md ]; then
-                      cp test.md release/
+                    if [ -f docs/test.md ]; then
+                      cp docs/test.md release/
                     fi
 
                     if [ -f docs/devops.md ]; then
                       cp docs/devops.md release/
                     fi
+
+                    if [ -f docs/roadmap.md ]; then
+                      cp docs/roadmap.md release/
+                    fi
+
+                    if [ -f docs/version.md ]; then
+                      cp docs/version.md release/
+                    fi
                 '''
+            }
+        }
+
+        stage('Package Release Archive') {
+            steps {
+                script {
+                    def versionName = params.RELEASE_VERSION?.trim() ? params.RELEASE_VERSION.trim() : 'snapshot'
+                    env.RELEASE_ARCHIVE = "printer-hub-${versionName}-release.tar.gz"
+                }
+
+                sh '''
+                    tar -czf "${RELEASE_ARCHIVE}" release
+                    ls -lh "${RELEASE_ARCHIVE}"
+                '''
+            }
+        }
+
+        stage('Publish GitHub Release') {
+            when {
+                expression {
+                    return params.PUBLISH_GITHUB_RELEASE && params.RELEASE_VERSION?.trim()
+                }
+            }
+            steps {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                    sh '''
+                        set -eu
+
+                        TAG_NAME="v${RELEASE_VERSION}"
+                        RELEASE_NAME="PrinterHub ${RELEASE_VERSION}"
+
+                        API_JSON=$(mktemp)
+
+                        cat > "${API_JSON}" <<EOF
+{
+  "tag_name": "${TAG_NAME}",
+  "name": "${RELEASE_NAME}",
+  "draft": false,
+  "prerelease": false,
+  "generate_release_notes": true
+}
+EOF
+
+                        curl -sS -X POST \
+                          -H "Accept: application/vnd.github+json" \
+                          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                          https://api.github.com/repos/${GITHUB_REPO}/releases \
+                          -d @"${API_JSON}" \
+                          > github-release-response.json
+
+                        UPLOAD_URL=$(python3 - <<'PY'
+import json
+with open("github-release-response.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+url = data.get("upload_url", "")
+print(url.split("{")[0])
+PY
+)
+
+                        test -n "${UPLOAD_URL}"
+
+                        curl -sS -X POST \
+                          -H "Accept: application/vnd.github+json" \
+                          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                          -H "Content-Type: application/gzip" \
+                          "${UPLOAD_URL}?name=${RELEASE_ARCHIVE}" \
+                          --data-binary @"${RELEASE_ARCHIVE}"
+                    '''
+                }
             }
         }
     }
@@ -98,14 +186,16 @@ pipeline {
             archiveArtifacts artifacts: 'target/site/jacoco/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/operator-message-report.md', allowEmptyArchive: true
             archiveArtifacts artifacts: 'release/**', allowEmptyArchive: true
+            archiveArtifacts artifacts: '*.tar.gz', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'github-release-response.json', allowEmptyArchive: true
         }
 
         success {
-            echo 'CI verification, simulated smoke run, and release preparation completed successfully.'
+            echo 'CI verification, smoke validation, release packaging, and optional GitHub release publication completed successfully.'
         }
 
         failure {
-            echo 'Pipeline failed. Check Java version, Maven output, smoke-run logs, and archived reports.'
+            echo 'Pipeline failed. Check Java version, Maven output, smoke-run logs, release bundle, and archived reports.'
         }
     }
 }

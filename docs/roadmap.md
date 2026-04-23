@@ -136,30 +136,35 @@ Expected result:
 
 ---
 
-## 0.0.7 — DevOps-Oriented Jenkins Pipeline Improvement
+## 0.0.7 — DevOps Pipeline and Release Automation
 
-status : planned
+status : done  
+version : 0.0.7
+
 
 Goals:
 
-* evolve the Jenkins pipeline from basic CI toward structured DevOps workflow
-* make pipeline phases explicit and clearly structured
-* add hardware-independent runtime verification in CI
-* improve release-preparation visibility without full deployment
+* transform the Jenkins pipeline into a structured DevOps workflow
+* validate application runtime behavior in CI using simulation
+* prepare and package a reproducible release bundle
+* optionally publish releases to GitHub
+* preserve technical and operator-facing evidence as release artifacts
 
 Deliverables:
 
-Split pipeline into clearer stages:
+Structured Jenkins pipeline stages:
 
 ```text
 checkout
 environment check
 build and verify
 simulated smoke run
-release bundle preparation
+prepare release bundle
+package release archive
+optional GitHub release publication
 ```
 
-Add simulated runtime execution:
+Runtime validation:
 
 ```bash
 mvn exec:java \
@@ -167,40 +172,44 @@ mvn exec:java \
 -Dexec.args="SIM_PORT M105 3 100 sim"
 ```
 
-Archive extended CI evidence:
-
-```text
-JUnit reports
-JaCoCo report
-operator message report
-packaged jar
-```
-
-Prepare delivery-ready structure:
+Release packaging:
 
 ```text
 release/
-├── printer-hub.jar
+├── printer-hub-<version>.jar
 ├── jacoco/
 ├── operator-message-report.md
 ├── README.md
-└── test.md
+├── test.md
+├── devops.md
+├── roadmap.md
+└── version.md
 ```
 
-Add documentation:
+Release archive generation:
 
 ```text
-devops.md
+printer-hub-<version>-release.tar.gz
+```
+
+Optional GitHub publication:
+
+```text
+create GitHub release
+upload release archive
+generate release notes
 ```
 
 Expected result:
 
-* pipeline demonstrates build, test, integration, and runtime validation
-* CI output becomes suitable for DevOps demonstration
-* release preparation becomes visible
-* project progresses toward CI/CD readiness
+* pipeline demonstrates full CI verification and runtime validation
+* release artifacts are structured and reproducible
+* CI output becomes suitable as DevOps demonstration material
+* project gains a controlled release workflow
+* foundation established for future CD or deployment stages
 
 ---
+
 
 ## 0.0.8 — Printer State Model
 
