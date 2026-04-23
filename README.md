@@ -204,6 +204,23 @@ Movement-related or operationally risky commands should only be introduced delib
 
 ---
 
+## Run from Release
+
+After downloading and extracting the release archive:
+
+```bash
+cd release
+java -jar printer-hub-<version>.jar SIM_PORT M105 3 100 sim
+````
+
+For real hardware mode on Linux:
+
+```bash
+cd release
+java -jar printer-hub-<version>.jar /dev/ttyUSB0 M105 3 2000 real
+```
+
+
 ## License
 
 Prototype / educational development.

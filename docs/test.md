@@ -119,6 +119,19 @@ xmllint --format target/site/jacoco/jacoco.xml > jacoco-pretty.xml
 grep -n "printerhub/Main\|printerhub/SerialConnection\|printerhub/PrinterPoller" jacoco-pretty.xml
 ```
 
+### before github commit 
+
+```bash
+
+mvn clean verify
+mvn clean package
+# test:
+java -jar target/printer-hub-<version>-all.jar SIM_PORT M105 3 100 sim
+java -jar target/printer-hub-<version>-all.jar /dev/ttyUSB0 M105 3 2000 real
+```
+
+
+
 ---
 
 ## Test scope
@@ -264,6 +277,24 @@ diff -u docs/reports/operator-message-report-0.0.5.md docs/reports/operator-mess
 ```
 
 This helps detect wording regressions, exit-code drift, and loss of useful operator context.
+
+
+
+
+
+Test the release jar, doenload from git extract and launch :
+
+```bash
+cd release
+java -jar printer-hub-<version>.jar SIM_PORT M105 3 100 sim
+``` 
+
+
+or for real mode:
+
+```bash
+java -jar printer-hub-<version>.jar /dev/ttyUSB0 M105 3 2000 real
+``` 
 
 ---
 

@@ -73,9 +73,10 @@ pipeline {
                     rm -rf release
                     mkdir -p release
 
-                    if ls target/*.jar >/dev/null 2>&1; then
-                      cp target/*.jar release/ || true
+                    if ls target/*-all.jar >/dev/null 2>&1; then
+                      cp target/*-all.jar release/
                     fi
+
 
                     if [ -f target/operator-message-report.md ]; then
                       cp target/operator-message-report.md release/
