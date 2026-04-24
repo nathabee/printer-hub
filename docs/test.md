@@ -286,14 +286,14 @@ Test the release jar, doenload from git extract and launch :
 
 ```bash
 cd release
-java -jar printer-hub-<version>.jar SIM_PORT M105 3 100 sim
+java -jar printer-hub-<version>-all.jar SIM_PORT M105 3 100 sim
 ``` 
 
 
 or for real mode:
 
 ```bash
-java -jar printer-hub-<version>.jar /dev/ttyUSB0 M105 3 2000 real
+java -jar printer-hub-<version>-all.jar /dev/ttyUSB0 M105 3 2000 real
 ``` 
 
 ---

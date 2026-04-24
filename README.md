@@ -4,61 +4,116 @@
 
 # PrinterHub
 
-**PrinterHub** is a Java-based prototype for serial communication, polling, and verification of a 3D printer workflow.
+**PrinterHub** is a Java-based system-integration prototype that simulates how industrial printer farms are monitored, controlled, and automated.
 
-The project explores how a printer-connected Java application can evolve from direct USB communication toward a more integrated software architecture with testing, CI, simulation, and later remote-control capabilities.
+The project starts with direct serial communication to a real **Creality Ender-3 V2 Neo** printer and incrementally evolves toward an industrial-style architecture including centralized monitoring, job management, REST APIs, database persistence, and multi-printer orchestration.
 
-This work is based on hands-on interaction with a real **Creality Ender-3 V2 Neo** printer connected over USB serial.
-
----
-
-## Project Goals
-
-The long-term objective is to build up the software layers typically found around connected printer systems.
-
-Current and planned areas include:
-
-- serial communication with printer firmware
-- G-code command handling
-- repeated polling and response logging
-- automated testing and CI verification
-- printer state modeling
-- remote control via REST API
-- hardware simulation using Arduino
-- optional containerized CI execution
+The Ender-3 printer serves as a physical reference device representing the lower hardware layer of a larger industrial workflow.
 
 ---
 
-## System Concept
+## Industrial Motivation
 
-Target architecture under exploration:
+Modern laboratory and industrial printers — including bio-printers — are rarely isolated devices.
+
+They operate as part of a **centralized software environment** where users:
+
+- monitor multiple printers remotely
+- upload printable jobs
+- track printer state
+- respond to failures
+- maintain operational logs
+- manage printer fleets
+
+PrinterHub simulates this environment step by step, starting from hardware-level communication and progressing toward distributed system integration.
+
+For the full industrial context:
+
+- see [`docs/industrial-bio-printer-simulation.md`](docs/industrial-bio-printer-simulation.md)
+
+---
+
+## Target Architecture
+
+PrinterHub evolves toward a centralized printer-farm structure.
 
 ```text
-Client Application
+Central Monitoring UI
+printer overview
+job upload
+live status
         |
-     REST API
+        v
+Backend REST API
+job management
+printer state API
         |
-     PrinterHub
+        v
+Database
+jobs
+printer states
+logs
+history
         |
-   Serial Interface
+        v
+Java Printer Control Service
+polling
+command execution
+error handling
         |
-   3D Printer Firmware
+        v
+Serial Communication
+USB / UART
         |
- Motors / Sensors / Heaters
+        v
+3D Printer Firmware
+Marlin
+        |
+        v
+Motors / Sensors / Heaters
 ```
 
-The current implemented scope is focused on the `PrinterHub` to serial-interface layer.
+Current development focuses on the **Java control service and serial communication layer**, which form the foundation of the system.
 
 ---
 
-## Hardware Setup
+## Current Scope
 
-Current test hardware:
+Implemented components:
+
+* serial communication with printer firmware
+* G-code command handling
+* repeated polling
+* structured logging foundation
+* simulated serial adapter
+* automated test framework
+* Jenkins CI pipeline
+* JaCoCo coverage reporting
+
+Planned extensions:
+
+* printer state model
+* REST API backend
+* job management layer
+* database persistence
+* centralized monitoring dashboard
+* multi-printer simulation
+* failure scenario simulation
+
+See roadmap:
+
+* [`docs/roadmap.md`](docs/roadmap.md)
+
+---
+
+## Hardware Reference Setup
+
+Primary test hardware:
 
 Printer:
 
 * Creality Ender-3 V2 Neo
-* Firmware: Marlin (default factory firmware)
+* Firmware: Marlin (factory default)
 
 Connection:
 
@@ -72,99 +127,36 @@ ch341-uart converter detected
 attached to ttyUSB0
 ```
 
-Microcontroller / interface:
+---
 
-* STM32-based control board
-* CH341 USB-to-UART interface
+## Quickstart
+
+To build and run the project:
+
+* see [`docs/quickstart.md`](docs/quickstart.md)
 
 ---
 
-## Software Environment
+## DevOps and Testing
 
-Operating system:
+Continuous Integration is implemented using Jenkins.
 
-* Ubuntu Linux
-
-Current tools:
-
-* minicom — manual serial communication testing
-* Java 21 — application implementation
-* Maven — build, test, verification
-* Jenkins — CI automation
-
-Planned later:
-
-* Spring Boot — API layer
-* Arduino — hardware simulation support
-
----
-
-## Current Status
-
-Version `0.0.6` is implemented
- 
-* [ROADMAP](docs/roadmap.md) 
-
-Not implemented yet:
-
-* printer state model
-* REST API layer
-* remote control
-* hardware simulation with Arduino
-* containerized CI runner
- 
----
-
-## DevOps
-
-Basic Continuous Integration (CI) is implemented starting with version `0.0.6`.
-
-Current pipeline capabilities:
-
-- automatic build on commit
-- Maven verification (`mvn clean verify`)
-- execution of automated tests
-- JaCoCo coverage generation
-- archiving of test and coverage reports
-- generation of operator-facing message report
-- hardware-independent verification using simulated runtime
-
-Current DevOps phase coverage:
+Current CI workflow:
 
 ```text
-Checkout → Build → Test → Integrate → Archive Reports
+Checkout → Build → Test → Verify → Archive Reports
 ```
 
-Not yet implemented:
+Includes:
 
-```text
-Package → Release → Deploy → Runtime Verification Pipeline
-```
+* Maven build verification
+* automated test execution
+* JaCoCo coverage reporting
+* hardware-independent simulation execution
 
-Planned next step:
+Details:
 
-* extend Jenkins pipeline toward structured DevOps workflow
-* add simulated smoke execution
-* prepare release-ready artifact bundle
-
-For details:
-
-* see [`docs/devops.md`](docs/devops.md)
-
-
----
-
-## Why This Project Matters
-
-Modern industrial or laboratory printers are rarely isolated devices. They are usually part of a larger software environment with monitoring, validation, automation, and operational workflows.
-
-This project focuses on the path from low-level device communication to more structured software integration, including:
-
-* communication reliability
-* testability
-* CI verification
-* operational message clarity
-* future service integration
+* [`docs/devops.md`](docs/devops.md)
 
 ---
 
@@ -175,55 +167,50 @@ printer-hub/
 ├── README.md
 ├── Jenkinsfile
 ├── docs/
-│   ├── interface-discovery.md
+│   ├── quickstart.md
+│   ├── industrial-bio-printer-simulation.md
 │   ├── roadmap.md
+│   ├── devops.md
+│   ├── interface-discovery.md
 │   └── version.md
 ├── src/
-│   ├── main/
-│   │   └── java/
-│   └── test/
-│       └── java/
+│   ├── main/java/
+│   └── test/java/
 └── pom.xml
 ```
 
 ---
 
-## Safety Note
+## Why This Project Matters
 
-Real hardware communication currently focuses on safe validation commands and controlled polling behavior.
+Industrial printers — especially in laboratory and medical environments — depend on reliable software systems that manage communication, monitoring, automation, and traceability.
 
-Typical safe commands:
+PrinterHub explores the transition from:
 
 ```text
-M105   (Read temperature)
-M114   (Read position)
-M115   (Firmware info)
+single USB-connected printer
 ```
 
-Movement-related or operationally risky commands should only be introduced deliberately after validation of communication behavior and error handling.
+to:
+
+```text
+centralized monitored printer farm
+```
+
+This makes the project useful as:
+
+* a system-integration learning platform
+* an industrial architecture simulation
+* a structured Java communication prototype
+* a foundation for distributed printer control systems
 
 ---
 
-## Run from Release
-
-After downloading and extracting the release archive:
-
-```bash
-cd release
-java -jar printer-hub-<version>.jar SIM_PORT M105 3 100 sim
-````
-
-For real hardware mode on Linux:
-
-```bash
-cd release
-java -jar printer-hub-<version>.jar /dev/ttyUSB0 M105 3 2000 real
-```
-
-
 ## License
 
-Prototype / educational development.
+MIT License.
 
-MIT License. See `LICENSE`.
+See:
+
+* [`LICENSE`](LICENSE)
  
