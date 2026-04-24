@@ -1,17 +1,17 @@
 {
   "appName": "PrinterHub",
 
-  "tagline": "Java-based control and monitoring for USB-connected 3D printers",
+  "tagline": "Java control and monitoring service for USB-connected 3D printers",
 
-  "subline": "Serial communication • G-code control • printer state modeling",
+  "subline": "Serial communication • printer state tracking • REST status API",
 
-  "featureTitle": "Industrial-style device communication",
+  "featureTitle": "Industrial-style printer communication",
 
-  "featureLeft1": "• USB serial interface handling",
-  "featureLeft2": "• reliable G-code exchange",
+  "featureLeft1": "• USB serial device control",
+  "featureLeft2": "• reliable G-code communication",
 
-  "featureRight1": "• printer state tracking",
-  "featureRight2": "• future REST control layer",
+  "featureRight1": "• printer state modeling",
+  "featureRight2": "• REST-based monitoring endpoints",
 
   "chip1": "Java",
   "chip2": "Serial IO",
@@ -21,22 +21,27 @@
   "iconFile": "printerhub-icon.svg",
 
   "screenshot1": "printerhub-screenshot-1.png",
-  "screenshot2": "printerhub-screenshot-2.png",
+  "screenshot1Label": "",
 
-  "screenshot1Label": "Printer response logging",
-  "screenshot2Label": "Serial communication test console",
 
-  "shot1X": 900,
-  "shot1Y": 62,
-  "shot1Width": 300,
-  "shot1Height": 300,
+  "screenshot2": "printerhub-image.png",
+  "screenshot2Label": "",
+
+
+  "screenshot22": "printerhub-screenshot-2.png",
+  "screenshot22Label": "REST API monitoring test",
+
+  "shot1X": 920,
+  "shot1Y": 122,
+  "shot1Width": 400,
+  "shot1Height": 400,
   "shot1Radius": 18,
   "shot1Fit": "xMidYMid meet",
 
-  "shot2X": 1100,
-  "shot2Y": 150,
-  "shot2Width": 400,
-  "shot2Height": 190,
+  "shot2X": 960,
+  "shot2Y": 90,
+  "shot2Width": 600,
+  "shot2Height": 300,
   "shot2Radius": 18,
   "shot2Fit": "xMidYMid meet"
 }

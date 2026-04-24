@@ -32,11 +32,11 @@
     </filter>
 
     <clipPath id="shotLeftClip">
-      <rect x="900" y="62" width="300" height="300" rx="18"/>
+      <rect x="920" y="122" width="400" height="400" rx="18"/>
     </clipPath>
 
     <clipPath id="shotRightClip">
-      <rect x="1100" y="150" width="400" height="190" rx="18"/>
+      <rect x="960" y="90" width="600" height="300" rx="18"/>
     </clipPath>
   </defs>
 
@@ -66,13 +66,13 @@
           font-family="Arial, sans-serif"
           font-size="24"
           font-weight="400"
-          fill="#5b6472">Java-based control and monitoring for USB-connected 3D printers</text>
+          fill="#5b6472">Java control and monitoring service for USB-connected 3D printers</text>
 
     <text x="146" y="142"
           font-family="Arial, sans-serif"
           font-size="22"
           font-weight="400"
-          fill="#6c5841">Serial communication • G-code control • printer state modeling</text>
+          fill="#6c5841">Serial communication • printer state tracking • REST status API</text>
   </g>
 
   <g transform="translate(78,248)">
@@ -82,7 +82,7 @@
           font-family="Arial, sans-serif"
           font-size="26"
           font-weight="700"
-          fill="#1f2937">Industrial-style device communication</text>
+          fill="#1f2937">Industrial-style printer communication</text>
 
     <rect x="34" y="68" width="160" height="38" rx="19" fill="#e9eef1"/>
     <text x="54" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#2f4858">Java</text>
@@ -98,36 +98,36 @@
 
 
 
-    <text x="36" y="136" font-family="Arial, sans-serif" font-size="21" fill="#374151">• USB serial interface handling</text>
-    <text x="36" y="168" font-family="Arial, sans-serif" font-size="21" fill="#374151">• reliable G-code exchange</text>
-    <text x="388" y="136" font-family="Arial, sans-serif" font-size="21" fill="#374151">• printer state tracking</text>
-    <text x="388" y="168" font-family="Arial, sans-serif" font-size="21" fill="#374151">• future REST control layer</text>
+    <text x="36" y="136" font-family="Arial, sans-serif" font-size="21" fill="#374151">• USB serial device control</text>
+    <text x="36" y="168" font-family="Arial, sans-serif" font-size="21" fill="#374151">• reliable G-code communication</text>
+    <text x="388" y="136" font-family="Arial, sans-serif" font-size="21" fill="#374151">• printer state modeling</text>
+    <text x="388" y="168" font-family="Arial, sans-serif" font-size="21" fill="#374151">• REST-based monitoring endpoints</text>
   </g>
 
   <g filter="url(#shadow)"> 
-    <rect x="900" y="62" width="300" height="300" rx="18" fill="#edf1f4"  opacity="0.42"/>
+    <rect x="920" y="122" width="400" height="400" rx="18" fill="#edf1f4"  opacity="0.42"/>
     <image href="printerhub-screenshot-1.png" xlink:href="printerhub-screenshot-1.png"
-           x="900" y="62"
-           width="300" height="300"
+           x="920" y="122"
+           width="400" height="400"
            preserveAspectRatio="xMidYMid meet"
            clip-path="url(#shotLeftClip)"/>
     <text x="930" y="390"
           font-family="Arial, sans-serif"
           font-size="18"
-          fill="#4b5563">Printer response logging</text>
+          fill="#4b5563"></text>
   </g>
 
   <g filter="url(#shadow)"> 
-    <rect x="1100" y="150" width="400" height="190" rx="18" fill="#edf1f4"  opacity="0.42"/>
-    <image href="printerhub-screenshot-2.png" xlink:href="printerhub-screenshot-2.png"
-           x="1100" y="150"
-           width="400" height="190"
+    <rect x="960" y="90" width="600" height="300" rx="18" fill="#edf1f4"  opacity="0.42"/>
+    <image href="printerhub-image.png" xlink:href="printerhub-image.png"
+           x="960" y="90"
+           width="600" height="300"
            preserveAspectRatio="xMidYMid meet"
            clip-path="url(#shotRightClip)"/>
     <text x="1250" y="390"
           font-family="Arial, sans-serif"
           font-size="18"
-          fill="#4b5563">Serial communication test console</text>
+          fill="#4b5563"></text>
   </g>
  
 </svg>
