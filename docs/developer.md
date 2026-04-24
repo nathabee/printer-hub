@@ -32,6 +32,12 @@ Handles open, send, read, and close against the printer port.
 Communication abstraction used by the polling layer.  
 Allows real and fake implementations.
 
+### `src/main/java/printerhub/RemoteApiServer.java`
+
+Lightweight embedded HTTP API server.  
+Provides `/health`, `/printer/status`, and `/printer/poll`.
+
+
 ### `src/main/java/printerhub/serial/`
 
 Serial adapter layer.  
@@ -50,7 +56,7 @@ Includes polling, serial connection, integration, and robustness tests.
 
 ```bash
 mvn clean compile
-````
+```
 
 ### Run tests
 
@@ -77,25 +83,68 @@ mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="/dev/ttyUSB0 M105 
 ```
 
 ---
-
 ## Before commit
 
 Run:
 
 ```bash
 mvn clean verify
-```
+````
 
-If you changed runtime or hardware-related behavior, also run:
+If runtime or hardware-related behavior changed, also run the checks below.
+
+### Test CLI simulation mode
 
 ```bash
 mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"
 ```
 
-Check generated outputs if needed:
+### Test API simulation mode
 
-* `target/site/jacoco/index.html`
-* `target/operator-message-report.md`
+Start API mode:
+
+```bash
+mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="api SIM_PORT sim 18080"
+```
+
+From another terminal:
+
+```bash
+curl http://localhost:18080/health
+curl http://localhost:18080/printer/status
+curl -X POST http://localhost:18080/printer/poll
+curl http://localhost:18080/printer/status
+```
+
+### Test API with real printer
+
+Start API mode:
+
+```bash
+mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="api /dev/ttyUSB0 real 18080"
+```
+
+From another terminal, with printer connected:
+
+```bash
+curl http://localhost:18080/health
+curl http://localhost:18080/printer/status
+curl -X POST http://localhost:18080/printer/poll
+curl http://localhost:18080/printer/status
+```
+
+Optional unplug test:
+
+```bash
+curl -X POST http://localhost:18080/printer/poll
+curl http://localhost:18080/printer/status
+```
+
+Expected behavior:
+
+* `/health` stays `UP`
+* `/printer/poll` fails or returns an error when the cable is removed
+* `/printer/status` reflects the latest known or error state
 
 ---
 

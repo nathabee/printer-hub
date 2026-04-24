@@ -210,63 +210,280 @@ Expected result:
 
 ---
 
-
+ 
 ## 0.0.8 — Printer State Model
 
-status : planned
+status : done  
+version : 0.0.8
 
 Goals:
 
-* define printer states
-* implement state transitions
-* validate command sequences
+- define explicit printer states
+- implement state transitions during polling
+- parse printer responses into a snapshot model
+- expose current printer state internally
 
 Example states:
 
 ```text
 DISCONNECTED
+CONNECTING
 IDLE
+HEATING
 PRINTING
-PAUSED
 ERROR
+UNKNOWN
 ```
+
+Result:
+
+* `PrinterState` added
+* `PrinterSnapshot` added
+* `PrinterStateTracker` added
+* `PrinterPoller` updates and reports printer state
+* simulated and real printer polling both show state transitions
 
 Expected result:
 
 * printer behavior is represented as an explicit state model
-* future API and monitoring features rely on defined states
+* future API and monitoring features can rely on defined snapshots
 * command flow becomes easier to validate and extend
 
 ---
 
 ## 0.0.9 — Remote API Layer
 
-status : planned
+status : done  
+version : 0.0.9
+
 
 Goals:
 
-* provide REST endpoints
-* expose printer status
-* enable remote interaction with the printer workflow
+* add API mode to the existing Java application
+* provide REST endpoints through a lightweight embedded HTTP server
+* expose printer status as JSON
+* prepare remote interaction without changing the CLI workflow
 
 Example endpoints:
 
 ```text
+GET  /health
 GET  /printer/status
-POST /printer/start
-POST /printer/pause
-POST /printer/stop
+POST /printer/poll
 ```
 
 Expected result:
 
-* printer status and actions accessible through API
-* later UI and automation features can rely on stable endpoints
+* PrinterHub can run as a small service
+* printer status is accessible through HTTP
+* later dashboard and automation features can rely on stable endpoints
 * project moves toward service-oriented architecture
 
 ---
 
-## 0.0.10 — Hardware Simulation with Arduino
+  
+## 0.0.10 — Continuous API Monitoring
+
+status : planned
+
+Goals:
+
+* keep API mode running as a monitoring service
+* add background polling in simulated mode
+* update printer status without requiring manual `POST /printer/poll`
+* keep `/printer/status` refreshed from the latest monitoring cycle
+
+Expected result:
+
+* PrinterHub behaves more like a monitoring service
+* printer status can update automatically while API mode is running
+* later dashboard features can read live-ish status without triggering hardware access directly
+
+---
+
+## 0.0.11 — API Runtime and Smoke Verification
+
+status : planned
+
+Goals:
+
+* add automated tests for the remote API layer
+* add API smoke execution to Jenkins
+* verify `/health`, `/printer/status`, and `/printer/poll` in CI
+* document how to run PrinterHub in API mode locally and from the release jar
+
+Example local run:
+
+```bash
+mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="api SIM_PORT sim 18080"
+````
+
+Example verification:
+
+```bash
+curl http://localhost:18080/health
+curl http://localhost:18080/printer/status
+curl -X POST http://localhost:18080/printer/poll
+```
+
+Expected result:
+
+* API mode is implemented and verified
+* CI proves that the service can start and answer HTTP requests
+* release artifacts include API usage documentation
+
+---
+
+## 0.0.12 — Failure Scenario Simulation
+
+status : planned
+
+Goals:
+
+* simulate printer errors
+* simulate disconnected printers
+* simulate timeout scenarios
+* expose failures through API responses and printer status
+
+Expected result:
+
+* system can demonstrate operational failure handling
+* `ERROR` and `DISCONNECTED` states become testable through the API
+* project better represents real industrial operation
+
+---
+
+## 0.0.13 — Job Model Foundation
+
+status : planned
+
+Goals:
+
+* introduce a print job domain model
+* define job lifecycle states
+* prepare upload and execution workflows without real file upload yet
+
+Example job states:
+
+```text
+CREATED
+VALIDATED
+ASSIGNED
+RUNNING
+COMPLETED
+FAILED
+CANCELLED
+```
+
+Expected result:
+
+* print jobs become explicit domain objects
+* future upload, queue, and dashboard features rely on a stable model
+* project moves from polling-only logic toward job orchestration
+
+---
+
+## 0.0.14 — Job Upload Simulation
+
+status : planned
+
+Goals:
+
+* add endpoint for creating a simulated print job
+* validate supported file or job type
+* store job metadata in memory
+* connect job lifecycle to printer state
+
+Example endpoints:
+
+```text
+POST /jobs
+GET  /jobs
+GET  /jobs/{id}
+```
+
+Expected result:
+
+* users can create a job through the API
+* job metadata can be inspected remotely
+* the system starts resembling a centralized printer-farm backend
+
+---
+
+## 0.0.15 — In-Memory Printer Farm Simulation
+
+status : planned
+
+Goals:
+
+* support multiple logical printers
+* expose all printer states through the API
+* assign jobs to a selected printer
+* simulate a small printer farm without requiring multiple real printers
+
+Example endpoints:
+
+```text
+GET  /printers
+GET  /printers/{id}/status
+POST /printers/{id}/poll
+POST /printers/{id}/jobs
+```
+
+Expected result:
+
+* project no longer represents only one printer
+* API can expose a printer fleet
+* later UI can display several printers in one dashboard
+
+---
+
+## 0.0.16 — Central Monitoring Dashboard
+
+status : planned
+
+Goals:
+
+* build a small web UI for printer farm monitoring
+* display all printers and their current states
+* show active jobs and last known status
+* call the REST API instead of accessing printers directly
+* refresh status from the API periodically
+
+Expected result:
+
+* users can monitor the printer farm from a central UI
+* project demonstrates the full chain from UI to printer service
+* the industrial simulation becomes visible and portfolio-ready
+
+---
+
+## 0.0.17 — Database Persistence
+
+status : planned
+
+Goals:
+
+* add persistent storage for jobs, printer states, and events
+* keep history across application restarts
+* prepare traceability for industrial-style monitoring
+
+Possible technology:
+
+```text
+SQLite first
+PostgreSQL later
+```
+
+Expected result:
+
+* jobs and printer events are stored persistently
+* printer history becomes queryable
+* the project gains a foundation for reporting and audit trails
+
+---
+
+## 0.0.18 — Hardware Simulation with Arduino
 
 status : planned
 
@@ -284,14 +501,14 @@ Expected result:
 
 ---
 
-## 0.0.11 — Optional Dockerized CI Runner
+## 0.0.19 — Optional Dockerized CI Runner
 
 status : optional
 
 Goals:
 
-* add Dockerfile for Maven/Java build execution
-* optionally run Jenkins pipeline using container agent
+* add Dockerfile for Maven and Java build execution
+* optionally run Jenkins pipeline using a container agent
 * keep CI independent from local machine setup
 
 Expected result:

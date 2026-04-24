@@ -17,6 +17,11 @@ pipeline {
             defaultValue: false,
             description: 'Publish the prepared release bundle to GitHub Releases.'
         )
+        string(
+            name: 'API_SMOKE_PORT',
+            defaultValue: '18090',
+            description: 'Port used for the simulated API smoke test.'
+        )
     }
 
     options {
@@ -67,6 +72,44 @@ pipeline {
             }
         }
 
+        stage('API Simulated Smoke Run') {
+            steps {
+                sh '''
+                    set -eu
+
+                    API_PORT="${API_SMOKE_PORT}"
+                    JAR_FILE=$(ls target/*-all.jar | head -n 1)
+
+                    echo "Using jar: ${JAR_FILE}"
+                    echo "Starting API smoke server on port ${API_PORT}"
+
+                    java -jar "${JAR_FILE}" api SIM_PORT sim "${API_PORT}" > target/api-smoke.log 2>&1 &
+                    API_PID=$!
+
+                    cleanup() {
+                    kill "${API_PID}" >/dev/null 2>&1 || true
+                    }
+                    trap cleanup EXIT
+
+                    for i in $(seq 1 20); do
+                    if curl -fsS "http://localhost:${API_PORT}/health" >/dev/null; then
+                        break
+                    fi
+                    sleep 1
+                    done
+
+                    curl -fsS "http://localhost:${API_PORT}/health"
+                    curl -fsS "http://localhost:${API_PORT}/printer/status"
+                    curl -fsS -X POST "http://localhost:${API_PORT}/printer/poll"
+                    curl -fsS "http://localhost:${API_PORT}/printer/status"
+
+                    echo
+                    echo "API smoke log:"
+                    cat target/api-smoke.log
+                '''
+            }
+        }
+
         stage('Prepare Release Bundle') {
             steps {
                 sh '''
@@ -106,6 +149,15 @@ pipeline {
                     if [ -f docs/version.md ]; then
                       cp docs/version.md release/
                     fi
+
+                    if [ -f docs/quickstart.md ]; then
+                      cp docs/quickstart.md release/
+                    fi
+
+                    if [ -f docs/industrial-bio-printer-simulation.md ]; then
+                      cp docs/industrial-bio-printer-simulation.md release/
+                    fi
+
                 '''
             }
         }
@@ -189,6 +241,7 @@ PY
             archiveArtifacts artifacts: 'release/**', allowEmptyArchive: true
             archiveArtifacts artifacts: '*.tar.gz', allowEmptyArchive: true
             archiveArtifacts artifacts: 'github-release-response.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/api-smoke.log', allowEmptyArchive: true
         }
 
         success {

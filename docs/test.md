@@ -14,6 +14,10 @@ Main production classes:
 - `PrinterPort.java` — printer communication abstraction
 - `SerialConnection.java` — serial communication implementation
 - `OperationMessages.java` — operator-facing messages
+- `RemoteApiServer.java` — lightweight embedded HTTP API server for `/health`, `/printer/status`, and `/printer/poll`
+- `PrinterState.java` — printer state enum
+- `PrinterSnapshot.java` — current printer state and temperature snapshot
+- `PrinterStateTracker.java` — parses responses and updates printer state
 
 Serial adapter classes in `printerhub.serial`:
 
@@ -44,26 +48,26 @@ Test code may use production code. Production code must not depend on test code.
 
 ## Runtime modes
 
-The application supports three modes:
+The application supports CLI mode, API mode, simulated mode, real hardware mode, and test-only fakes.
 
-| Mode | Adapter | Hardware | Typical command |
+| Mode | Purpose | Hardware | Typical command |
 |---|---|---:|---|
-| Real | `JSerialCommPortAdapter` | Yes | `mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="/dev/ttyUSB0 M105 3 2000 real"` |
-| Simulated | `SimulatedSerialPortAdapter` | No | `mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"` |
-| Test | `FakePrinterPort` / `FakeSerialPortAdapter` | No | `mvn test` |
+| CLI real | Poll real printer once or repeatedly | Yes | `mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="/dev/ttyUSB0 M105 3 2000 real"` |
+| CLI simulated | Poll simulated printer | No | `mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"` |
+| API real | Start HTTP API against real printer | Yes | `mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="api /dev/ttyUSB0 real 18080"` |
+| API simulated | Start HTTP API against simulated printer | No | `mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="api SIM_PORT sim 18080"` |
+| Test | Automated unit/integration testing | No | `mvn test` |
 
-Argument order for `Main`:
+CLI argument order:
 
 ```text
 <port> <command> <repeatCount> <delayMs> [mode]
-```
+````
 
-Examples:
+API argument order:
 
-```bash
-mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="/dev/ttyUSB0 M105 3 2000 real"
-mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="SIM_PORT M105 3 100 sim"
-mvn test
+```text
+api <port> [mode] [apiPort]
 ```
 
 ---
@@ -119,15 +123,46 @@ xmllint --format target/site/jacoco/jacoco.xml > jacoco-pretty.xml
 grep -n "printerhub/Main\|printerhub/SerialConnection\|printerhub/PrinterPoller" jacoco-pretty.xml
 ```
 
-### before github commit 
+### Before GitHub commit
+
+Run full verification:
 
 ```bash
-
 mvn clean verify
 mvn clean package
-# test:
+````
+
+Test CLI simulation mode:
+
+```bash
 java -jar target/printer-hub-<version>-all.jar SIM_PORT M105 3 100 sim
+```
+
+Test CLI real mode when printer is connected:
+
+```bash
 java -jar target/printer-hub-<version>-all.jar /dev/ttyUSB0 M105 3 2000 real
+```
+
+Test API simulation mode:
+
+```bash
+java -jar target/printer-hub-<version>-all.jar api SIM_PORT sim 18080
+```
+
+From another terminal:
+
+```bash
+curl http://localhost:18080/health
+curl http://localhost:18080/printer/status
+curl -X POST http://localhost:18080/printer/poll
+curl http://localhost:18080/printer/status
+```
+
+Test API real mode when printer is connected:
+
+```bash
+java -jar target/printer-hub-<version>-all.jar api /dev/ttyUSB0 real 18080
 ```
 
 
@@ -155,6 +190,28 @@ Focus:
 * timeout handling
 * disconnect behavior
 * workflow-level operator messages
+
+---
+
+### `RemoteApiServer`
+
+Provides lightweight HTTP endpoints.
+
+Endpoints:
+
+```text
+GET  /health
+GET  /printer/status
+POST /printer/poll
+```
+
+Focus:
+
+* API health check
+* JSON printer status output
+* safe polling through HTTP
+* state update after successful poll
+* error response when printer polling fails
 
 ---
 
@@ -281,20 +338,37 @@ This helps detect wording regressions, exit-code drift, and loss of useful opera
 
 
 
+ 
 
-Test the release jar, doenload from git extract and launch :
+
+```markdown
+Test the release jar after downloading from GitHub and extracting the archive:
 
 ```bash
 cd release
 java -jar printer-hub-<version>-all.jar SIM_PORT M105 3 100 sim
-``` 
+````
 
-
-or for real mode:
+For real mode:
 
 ```bash
 java -jar printer-hub-<version>-all.jar /dev/ttyUSB0 M105 3 2000 real
-``` 
+```
+
+For API simulation mode:
+
+```bash
+java -jar printer-hub-<version>-all.jar api SIM_PORT sim 18080
+```
+
+From another terminal:
+
+```bash
+curl http://localhost:18080/health
+curl http://localhost:18080/printer/status
+curl -X POST http://localhost:18080/printer/poll
+curl http://localhost:18080/printer/status
+```
 
 ---
 

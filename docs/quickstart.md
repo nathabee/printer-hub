@@ -17,7 +17,7 @@ Required tools:
 - Java 21
 - Maven
 - USB access permissions
-- Serial device available (`/dev/ttyUSB0` or simulation)
+- Serial device available for real mode, or simulation mode available without hardware
 
 Optional:
 
@@ -30,7 +30,7 @@ Optional:
 ```bash
 git clone https://github.com/nathabee/printer-hub.git
 cd printer-hub
-````
+```
 
 ---
 
@@ -92,6 +92,46 @@ Run:
 ```bash
 java -jar target/printer-hub-<version>-all.jar /dev/ttyUSB0 M105 3 2000 real
 ```
+
+---
+## Run API Mode
+
+API mode starts PrinterHub as a small HTTP service.
+
+Simulation mode:
+
+```bash
+java -jar target/printer-hub-<version>-all.jar api SIM_PORT sim 18080
+````
+
+Real printer mode:
+
+```bash
+java -jar target/printer-hub-<version>-all.jar api /dev/ttyUSB0 real 18080
+```
+
+From another terminal:
+
+```bash
+curl http://localhost:18080/health
+curl http://localhost:18080/printer/status
+curl -X POST http://localhost:18080/printer/poll
+curl http://localhost:18080/printer/status
+```
+
+Endpoints:
+
+```text
+GET  /health
+GET  /printer/status
+POST /printer/poll
+```
+
+Note:
+
+`/health` checks the API server.
+`/printer/poll` checks the printer and updates the printer snapshot.
+
 
 ---
 

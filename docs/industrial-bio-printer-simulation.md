@@ -303,49 +303,54 @@ Purpose:
 
 Current and planned development stages:
 
-| Step                       | Goal                                     | Status                |
-| -------------------------- | ---------------------------------------- | --------------------- |
-| Basic serial communication | Connect to printer and send commands     | Implemented           |
-| Continuous polling         | Read printer status repeatedly           | Implemented           |
-| Simulated serial adapter   | Run without real printer                 | Implemented           |
-| Structured logging         | Record commands, responses, and errors   | Partially implemented |
-| Printer state model        | Represent IDLE, PRINTING, ERROR, etc.    | Next                  |
-| REST API                   | Expose printer state and job actions     | Planned               |
-| Database                   | Persist jobs, states, logs, and history  | Planned               |
-| Multi-printer simulation   | Simulate a printer farm                  | Planned               |
-| Monitoring dashboard       | Central UI for all printers              | Planned               |
-| Job upload                 | Upload `.gcode` or simulated job package | Planned               |
-
+| Step | Goal | Status |
+|---|---|---|
+| Basic serial communication | Connect to printer and send commands | Implemented |
+| Continuous polling | Read printer status repeatedly | Implemented |
+| Simulated serial adapter | Run without real printer | Implemented |
+| Structured logging | Record commands, responses, and errors | Partially implemented |
+| Printer state model | Represent printer lifecycle states | Implemented |
+| REST API | Provide `/health`, `/printer/status`, `/printer/poll` | Implemented |
+| Continuous API monitoring | Background polling in API mode | Planned |
+| Failure simulation | Simulate disconnect and timeout scenarios | Planned |
+| Job model | Represent print jobs and lifecycle | Planned |
+| Job upload | Upload `.gcode` or simulated job package | Planned |
+| Multi-printer simulation | Simulate printer farm | Planned |
+| Monitoring dashboard | Central UI for printers | Planned |
+| Database persistence | Store jobs, states, and history | Planned |
+ 
 ---
 
 ## 10. Current Project Status
 
 Current capabilities:
 
-* basic serial communication implemented
-* continuous polling implemented
-* simulated serial adapter available
-* logging infrastructure defined
-* automated test foundation available
-* CI pipeline integration started
-
+- serial communication implemented
+- repeated polling workflow implemented
+- simulated serial adapter available
+- printer state model implemented
+- printer snapshot parsing available
+- REST API mode implemented
+- `/health`, `/printer/status`, and `/printer/poll` endpoints available
+- automated test foundation available
+- CI pipeline with Jenkins operational
+- release packaging implemented
+ 
 ---
-
+ 
 ## 11. Next Steps
 
 Next development goals:
 
-* implement printer state model
-* refine communication error handling
-* define job model
-* add REST API service
-* add database persistence
-* support file upload for print jobs
-* add multi-printer simulation
-* build monitoring dashboard
-* add live status updates
-* simulate failure scenarios
-
+- add continuous API monitoring
+- add API runtime verification in Jenkins
+- improve failure-state simulation
+- define job model
+- add simulated job creation endpoint
+- add multi-printer simulation
+- build monitoring dashboard
+- add database persistence
+ 
 ---
 
 ## 12. Long-Term Vision

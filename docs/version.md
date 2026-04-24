@@ -10,6 +10,7 @@ see ROADMAP.md
 
 ### Version 0.0.x : first sprint to create a deployment ready prototype
 
+- 0.0.9  Remote API Layer
 - 0.0.8  Printer State Model
 - 0.0.7  DevOps pipeline and release automation
 - 0.0.6  Jenkins CI and Broader Automated Verification
