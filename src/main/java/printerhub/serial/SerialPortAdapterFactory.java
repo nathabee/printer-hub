@@ -4,7 +4,7 @@ File: src/main/java/printerhub/serial/SerialPortAdapterFactory.java
 Purpose:
 
 central place choosing real implementation
-later can choose fake/simulated one
+or simulated runtime implementation
 */
 
 package printerhub.serial;
@@ -25,20 +25,20 @@ public final class SerialPortAdapterFactory {
     public static SerialPortAdapter create(String portName, String mode) {
         String normalizedMode = mode == null ? "real" : mode.trim().toLowerCase();
 
-        SerialPortAdapter result;
-        switch (normalizedMode) {
-            case "real":
-                result = createReal(portName);
-                break;
-            case "sim":
-            case "simulated":
-                result = createSimulated(portName);
-                break;
-            default:
-                throw new IllegalArgumentException(
-                        "mode must be one of: real, sim, simulated"
-                );
+        if ("real".equals(normalizedMode)) {
+            SimulationProfile.clearManagedProperties();
+            return createReal(portName);
         }
-        return result;
+
+        SimulationProfile profile = SimulationProfile.fromMode(normalizedMode);
+
+        if (profile != null) {
+            profile.apply();
+            return createSimulated(portName);
+        }
+
+        throw new IllegalArgumentException(
+                "mode must be one of: real, sim, simulated, sim-disconnected, sim-timeout, sim-error"
+        );
     }
 }

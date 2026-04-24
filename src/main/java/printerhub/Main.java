@@ -214,11 +214,19 @@ public class Main {
 
     private static void validateMode(String mode) {
         String normalizedMode = mode == null ? "" : mode.trim().toLowerCase();
-        if (!normalizedMode.equals("real")
-                && !normalizedMode.equals("sim")
-                && !normalizedMode.equals("simulated")) {
-            throw new IllegalArgumentException("mode must be one of: real, sim, simulated");
+
+        if (normalizedMode.equals("real")
+                || normalizedMode.equals("sim")
+                || normalizedMode.equals("simulated")
+                || normalizedMode.equals("sim-disconnected")
+                || normalizedMode.equals("sim-timeout")
+                || normalizedMode.equals("sim-error")) {
+            return;
         }
+
+        throw new IllegalArgumentException(
+                "mode must be one of: real, sim, simulated, sim-disconnected, sim-timeout, sim-error"
+        );
     }
 
     private static void printUsage() {
@@ -237,7 +245,7 @@ public class Main {
         System.err.println("  command     G-code command, for example M105");
         System.err.println("  repeatCount number of polling attempts, must be > 0");
         System.err.println("  delayMs     delay between polls in milliseconds, must be > 0");
-        System.err.println("  mode        real | sim | simulated");
+        System.err.println("  mode        real | sim | simulated | sim-disconnected | sim-timeout | sim-error");
         System.err.println("  apiPort     HTTP port for API mode, default 18080");
         System.err.println();
         System.err.println("Examples:");
@@ -247,6 +255,12 @@ public class Main {
                 + "-Dexec.args=\"SIM_PORT M105 3 100 sim\"");
         System.err.println("  mvn exec:java -Dexec.mainClass=\"printerhub.Main\" "
                 + "-Dexec.args=\"api SIM_PORT sim 18080\"");
+        System.err.println("  mvn exec:java -Dexec.mainClass=\"printerhub.Main\" "
+        + "-Dexec.args=\"api SIM_PORT sim-disconnected 18080\"");
+        System.err.println("  mvn exec:java -Dexec.mainClass=\"printerhub.Main\" "
+                + "-Dexec.args=\"api SIM_PORT sim-timeout 18080\"");
+        System.err.println("  mvn exec:java -Dexec.mainClass=\"printerhub.Main\" "
+                + "-Dexec.args=\"api SIM_PORT sim-error 18080\"");
         System.err.println();
         System.err.println("Defaults:");
         System.err.println("  port        = " + DEFAULT_PORT);

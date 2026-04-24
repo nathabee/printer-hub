@@ -132,4 +132,45 @@ class MainIntegrationTest {
         Main main = new Main();
         assertEquals(Main.class, main.getClass());
     }
+
+    @Test
+    void run_simDisconnected_returnsCode1() throws Exception {
+        System.setProperty("printerhub.initDelayMs", "1");
+
+        final int[] codeHolder = new int[1];
+
+        String stderr = tapSystemErrNormalized(() -> {
+            codeHolder[0] = Main.run(new String[]{"SIM_PORT", "M105", "1", "1", "sim-disconnected"});
+        });
+
+        assertEquals(1, codeHolder[0]);
+        assertTrue(stderr.contains("Failed to open serial port 'SIM_PORT'"));
+    }
+
+    @Test
+    void run_simTimeout_returnsCode4() throws Exception {
+        System.setProperty("printerhub.initDelayMs", "1");
+
+        final int[] codeHolder = new int[1];
+
+        String stderr = tapSystemErrNormalized(() -> {
+            codeHolder[0] = Main.run(new String[]{"SIM_PORT", "M105", "1", "1", "sim-timeout"});
+        });
+
+        assertEquals(4, codeHolder[0]);
+        assertTrue(stderr.contains("No response received from printer within"));
+    }
+
+    @Test
+    void run_simError_returnsCode0AndReceivesErrorResponse() throws Exception {
+        System.setProperty("printerhub.initDelayMs", "1");
+
+        String output = tapSystemOutNormalized(() -> {
+            int exitCode = Main.run(new String[]{"SIM_PORT", "M105", "1", "1", "sim-error"});
+            assertEquals(0, exitCode);
+        });
+
+        assertTrue(output.contains("[RECV] Error: Simulated printer failure"));
+    }
+
 }

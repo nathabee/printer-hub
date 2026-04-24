@@ -400,26 +400,44 @@ This helps detect wording regressions, exit-code drift, and loss of useful opera
 
 ## Release jar test after download
 
-Test the release jar after downloading from GitHub and extracting the archive:
+
+
+Test the release jar after downloading from GitHub and extracting the archive
+
+
+### test the jar 
+
+* in simulation mode (no real printer)
+
 
 ```bash
 cd release
 java -jar printer-hub-<version>-all.jar SIM_PORT M105 3 100 sim
 ```
 
-For real mode:
+* in real mode (with real printer)
 
 ```bash
 java -jar printer-hub-<version>-all.jar /dev/ttyUSB0 M105 3 2000 real
 ```
 
-For API simulation mode:
+### api mode 
+
+* For API simulation mode:
 
 ```bash
 java -jar printer-hub-<version>-all.jar api SIM_PORT sim 18080
 ```
 
-From another terminal:
+* For API in real mode (with real printer): 
+
+
+```bash
+java -jar printer-hub-<version>-all.jar api  /dev/ttyUSB0 real 18080
+```
+
+
+* From another terminal:
 
 ```bash
 curl http://localhost:18080/health

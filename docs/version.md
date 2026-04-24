@@ -10,6 +10,7 @@ see ROADMAP.md
 
 ### Version 0.0.x : first sprint to create a deployment ready prototype
 
+- 0.0.12 Failure Scenario Simulation
 - 0.0.11 API Runtime and Smoke Verification
 - 0.0.10 Continuous API Monitoring
 - 0.0.9  Remote API Layer
