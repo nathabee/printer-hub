@@ -76,6 +76,7 @@ Motors / Sensors / Heaters
 Current development focuses on the **Java control service and serial communication layer**, which form the foundation of the system.
 
 ---
+
 ## Current Scope
 
 Implemented components:
@@ -88,6 +89,8 @@ Implemented components:
 * printer state model and snapshot tracking
 * REST API backend
 * background monitoring in API mode
+* failure scenario simulation (disconnect, timeout, error)
+* print job domain model and lifecycle states
 * automated test framework
 * API runtime tests
 * Jenkins CI pipeline
@@ -96,8 +99,6 @@ Implemented components:
 
 Planned extensions:
 
-* failure scenario simulation
-* job management layer
 * job upload simulation
 * multi-printer simulation
 * centralized monitoring dashboard

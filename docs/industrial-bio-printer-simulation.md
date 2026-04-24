@@ -321,8 +321,7 @@ Current and planned development stages:
 | Database persistence | Store jobs, states, and history | Planned |
 
 ---
-
-## 10. Current Project Status
+ 
 
 ## 10. Current Project Status
 

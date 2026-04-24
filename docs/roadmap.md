@@ -303,7 +303,7 @@ Expected result:
 
 ## 0.0.11 — API Runtime and Smoke Verification
 
-status : planned
+status : done
 
 Goals:
 
@@ -347,7 +347,7 @@ Expected result:
 
 ## 0.0.12 — Failure Scenario Simulation
 
-status : planned
+status : done
 
 Goals:
 
@@ -366,7 +366,7 @@ Expected result:
 
 ## 0.0.13 — Job Model Foundation
 
-status : planned
+status : done
 
 Goals:
 

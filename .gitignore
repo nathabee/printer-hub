@@ -11,3 +11,6 @@ jacoco-pretty.xml
 *.swp
 *~
 .DS_Store
+
+
+chat.txt
