@@ -308,29 +308,40 @@ status : planned
 Goals:
 
 * add automated tests for the remote API layer
-* add API smoke execution to Jenkins
+* extend Jenkins API smoke verification
 * verify `/health`, `/printer/status`, and `/printer/poll` in CI
-* document how to run PrinterHub in API mode locally and from the release jar
+* verify automatic status refresh behavior
+* document API runtime validation workflow
+* ensure clean startup and shutdown behavior in CI
 
 Example local run:
 
 ```bash
-mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="api SIM_PORT sim 18080"
-```
+mvn exec:java \
+-Dexec.mainClass="printerhub.Main" \
+-Dexec.args="api SIM_PORT sim 18080"
+````
 
 Example verification:
 
 ```bash
 curl http://localhost:18080/health
 curl http://localhost:18080/printer/status
+
+sleep 3
+
+curl http://localhost:18080/printer/status
 curl -X POST http://localhost:18080/printer/poll
 ```
 
 Expected result:
 
-* API mode is implemented and verified
-* CI proves that the service can start and answer HTTP requests
-* release artifacts include API usage documentation
+* API server starts reliably
+* `/health` always responds
+* `/printer/status` updates automatically
+* manual `/printer/poll` remains functional
+* Jenkins validates API runtime behavior
+* release artifacts include verified API usage documentation
 
 ---
 

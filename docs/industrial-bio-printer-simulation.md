@@ -312,13 +312,17 @@ Current and planned development stages:
 | Printer state model | Represent printer lifecycle states | Implemented |
 | REST API | Provide `/health`, `/printer/status`, `/printer/poll` | Implemented |
 | Continuous API monitoring | Background polling in API mode | Implemented |
+| API runtime verification | Verify API startup and responses in CI | Implemented |
 | Failure simulation | Simulate disconnect and timeout scenarios | Planned |
 | Job model | Represent print jobs and lifecycle | Planned |
 | Job upload | Upload `.gcode` or simulated job package | Planned |
 | Multi-printer simulation | Simulate printer farm | Planned |
 | Monitoring dashboard | Central UI for printers | Planned |
 | Database persistence | Store jobs, states, and history | Planned |
+
 ---
+
+## 10. Current Project Status
 
 ## 10. Current Project Status
 
@@ -334,6 +338,7 @@ Current capabilities:
 - `/health`, `/printer/status`, and `/printer/poll` endpoints available
 - automatic status refresh without manual polling
 - automated test foundation available
+- API runtime smoke verification executed in CI
 - CI pipeline with Jenkins operational
 - release packaging implemented
  
@@ -342,8 +347,7 @@ Current capabilities:
 ## 11. Next Steps
 
 Next development goals:
-
-- add API runtime verification in Jenkins
+ 
 - improve failure-state simulation
 - define job model
 - add simulated job creation endpoint

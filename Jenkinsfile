@@ -115,6 +115,14 @@ pipeline {
                     grep -q '"state"' target/api-status-after.json
                     grep -q '"updatedAt"' target/api-status-after.json
 
+                    BEFORE_UPDATED_AT=$(grep '"updatedAt"' target/api-status-before.json)
+                    AFTER_UPDATED_AT=$(grep '"updatedAt"' target/api-status-after.json)
+
+                    echo "Before updatedAt: ${BEFORE_UPDATED_AT}"
+                    echo "After updatedAt:  ${AFTER_UPDATED_AT}"
+
+                    test "${BEFORE_UPDATED_AT}" != "${AFTER_UPDATED_AT}"
+
                     echo
                     echo "API smoke log:"
                     cat target/api-smoke.log

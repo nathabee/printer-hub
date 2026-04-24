@@ -11,11 +11,13 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ExecutorService;
 
 public class RemoteApiServer {
 
@@ -32,8 +34,10 @@ public class RemoteApiServer {
     private final AtomicBoolean pollingInProgress = new AtomicBoolean(false);
 
     private HttpServer server;
-    private java.util.concurrent.ExecutorService httpExecutor;
-private ScheduledExecutorService pollingExecutor;
+    private ExecutorService httpExecutor;
+    private ScheduledExecutorService pollingExecutor;
+    //private java.util.concurrent.ExecutorService httpExecutor;
+    //private ScheduledExecutorService pollingExecutor;
 
     public RemoteApiServer(int apiPort,
                            String printerPortName,

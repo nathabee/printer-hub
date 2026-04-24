@@ -33,6 +33,7 @@ Main test classes:
 - `MainIntegrationTest.java` — end-to-end flow tests
 - `MainRobustnessTest.java` — invalid-input and defensive-path tests
 - `TestReportWriter.java` — generates the operator-message report
+- `RemoteApiServerTest.java` — API endpoint and background monitoring tests
 
 Test helpers:
 
@@ -347,6 +348,10 @@ Running tests or verification generates:
 
 * `target/site/jacoco/index.html`
 * `target/operator-message-report.md`
+* `target/api-smoke.log`
+* `target/api-status-before.json`
+* `target/api-status-after.json`
+
 
 ### JaCoCo report
 

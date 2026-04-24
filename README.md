@@ -76,29 +76,32 @@ Motors / Sensors / Heaters
 Current development focuses on the **Java control service and serial communication layer**, which form the foundation of the system.
 
 ---
-
 ## Current Scope
 
 Implemented components:
 
 * serial communication with printer firmware
 * G-code command handling
-* repeated polling
+* repeated polling workflow
 * structured logging foundation
 * simulated serial adapter
+* printer state model and snapshot tracking
+* REST API backend
+* background monitoring in API mode
 * automated test framework
+* API runtime tests
 * Jenkins CI pipeline
+* API smoke verification in CI
 * JaCoCo coverage reporting
 
 Planned extensions:
 
-* printer state model
-* REST API backend
-* job management layer
-* database persistence
-* centralized monitoring dashboard
-* multi-printer simulation
 * failure scenario simulation
+* job management layer
+* job upload simulation
+* multi-printer simulation
+* centralized monitoring dashboard
+* database persistence
 
 See roadmap:
 
