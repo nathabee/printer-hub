@@ -423,7 +423,7 @@ Expected result:
 
 ## 0.0.15 — In-Memory Printer Farm Simulation
 
-status : planned
+status : done
 
 Goals:
 
@@ -437,7 +437,7 @@ Example endpoints:
 ```text
 GET  /printers
 GET  /printers/{id}/status
-POST /printers/{id}/poll
+POST /printers/{id}/poll 
 POST /printers/{id}/jobs
 ```
 
@@ -494,7 +494,20 @@ Expected result:
 
 ---
 
-## 0.0.18 — Hardware Simulation with Arduino
+## 0.0.18 — Job Execution Simulation
+
+Goals:
+
+* move assigned jobs from ASSIGNED to RUNNING
+* simulate completion and failure
+* connect job state changes to printer state
+* expose active job per printer
+
+
+
+
+---
+## 0.0.xxx — Hardware Simulation with Arduino
 
 status : planned
 
@@ -512,7 +525,7 @@ Expected result:
 
 ---
 
-## 0.0.19 — Optional Dockerized CI Runner
+## 0.0.xxx — Optional Dockerized CI Runner
 
 status : optional
 

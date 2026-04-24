@@ -5,9 +5,10 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import printerhub.serial.SerialPortAdapterFactory;
 
+
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.InetSocketAddress;
+import java.net.InetSocketAddress; 
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -16,12 +17,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-// import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean; 
 import printerhub.jobs.PrintJob;
 import printerhub.jobs.PrintJobStore;
 import printerhub.jobs.PrintJobType;
-
+import printerhub.farm.PrinterFarmStore;
+import printerhub.farm.PrinterNode;
 
 public class RemoteApiServer {
 
@@ -37,12 +38,11 @@ public class RemoteApiServer {
     private final PrinterStateTracker stateTracker;
     private final AtomicBoolean pollingInProgress = new AtomicBoolean(false);
     private final PrintJobStore jobStore;
+    private final PrinterFarmStore printerFarmStore;
 
     private HttpServer server;
     private ExecutorService httpExecutor;
-    private ScheduledExecutorService pollingExecutor;
-    //private java.util.concurrent.ExecutorService httpExecutor;
-    //private ScheduledExecutorService pollingExecutor;
+    private ScheduledExecutorService pollingExecutor; 
 
     public RemoteApiServer(int apiPort,
                            String printerPortName,
@@ -56,7 +56,8 @@ public class RemoteApiServer {
         this.baudRate = baudRate;
         this.initDelayMs = initDelayMs;
         this.pollDelayMs = pollDelayMs;
-        this.stateTracker = new PrinterStateTracker();
+        this.printerFarmStore = new PrinterFarmStore(printerPortName, printerMode);
+        this.stateTracker = printerFarmStore.getDefaultPrinter().getStateTracker();
         this.jobStore = new PrintJobStore();
     }
 
@@ -69,6 +70,7 @@ public class RemoteApiServer {
         server.createContext("/printer/status", this::handlePrinterStatus);
         server.createContext("/printer/poll", this::handlePrinterPoll);
         server.createContext("/jobs", this::handleJobs);
+        server.createContext("/printers", this::handlePrinters);
         server.setExecutor(httpExecutor);
         server.start();
 
@@ -157,21 +159,27 @@ public class RemoteApiServer {
     }
 
     private PrinterSnapshot pollPrinterOnce() {
+        return pollPrinterNode(printerFarmStore.getDefaultPrinter());
+    }
+
+    private PrinterSnapshot pollPrinterNode(PrinterNode printerNode) {
         if (!pollingInProgress.compareAndSet(false, true)) {
-            return stateTracker.getCurrentSnapshot();
+            return printerNode.getSnapshot();
         }
 
         PrinterPort port = new SerialConnection(
-                printerPortName,
+                printerNode.getPortName(),
                 baudRate,
-                SerialPortAdapterFactory.create(printerPortName, printerMode)
+                SerialPortAdapterFactory.create(printerNode.getPortName(), printerNode.getMode())
         );
 
+        PrinterStateTracker tracker = printerNode.getStateTracker();
+
         try {
-            stateTracker.markConnecting();
+            tracker.markConnecting();
 
             if (!port.connect()) {
-                return stateTracker.markDisconnected();
+                return tracker.markDisconnected();
             }
 
             sleepInitDelay();
@@ -180,20 +188,20 @@ public class RemoteApiServer {
             String response = port.readLine();
 
             if (!isValidTemperatureResponse(response)) {
-                return stateTracker.markError(response);
+                return tracker.markError(response);
             }
 
-            return stateTracker.updateFromResponse(response);
+            return tracker.updateFromResponse(response);
 
         } catch (TimeoutException e) {
-            return stateTracker.markError("Printer timeout: " + e.getMessage());
+            return tracker.markError("Printer timeout: " + e.getMessage());
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return stateTracker.markError("Printer polling interrupted: " + e.getMessage());
+            return tracker.markError("Printer polling interrupted: " + e.getMessage());
 
         } catch (Exception e) {
-            return stateTracker.markDisconnected();
+            return tracker.markDisconnected();
 
         } finally {
             try {
@@ -344,6 +352,153 @@ public class RemoteApiServer {
                 );
     }
 
+    private void handlePrinters(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/printers".equals(path)) {
+            handlePrintersRoot(exchange);
+            return;
+        }
+
+        if (path.startsWith("/printers/")) {
+            handlePrinterById(exchange, path);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson("Printer endpoint not found"));
+    }
+
+    private void handlePrintersRoot(HttpExchange exchange) throws IOException {
+        if (!isMethod(exchange, "GET")) {
+            sendJson(exchange, 405, errorJson("Method not allowed"));
+            return;
+        }
+
+        sendJson(exchange, 200, printersJson());
+    }
+
+    private void handlePrinterById(HttpExchange exchange, String path) throws IOException {
+        String remaining = path.substring("/printers/".length());
+        String[] parts = remaining.split("/");
+
+        if (parts.length < 2) {
+            sendJson(exchange, 404, errorJson("Printer endpoint not found"));
+            return;
+        }
+
+        String printerId = parts[0];
+        String action = parts[1];
+
+        PrinterNode printerNode = printerFarmStore.findById(printerId).orElse(null);
+
+        if (printerNode == null) {
+            sendJson(exchange, 404, errorJson("Printer not found"));
+            return;
+        }
+
+        if ("status".equals(action)) {
+            handlePrinterStatusById(exchange, printerNode);
+            return;
+        }
+
+        if ("poll".equals(action)) {
+            handlePrinterPollById(exchange, printerNode);
+            return;
+        }
+
+        if ("jobs".equals(action)) {
+            handlePrinterJobAssignment(exchange, printerNode);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson("Printer endpoint not found"));
+    }
+
+    private void handlePrinterStatusById(HttpExchange exchange, PrinterNode printerNode) throws IOException {
+        if (!isMethod(exchange, "GET")) {
+            sendJson(exchange, 405, errorJson("Method not allowed"));
+            return;
+        }
+
+        sendJson(exchange, 200, printerJson(printerNode));
+    }
+
+    private void handlePrinterPollById(HttpExchange exchange, PrinterNode printerNode) throws IOException {
+        if (!isMethod(exchange, "POST")) {
+            sendJson(exchange, 405, errorJson("Method not allowed"));
+            return;
+        }
+
+        PrinterSnapshot snapshot = pollPrinterNode(printerNode);
+
+        if (snapshot.getState() == PrinterState.ERROR || snapshot.getState() == PrinterState.DISCONNECTED) {
+            sendJson(exchange, 502, printerJson(printerNode));
+            return;
+        }
+
+        sendJson(exchange, 200, printerJson(printerNode));
+    }
+
+    private void handlePrinterJobAssignment(HttpExchange exchange, PrinterNode printerNode) throws IOException {
+        if (!isMethod(exchange, "POST")) {
+            sendJson(exchange, 405, errorJson("Method not allowed"));
+            return;
+        }
+
+        PrintJob job = jobStore.createAssigned(
+                "simulated-job-for-" + printerNode.getId(),
+                PrintJobType.SIMULATED,
+                printerNode.getId()
+        );
+
+        printerNode.assignJob(job.getId());
+
+        sendJson(exchange, 201, jobJson(job));
+    }
+
+    
+    private String printersJson() {
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        json.append("  \"printers\": [");
+
+        boolean first = true;
+        for (PrinterNode printerNode : printerFarmStore.findAll()) {
+            if (!first) {
+                json.append(",");
+            }
+
+            json.append("\n").append(indent(printerJson(printerNode), 4));
+            first = false;
+        }
+
+        if (!first) {
+            json.append("\n  ");
+        }
+
+        json.append("]\n");
+        json.append("}\n");
+
+        return json.toString();
+    }
+
+    private String printerJson(PrinterNode printerNode) {
+        PrinterSnapshot snapshot = printerNode.getSnapshot();
+
+        return "{\n"
+                + "  \"id\": " + nullableString(printerNode.getId()) + ",\n"
+                + "  \"name\": " + nullableString(printerNode.getName()) + ",\n"
+                + "  \"portName\": " + nullableString(printerNode.getPortName()) + ",\n"
+                + "  \"mode\": " + nullableString(printerNode.getMode()) + ",\n"
+                + "  \"assignedJobId\": " + nullableString(printerNode.getAssignedJobId()) + ",\n"
+                + "  \"state\": \"" + snapshot.getState() + "\",\n"
+                + "  \"hotendTemperature\": " + nullableNumber(snapshot.getHotendTemperature()) + ",\n"
+                + "  \"bedTemperature\": " + nullableNumber(snapshot.getBedTemperature()) + ",\n"
+                + "  \"lastResponse\": " + nullableString(snapshot.getLastResponse()) + ",\n"
+                + "  \"updatedAt\": \"" + JSON_TIME_FORMAT.format(snapshot.getUpdatedAt()) + "\"\n"
+                + "}\n";
+    }
+
     private void sendJsonUnchecked(HttpExchange exchange, int statusCode, String body) {
         try {
             sendJson(exchange, statusCode, body);
@@ -391,4 +546,5 @@ public class RemoteApiServer {
         String prefix = " ".repeat(spaces);
         return prefix + value.replace("\n", "\n" + prefix).stripTrailing();
     }
+
 }

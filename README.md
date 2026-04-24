@@ -94,6 +94,9 @@ Implemented components:
 * in-memory print job store
 * simulated job creation API
 * job listing and job lookup API
+* in-memory printer farm simulation
+* printer fleet status API
+* job assignment to selected printers
 * automated test framework
 * API runtime tests
 * Jenkins CI pipeline
@@ -102,14 +105,14 @@ Implemented components:
 
 Planned extensions:
 
-* connecting job lifecycle to printer state
-* multi-printer simulation
+* job execution simulation
 * centralized monitoring dashboard
 * database persistence
 
 See roadmap:
 
 * [`docs/roadmap.md`](docs/roadmap.md)
+
 
 ---
 

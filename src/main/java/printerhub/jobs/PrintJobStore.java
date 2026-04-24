@@ -16,6 +16,21 @@ public class PrintJobStore {
         return job;
     }
 
+    public PrintJob createAssigned(String name, PrintJobType type, String printerId) {
+        PrintJob job = PrintJob.create(name, type).assignedTo(printerId);
+        jobs.put(job.getId(), job);
+        return job;
+    }
+
+    public PrintJob save(PrintJob job) {
+        if (job == null) {
+            throw new IllegalArgumentException("print job must not be null");
+        }
+
+        jobs.put(job.getId(), job);
+        return job;
+    }
+
     public List<PrintJob> findAll() {
         return new ArrayList<>(jobs.values());
     }

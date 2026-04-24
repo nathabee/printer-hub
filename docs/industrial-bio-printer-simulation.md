@@ -317,11 +317,10 @@ Current and planned development stages:
 | Job model | Represent print jobs and lifecycle | Implemented |
 | Job upload simulation | Create simulated jobs through the API | Implemented |
 | In-memory job store | Store and retrieve job metadata during runtime | Implemented |
-| Multi-printer simulation | Simulate printer farm | Planned |
+| Multi-printer simulation | Simulate printer farm | Implemented |
+| Printer-specific job assignment | Assign jobs to selected printers | Implemented |
 | Monitoring dashboard | Central UI for printers | Planned |
 | Database persistence | Store jobs, states, and history | Planned |
-
-
 ---
  
 ## 10. Current Project Status
@@ -354,6 +353,13 @@ Current capabilities:
 - API runtime smoke verification executed in CI
 - CI pipeline with Jenkins operational
 - release packaging implemented
+- in-memory printer farm simulation implemented
+- printer fleet API endpoints available:
+  - `GET /printers`
+  - `GET /printers/{id}/status`
+  - `POST /printers/{id}/poll`
+  - `POST /printers/{id}/jobs`
+- jobs can be assigned to selected logical printers
 ---
 
 ## 11. Next Steps

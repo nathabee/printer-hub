@@ -284,4 +284,93 @@ class RemoteApiServerTest {
         return matcher.group(1);
     }
 
+
+    @Test
+    void printers_get_returnsPrinterFleet() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/printers"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"printers\""));
+        assertTrue(response.body().contains("\"id\": \"printer-1\""));
+        assertTrue(response.body().contains("\"id\": \"printer-2\""));
+        assertTrue(response.body().contains("\"id\": \"printer-3\""));
+    }
+
+    @Test
+    void printerStatusById_get_returnsPrinterStatus() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/printers/printer-1/status"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"id\": \"printer-1\""));
+        assertTrue(response.body().contains("\"state\""));
+        assertTrue(response.body().contains("\"updatedAt\""));
+    }
+
+    @Test
+    void printerPollById_post_returnsPrinterStatus() throws Exception {
+        int port = freePort();
+        startApi(port, 1000);
+
+        HttpResponse<String> response = send("POST", url(port, "/printers/printer-1/poll"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"id\": \"printer-1\""));
+        assertTrue(response.body().contains("\"state\""));
+    }
+
+    @Test
+    void printerJobAssignment_post_createsAssignedJob() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("POST", url(port, "/printers/printer-2/jobs"));
+
+        assertEquals(201, response.statusCode());
+        assertTrue(response.body().contains("\"type\": \"SIMULATED\""));
+        assertTrue(response.body().contains("\"state\": \"ASSIGNED\""));
+        assertTrue(response.body().contains("\"assignedPrinterId\": \"printer-2\""));
+    }
+
+    @Test
+    void printerStatusAfterJobAssignment_containsAssignedJobId() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> created = send("POST", url(port, "/printers/printer-2/jobs"));
+        String jobId = extractJsonString(created.body(), "id");
+
+        HttpResponse<String> response = send("GET", url(port, "/printers/printer-2/status"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"assignedJobId\": \"" + jobId + "\""));
+    }
+
+    @Test
+    void printerById_unknown_returns404() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/printers/missing/status"));
+
+        assertEquals(404, response.statusCode());
+        assertTrue(response.body().contains("Printer not found"));
+    }
+
+    @Test
+    void printerById_invalidMethod_returns405() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/printers/printer-1/poll"));
+
+        assertEquals(405, response.statusCode());
+        assertTrue(response.body().contains("Method not allowed"));
+    }
+
 }
