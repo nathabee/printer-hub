@@ -1,6 +1,8 @@
 package printerhub;
 
 import org.junit.jupiter.api.Test;
+
+import printerhub.serial.FakeSerialPortAdapter;
 import printerhub.serial.SerialPortAdapter;
 
 import java.io.ByteArrayInputStream;
@@ -164,11 +166,13 @@ class SerialConnectionTest {
         }
     }
 
-    @Test
+    @Test 
     void constructor_blankPortName_throws() throws Exception {
+        TestSerialPortAdapter adapter = new TestSerialPortAdapter();
+
         captureAndReportIllegalArgumentScenario(
                 "serial constructor blank portName",
-                () -> new SerialConnection("   ", 115200),
+                () -> new SerialConnection("   ", 115200, adapter),
                 "portName must not be blank"
         );
     }
@@ -194,10 +198,12 @@ class SerialConnectionTest {
     }
 
     @Test
-    void constructor_twoArg_validPath_setsPortName() {
-        SerialConnection connection = new SerialConnection("/dev/ttyUSB0", 115200);
+    void constructor_threeArg_validPath_setsPortName() {
+        FakeSerialPortAdapter adapter = new FakeSerialPortAdapter("FAKE_PORT");
 
-        assertEquals("/dev/ttyUSB0", connection.getPortName());
+        SerialConnection connection = new SerialConnection("FAKE_PORT", 115200, adapter);
+
+        assertEquals("FAKE_PORT", connection.getPortName());
     }
 
     @Test

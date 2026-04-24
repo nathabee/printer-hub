@@ -13,23 +13,35 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public class FakeSerialPortAdapter implements SerialPortAdapter {
 
     public boolean openResult = true;
     public boolean closeResult = true;
     public boolean open = false;
-    public String systemPortName = "FAKE_PORT";
+    public String systemPortName;
 
     private InputStream inputStream = new ByteArrayInputStream(new byte[0]);
     private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
+    public FakeSerialPortAdapter() {
+        this("FAKE_PORT");
+    }
+
+    public FakeSerialPortAdapter(String systemPortName) {
+        this.systemPortName = systemPortName == null || systemPortName.isBlank()
+                ? "FAKE_PORT"
+                : systemPortName;
+    }
+
     public void setInputData(String data) {
-        this.inputStream = new ByteArrayInputStream(data.getBytes());
+        String safeData = data == null ? "" : data;
+        this.inputStream = new ByteArrayInputStream(safeData.getBytes(StandardCharsets.UTF_8));
     }
 
     public String getWrittenData() {
-        return outputStream.toString();
+        return outputStream.toString(StandardCharsets.UTF_8);
     }
 
     @Override
