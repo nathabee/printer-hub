@@ -102,7 +102,7 @@ Simulation mode:
 
 ```bash
 java -jar target/printer-hub-<version>-all.jar api SIM_PORT sim 18080
-````
+```
 
 Real printer mode:
 

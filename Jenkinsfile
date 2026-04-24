@@ -99,9 +99,21 @@ pipeline {
                     done
 
                     curl -fsS "http://localhost:${API_PORT}/health"
-                    curl -fsS "http://localhost:${API_PORT}/printer/status"
-                    curl -fsS -X POST "http://localhost:${API_PORT}/printer/poll"
-                    curl -fsS "http://localhost:${API_PORT}/printer/status"
+                    curl -fsS "http://localhost:${API_PORT}/printer/status" > target/api-status-before.json
+
+                    sleep 3
+
+                    curl -fsS "http://localhost:${API_PORT}/printer/status" > target/api-status-after.json
+
+                    echo "Status before:"
+                    cat target/api-status-before.json
+
+                    echo
+                    echo "Status after:"
+                    cat target/api-status-after.json
+
+                    grep -q '"state"' target/api-status-after.json
+                    grep -q '"updatedAt"' target/api-status-after.json
 
                     echo
                     echo "API smoke log:"
@@ -242,6 +254,8 @@ PY
             archiveArtifacts artifacts: '*.tar.gz', allowEmptyArchive: true
             archiveArtifacts artifacts: 'github-release-response.json', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/api-smoke.log', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/api-status-before.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/api-status-after.json', allowEmptyArchive: true
         }
 
         success {

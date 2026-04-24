@@ -10,6 +10,7 @@ see ROADMAP.md
 
 ### Version 0.0.x : first sprint to create a deployment ready prototype
 
+- 0.0.10 Continuous API Monitoring
 - 0.0.9  Remote API Layer
 - 0.0.8  Printer State Model
 - 0.0.7  DevOps pipeline and release automation

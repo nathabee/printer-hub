@@ -37,6 +37,8 @@ Allows real and fake implementations.
 Lightweight embedded HTTP API server.  
 Provides `/health`, `/printer/status`, and `/printer/poll`.
 
+In API mode, it also starts a background monitoring scheduler.  
+The scheduler polls the printer periodically and refreshes the latest `PrinterSnapshot`, so `/printer/status` can update without requiring manual `POST /printer/poll`.
 
 ### `src/main/java/printerhub/serial/`
 
@@ -89,7 +91,7 @@ Run:
 
 ```bash
 mvn clean verify
-````
+```
 
 If runtime or hardware-related behavior changed, also run the checks below.
 
@@ -112,9 +114,30 @@ From another terminal:
 ```bash
 curl http://localhost:18080/health
 curl http://localhost:18080/printer/status
-curl -X POST http://localhost:18080/printer/poll
-curl http://localhost:18080/printer/status
+
+watch -n 1 curl http://localhost:18080/printer/status
 ```
+
+Expected behavior:
+
+* `/health` stays `UP`
+* `/printer/status` updates automatically
+* `updatedAt` changes without manual `POST /printer/poll`
+* state may move between `CONNECTING` and `IDLE` during background polling
+* connection messages may appear repeatedly because each polling cycle connects, reads, and disconnects
+
+Optional manual poll test:
+
+```bash
+curl -X POST http://localhost:18080/printer/poll
+```
+
+
+Expected behavior:
+
+returns an immediate snapshot
+does not interfere with background monitoring
+
 
 ### Test API with real printer
 
@@ -129,8 +152,8 @@ From another terminal, with printer connected:
 ```bash
 curl http://localhost:18080/health
 curl http://localhost:18080/printer/status
-curl -X POST http://localhost:18080/printer/poll
-curl http://localhost:18080/printer/status
+
+watch -n 1 curl http://localhost:18080/printer/status
 ```
 
 Optional unplug test:
@@ -145,6 +168,10 @@ Expected behavior:
 * `/health` stays `UP`
 * `/printer/poll` fails or returns an error when the cable is removed
 * `/printer/status` reflects the latest known or error state
+* connection messages may appear repeatedly because each polling cycle connects, reads, and disconnects
+ 
+``` 
+
 
 ---
 

@@ -14,7 +14,7 @@ Main production classes:
 - `PrinterPort.java` — printer communication abstraction
 - `SerialConnection.java` — serial communication implementation
 - `OperationMessages.java` — operator-facing messages
-- `RemoteApiServer.java` — lightweight embedded HTTP API server for `/health`, `/printer/status`, and `/printer/poll`
+- `RemoteApiServer.java` — lightweight embedded HTTP API server with continuous monitoring for `/health`, `/printer/status`, and `/printer/poll`
 - `PrinterState.java` — printer state enum
 - `PrinterSnapshot.java` — current printer state and temperature snapshot
 - `PrinterStateTracker.java` — parses responses and updates printer state
@@ -62,7 +62,7 @@ CLI argument order:
 
 ```text
 <port> <command> <repeatCount> <delayMs> [mode]
-````
+```
 
 API argument order:
 
@@ -123,28 +123,32 @@ xmllint --format target/site/jacoco/jacoco.xml > jacoco-pretty.xml
 grep -n "printerhub/Main\|printerhub/SerialConnection\|printerhub/PrinterPoller" jacoco-pretty.xml
 ```
 
-### Before GitHub commit
+---
+
+## Before GitHub commit
 
 Run full verification:
 
 ```bash
 mvn clean verify
 mvn clean package
-````
+```
 
-Test CLI simulation mode:
+### Test CLI simulation mode
 
 ```bash
 java -jar target/printer-hub-<version>-all.jar SIM_PORT M105 3 100 sim
 ```
 
-Test CLI real mode when printer is connected:
+### Test CLI real mode when printer is connected
 
 ```bash
 java -jar target/printer-hub-<version>-all.jar /dev/ttyUSB0 M105 3 2000 real
 ```
 
-Test API simulation mode:
+### Test API simulation mode
+
+Start API mode:
 
 ```bash
 java -jar target/printer-hub-<version>-all.jar api SIM_PORT sim 18080
@@ -155,17 +159,68 @@ From another terminal:
 ```bash
 curl http://localhost:18080/health
 curl http://localhost:18080/printer/status
+
+watch -n 1 curl http://localhost:18080/printer/status
+```
+
+Expected behavior:
+
+* `/health` stays `UP`
+* `/printer/status` updates automatically
+* `updatedAt` changes without manual `POST /printer/poll`
+* state may move between `CONNECTING` and `IDLE` during background polling
+* repeated connect/disconnect messages are expected because each monitoring cycle reconnects
+
+Optional manual poll check:
+
+```bash
 curl -X POST http://localhost:18080/printer/poll
 curl http://localhost:18080/printer/status
 ```
 
-Test API real mode when printer is connected:
+Expected behavior:
+
+* manual poll returns a current snapshot
+* API stays running
+* background monitoring continues afterward
+
+### Test API real mode when printer is connected
+
+Start API mode:
 
 ```bash
 java -jar target/printer-hub-<version>-all.jar api /dev/ttyUSB0 real 18080
 ```
 
+From another terminal:
 
+```bash
+curl http://localhost:18080/health
+curl http://localhost:18080/printer/status
+
+watch -n 1 curl http://localhost:18080/printer/status
+```
+
+Expected behavior:
+
+* `/health` stays `UP`
+* `/printer/status` updates automatically
+* `updatedAt` changes without manual `POST /printer/poll`
+* state may move between `CONNECTING` and `IDLE` during background polling
+* repeated connect/disconnect messages are expected because each monitoring cycle reconnects
+
+Optional unplug test:
+
+```bash
+curl -X POST http://localhost:18080/printer/poll
+curl http://localhost:18080/printer/status
+```
+
+Expected behavior:
+
+* `/health` stays `UP`
+* `/printer/poll` fails or returns an error when the cable is removed
+* `/printer/status` reflects the latest known or error state
 
 ---
 
@@ -195,7 +250,7 @@ Focus:
 
 ### `RemoteApiServer`
 
-Provides lightweight HTTP endpoints.
+Provides lightweight HTTP endpoints and continuous API monitoring.
 
 Endpoints:
 
@@ -209,7 +264,8 @@ Focus:
 
 * API health check
 * JSON printer status output
-* safe polling through HTTP
+* background status refresh
+* safe manual polling through HTTP
 * state update after successful poll
 * error response when printer polling fails
 
@@ -335,19 +391,16 @@ diff -u docs/reports/operator-message-report-0.0.5.md docs/reports/operator-mess
 
 This helps detect wording regressions, exit-code drift, and loss of useful operator context.
 
+---
 
+## Release jar test after download
 
-
- 
-
-
-```markdown
 Test the release jar after downloading from GitHub and extracting the archive:
 
 ```bash
 cd release
 java -jar printer-hub-<version>-all.jar SIM_PORT M105 3 100 sim
-````
+```
 
 For real mode:
 
@@ -366,6 +419,20 @@ From another terminal:
 ```bash
 curl http://localhost:18080/health
 curl http://localhost:18080/printer/status
+
+watch -n 1 curl http://localhost:18080/printer/status
+```
+
+Expected behavior:
+
+* `/health` stays `UP`
+* `/printer/status` updates automatically
+* `updatedAt` changes without manual `POST /printer/poll`
+* state may move between `CONNECTING` and `IDLE` during background polling
+
+Optional manual poll check:
+
+```bash
 curl -X POST http://localhost:18080/printer/poll
 curl http://localhost:18080/printer/status
 ```
@@ -374,12 +441,13 @@ curl http://localhost:18080/printer/status
 
 ## Summary
 
-The test strategy covers four things:
+The test strategy covers five things:
 
 1. polling logic
 2. serial communication behavior
 3. full application flow
 4. top-level robustness and operator-visible messages
+5. API runtime behavior and continuous status monitoring
 
 That gives better confidence than coverage alone.
  

@@ -127,9 +127,9 @@ public class Main {
                 DEFAULT_DELAY_MS
         );
 
-        apiServer.start();
-
         Runtime.getRuntime().addShutdownHook(new Thread(apiServer::stop));
+
+        apiServer.start();
 
         Thread.currentThread().join();
         return 0;

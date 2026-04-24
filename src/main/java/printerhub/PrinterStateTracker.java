@@ -1,6 +1,7 @@
 package printerhub;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -12,7 +13,7 @@ public class PrinterStateTracker {
     private PrinterSnapshot currentSnapshot =
             new PrinterSnapshot(PrinterState.DISCONNECTED, null, null, null, LocalDateTime.now());
 
-    public PrinterSnapshot markConnecting() {
+    public synchronized PrinterSnapshot markConnecting() {
         currentSnapshot = new PrinterSnapshot(
                 PrinterState.CONNECTING,
                 currentSnapshot.getHotendTemperature(),
@@ -23,7 +24,7 @@ public class PrinterStateTracker {
         return currentSnapshot;
     }
 
-    public PrinterSnapshot markDisconnected() {
+    public synchronized PrinterSnapshot markDisconnected() {
         currentSnapshot = new PrinterSnapshot(
                 PrinterState.DISCONNECTED,
                 currentSnapshot.getHotendTemperature(),
@@ -34,7 +35,7 @@ public class PrinterStateTracker {
         return currentSnapshot;
     }
 
-    public PrinterSnapshot markError(String response) {
+    public synchronized PrinterSnapshot markError(String response) {
         currentSnapshot = new PrinterSnapshot(
                 PrinterState.ERROR,
                 currentSnapshot.getHotendTemperature(),
@@ -45,7 +46,7 @@ public class PrinterStateTracker {
         return currentSnapshot;
     }
 
-    public PrinterSnapshot updateFromResponse(String response) {
+    public synchronized PrinterSnapshot updateFromResponse(String response) {
         if (response == null || response.isBlank()) {
             return markError(response);
         }
@@ -65,12 +66,12 @@ public class PrinterStateTracker {
         return currentSnapshot;
     }
 
-    public PrinterSnapshot getCurrentSnapshot() {
+    public synchronized PrinterSnapshot getCurrentSnapshot() {
         return currentSnapshot;
     }
 
     private PrinterState resolveState(String response, Double hotendTemperature) {
-        String normalized = response.toLowerCase();
+        String normalized = response.toLowerCase(Locale.ROOT);
 
         if (normalized.contains("error")
                 || normalized.contains("kill")

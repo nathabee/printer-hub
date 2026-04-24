@@ -284,7 +284,7 @@ Expected result:
   
 ## 0.0.10 — Continuous API Monitoring
 
-status : planned
+status : done
 
 Goals:
 
@@ -316,7 +316,7 @@ Example local run:
 
 ```bash
 mvn exec:java -Dexec.mainClass="printerhub.Main" -Dexec.args="api SIM_PORT sim 18080"
-````
+```
 
 Example verification:
 

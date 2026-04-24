@@ -10,8 +10,12 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RemoteApiServer {
 
@@ -25,8 +29,11 @@ public class RemoteApiServer {
     private final long initDelayMs;
     private final long pollDelayMs;
     private final PrinterStateTracker stateTracker;
+    private final AtomicBoolean pollingInProgress = new AtomicBoolean(false);
 
     private HttpServer server;
+    private java.util.concurrent.ExecutorService httpExecutor;
+private ScheduledExecutorService pollingExecutor;
 
     public RemoteApiServer(int apiPort,
                            String printerPortName,
@@ -44,22 +51,48 @@ public class RemoteApiServer {
     }
 
     public void start() throws IOException {
+        httpExecutor = Executors.newFixedThreadPool(4);
+        pollingExecutor = Executors.newSingleThreadScheduledExecutor();
+
         server = HttpServer.create(new InetSocketAddress(apiPort), 0);
         server.createContext("/health", this::handleHealth);
         server.createContext("/printer/status", this::handlePrinterStatus);
         server.createContext("/printer/poll", this::handlePrinterPoll);
-        server.setExecutor(Executors.newFixedThreadPool(4));
+        server.setExecutor(httpExecutor);
         server.start();
+
+        pollingExecutor.scheduleWithFixedDelay(
+                this::runBackgroundPollSafely,
+                0,
+                pollDelayMs,
+                TimeUnit.MILLISECONDS
+        );
 
         System.out.println(OperationMessages.infoMessage(
                 "Remote API started on http://localhost:" + apiPort
         ));
+        System.out.println(OperationMessages.infoMessage(
+                "Background printer monitoring started for port '" + printerPortName + "' in mode '" + printerMode + "'."
+        ));
     }
 
     public void stop() {
+        System.out.println(OperationMessages.infoMessage("Stopping Remote API server..."));
+
+        if (pollingExecutor != null) {
+            pollingExecutor.shutdownNow();
+        }
+
         if (server != null) {
             server.stop(0);
         }
+
+        if (httpExecutor != null) {
+            httpExecutor.shutdownNow();
+        }
+
+        stateTracker.markDisconnected();
+        System.out.println(OperationMessages.infoMessage("Remote API server stopped."));
     }
 
     private void handleHealth(HttpExchange exchange) throws IOException {
@@ -91,6 +124,32 @@ public class RemoteApiServer {
             return;
         }
 
+        PrinterSnapshot snapshot = pollPrinterOnce();
+
+        if (snapshot.getState() == PrinterState.ERROR || snapshot.getState() == PrinterState.DISCONNECTED) {
+            sendJson(exchange, 502, snapshotJson(snapshot));
+            return;
+        }
+
+        sendJson(exchange, 200, snapshotJson(snapshot));
+    }
+
+    private void runBackgroundPollSafely() {
+        try {
+            pollPrinterOnce();
+        } catch (Exception e) {
+            stateTracker.markError("Background polling failed: " + e.getMessage());
+            System.err.println(OperationMessages.errorMessage(
+                    "Background polling failed: " + e.getMessage()
+            ));
+        }
+    }
+
+    private PrinterSnapshot pollPrinterOnce() {
+        if (!pollingInProgress.compareAndSet(false, true)) {
+            return stateTracker.getCurrentSnapshot();
+        }
+
         PrinterPort port = new SerialConnection(
                 printerPortName,
                 baudRate,
@@ -101,44 +160,44 @@ public class RemoteApiServer {
             stateTracker.markConnecting();
 
             if (!port.connect()) {
-                stateTracker.markDisconnected();
-                sendJson(exchange, 500, errorJson(
-                        OperationMessages.failedToConnectForPolling(printerPortName)
-                ));
-                return;
+                return stateTracker.markDisconnected();
             }
 
-            Thread.sleep(initDelayMs);
+            sleepInitDelay();
 
             port.sendCommand(DEFAULT_POLL_COMMAND);
             String response = port.readLine();
 
             if (!isValidTemperatureResponse(response)) {
-                stateTracker.markError(response);
-                sendJson(exchange, 502, errorJson("Invalid printer response for M105"));
-                return;
+                return stateTracker.markError(response);
             }
 
-            PrinterSnapshot snapshot = stateTracker.updateFromResponse(response);
-            sendJson(exchange, 200, snapshotJson(snapshot));
+            return stateTracker.updateFromResponse(response);
 
         } catch (TimeoutException e) {
-            stateTracker.markError(e.getMessage());
-            sendJson(exchange, 504, errorJson("Printer timeout: " + e.getMessage()));
+            return stateTracker.markError("Printer timeout: " + e.getMessage());
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            stateTracker.markError(e.getMessage());
-            sendJson(exchange, 500, errorJson("Printer polling interrupted: " + e.getMessage()));
+            return stateTracker.markError("Printer polling interrupted: " + e.getMessage());
 
         } catch (Exception e) {
-            stateTracker.markDisconnected();
-            sendJson(exchange, 500, errorJson("Printer polling failed: " + e.getMessage()));
+            return stateTracker.markDisconnected();
 
         } finally {
-            port.disconnect();
+            try {
+                port.disconnect();
+            } finally {
+                pollingInProgress.set(false);
+            }
         }
-}
+    }
+
+    private void sleepInitDelay() throws InterruptedException {
+        if (initDelayMs > 0) {
+            Thread.sleep(initDelayMs);
+        }
+    }
 
     private boolean isMethod(HttpExchange exchange, String expectedMethod) {
         return expectedMethod.equalsIgnoreCase(exchange.getRequestMethod());
@@ -178,7 +237,7 @@ public class RemoteApiServer {
             return "null";
         }
 
-        return String.format(java.util.Locale.ROOT, "%.2f", value);
+        return String.format(Locale.ROOT, "%.2f", value);
     }
 
     private String nullableString(String value) {
@@ -217,14 +276,14 @@ public class RemoteApiServer {
     }
 
     private boolean isValidTemperatureResponse(String response) {
-    if (response == null || response.isBlank()) {
-        return false;
-    }
+        if (response == null || response.isBlank()) {
+            return false;
+        }
 
-    String normalized = response.toLowerCase();
+        String normalized = response.toLowerCase(Locale.ROOT);
 
-    return normalized.contains("ok")
-            && normalized.contains("t:")
-            && normalized.contains("b:");
+        return normalized.contains("ok")
+                && normalized.contains("t:")
+                && normalized.contains("b:");
     }
 }
