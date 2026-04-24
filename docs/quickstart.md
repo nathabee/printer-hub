@@ -122,16 +122,90 @@ curl http://localhost:18080/printer/status
 Endpoints:
 
 ```text
+Core endpoints:
+
 GET  /health
 GET  /printer/status
 POST /printer/poll
+
+Printer farm endpoints:
+
+GET  /printers
+GET  /printers/{id}/status
+POST /printers/{id}/poll
+POST /printers/{id}/jobs
+
+Dashboard:
+
+GET /dashboard
 ```
 
 Note:
+ 
+- `/health` verifies that the API service is running
+- `/printer/poll` forces an immediate polling cycle
+- background polling continues automatically
+---
 
-`/health` checks the API server.
-`/printer/poll` checks the printer and updates the printer snapshot.
+## Test Printer Farm API
 
+
+
+List printers:
+
+```bash
+curl http://localhost:18080/printers
+```
+Default simulated printers:
+
+```text
+printer-1
+printer-2
+printer-3
+```
+
+Assign job to printer:
+
+```bash
+curl -X POST http://localhost:18080/printers/printer-2/jobs
+```
+
+Check printer status:
+
+```bash
+curl http://localhost:18080/printers/printer-2/status
+```
+
+Expected:
+
+* assigned job appears in printer data
+* temperatures update over time
+
+---
+
+## Open Monitoring Dashboard
+
+After starting API mode, open the dashboard in a browser.
+
+Example:
+
+```text
+http://localhost:18080/dashboard
+```
+
+The dashboard:
+
+* displays all simulated printers
+* shows current printer states
+* shows temperatures and assigned jobs
+* refreshes automatically every few seconds
+* retrieves data only from the REST API
+
+This verifies:
+
+```text
+browser -> REST API -> printer farm simulation
+```
 
 ---
 
@@ -223,10 +297,12 @@ Check:
 
 ## Next Steps
 
-After successful execution:
+ After successful execution:
 
 * review logs
-* inspect polling behavior
+* inspect printer farm behavior
+* open the monitoring dashboard
+* assign simulated jobs
 * explore test results
 * examine roadmap
 
@@ -236,3 +312,5 @@ See:
 * [`industrial-bio-printer-simulation.md`](industrial-bio-printer-simulation.md)
 * [`devops.md`](devops.md)
  
+
+

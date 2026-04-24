@@ -32,11 +32,11 @@
     </filter>
 
     <clipPath id="shotLeftClip">
-      <rect x="920" y="122" width="400" height="400" rx="18"/>
+      <rect x="920" y="152" width="400" height="400" rx="18"/>
     </clipPath>
 
     <clipPath id="shotRightClip">
-      <rect x="960" y="90" width="600" height="300" rx="18"/>
+      <rect x="1060" y="5" width="450" height="300" rx="18"/>
     </clipPath>
   </defs>
 
@@ -105,9 +105,9 @@
   </g>
 
   <g filter="url(#shadow)"> 
-    <rect x="920" y="122" width="400" height="400" rx="18" fill="#edf1f4"  opacity="0.42"/>
-    <image href="printerhub-screenshot-1.png" xlink:href="printerhub-screenshot-1.png"
-           x="920" y="122"
+    <rect x="920" y="152" width="400" height="400" rx="18" fill="#edf1f4"  opacity="0.42"/>
+    <image href="printerhub-image.png" xlink:href="printerhub-image.png"
+           x="920" y="152"
            width="400" height="400"
            preserveAspectRatio="xMidYMid meet"
            clip-path="url(#shotLeftClip)"/>
@@ -118,10 +118,10 @@
   </g>
 
   <g filter="url(#shadow)"> 
-    <rect x="960" y="90" width="600" height="300" rx="18" fill="#edf1f4"  opacity="0.42"/>
-    <image href="printerhub-image.png" xlink:href="printerhub-image.png"
-           x="960" y="90"
-           width="600" height="300"
+    <rect x="1060" y="5" width="450" height="300" rx="18" fill="#edf1f4"  opacity="0.42"/>
+    <image href="printerhub-screenshot-2.png" xlink:href="printerhub-screenshot-2.png"
+           x="1060" y="5"
+           width="450" height="300"
            preserveAspectRatio="xMidYMid meet"
            clip-path="url(#shotRightClip)"/>
     <text x="1250" y="390"

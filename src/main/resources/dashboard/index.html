@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PrinterHub Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/dashboard/dashboard.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">PrinterHub</p>
+        <h1>Printer Farm Monitoring</h1>
+        <p class="lead">Live status overview for the in-memory printer farm.</p>
+      </div>
+      <button id="refreshButton" type="button">Refresh now</button>
+    </header>
+
+    <section class="summary">
+      <div class="summary-card">
+        <span class="summary-label">Printers</span>
+        <strong id="printerCount">0</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Last refresh</span>
+        <strong id="lastRefresh">never</strong>
+      </div>
+    </section>
+
+    <section>
+      <h2>Printers</h2>
+      <div id="printerGrid" class="printer-grid">
+        <p class="muted">Loading printer status...</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="/dashboard/dashboard.js"></script>
+</body>
+</html>

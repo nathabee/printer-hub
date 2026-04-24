@@ -23,6 +23,7 @@ import printerhub.jobs.PrintJobStore;
 import printerhub.jobs.PrintJobType;
 import printerhub.farm.PrinterFarmStore;
 import printerhub.farm.PrinterNode;
+import java.io.InputStream;
 
 public class RemoteApiServer {
 
@@ -71,6 +72,7 @@ public class RemoteApiServer {
         server.createContext("/printer/poll", this::handlePrinterPoll);
         server.createContext("/jobs", this::handleJobs);
         server.createContext("/printers", this::handlePrinters);
+        server.createContext("/dashboard", this::handleDashboard);
         server.setExecutor(httpExecutor);
         server.start();
 
@@ -545,6 +547,52 @@ public class RemoteApiServer {
     private String indent(String value, int spaces) {
         String prefix = " ".repeat(spaces);
         return prefix + value.replace("\n", "\n" + prefix).stripTrailing();
+    }
+
+    private void handleDashboard(HttpExchange exchange) throws IOException {
+        if (!isMethod(exchange, "GET")) {
+            sendJson(exchange, 405, errorJson("Method not allowed"));
+            return;
+        }
+
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/dashboard".equals(path) || "/dashboard/".equals(path)) {
+            sendResource(exchange, "/dashboard/index.html", "text/html; charset=utf-8");
+            return;
+        }
+
+        if ("/dashboard/dashboard.css".equals(path)) {
+            sendResource(exchange, "/dashboard/dashboard.css", "text/css; charset=utf-8");
+            return;
+        }
+
+        if ("/dashboard/dashboard.js".equals(path)) {
+            sendResource(exchange, "/dashboard/dashboard.js", "application/javascript; charset=utf-8");
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson("Dashboard resource not found"));
+    }
+
+    private void sendResource(HttpExchange exchange, String resourcePath, String contentType) throws IOException {
+        try (InputStream inputStream = RemoteApiServer.class.getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                sendJson(exchange, 404, errorJson("Resource not found: " + resourcePath));
+                return;
+            }
+
+            byte[] bytes = inputStream.readAllBytes();
+
+            Headers headers = exchange.getResponseHeaders();
+            headers.set("Content-Type", contentType);
+
+            exchange.sendResponseHeaders(200, bytes.length);
+
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write(bytes);
+            }
+        }
     }
 
 }

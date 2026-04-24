@@ -298,7 +298,7 @@ Purpose:
 * handle connection failures
 
 ---
-
+ 
 ## 9. Development Steps
 
 Current and planned development stages:
@@ -320,7 +320,12 @@ Current and planned development stages:
 | Multi-printer simulation | Simulate printer farm | Implemented |
 | Printer-specific job assignment | Assign jobs to selected printers | Implemented |
 | Monitoring dashboard | Central UI for printers | Planned |
+| Database persistence | Store jobs, states, and history | Planned | 
+| Multi-printer simulation | Simulate printer farm | Implemented |
+| Printer-specific job assignment | Assign jobs to selected printers | Implemented |
+| Monitoring dashboard | Embedded UI for printer farm monitoring | Implemented |
 | Database persistence | Store jobs, states, and history | Planned |
+
 ---
  
 ## 10. Current Project Status
@@ -360,17 +365,25 @@ Current capabilities:
   - `POST /printers/{id}/poll`
   - `POST /printers/{id}/jobs`
 - jobs can be assigned to selected logical printers
+- embedded monitoring dashboard implemented:
+  - `GET /dashboard`
+  - `GET /dashboard/dashboard.css`
+  - `GET /dashboard/dashboard.js`
+- dashboard displays printer fleet state, temperatures, assigned jobs, and update time
+- dashboard refreshes from REST API periodically
+
+
 ---
 
 ## 11. Next Steps
 
 Next development goals:
 
-- connect job lifecycle to printer state
-- add multi-printer simulation
-- assign jobs to selected printers
-- build monitoring dashboard
+- simulate job execution lifecycle
+- connect assigned jobs to printer runtime state
+- expose active job per printer
 - add database persistence
+- store printer state and job history across restarts
  
 ---
 

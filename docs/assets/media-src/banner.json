@@ -20,25 +20,23 @@
 
   "iconFile": "printerhub-icon.svg",
 
-  "screenshot1": "printerhub-screenshot-1.png",
+  "screenshot1": "printerhub-image.png",
   "screenshot1Label": "",
 
-  "screenshot2": "printerhub-image.png",
+  "screenshot2": "printerhub-screenshot-dashboard.png", 
   "screenshot2Label": "",
-
-  "screenshot22": "printerhub-screenshot-2.png",
-  "screenshot22Label": "REST API monitoring test",
+ 
 
   "shot1X": 920,
-  "shot1Y": 122,
+  "shot1Y": 152,
   "shot1Width": 400,
   "shot1Height": 400,
   "shot1Radius": 18,
   "shot1Fit": "xMidYMid meet",
 
-  "shot2X": 960,
-  "shot2Y": 90,
-  "shot2Width": 600,
+  "shot2X": 1060,
+  "shot2Y": 5,
+  "shot2Width": 450,
   "shot2Height": 300,
   "shot2Radius": 18,
   "shot2Fit": "xMidYMid meet"

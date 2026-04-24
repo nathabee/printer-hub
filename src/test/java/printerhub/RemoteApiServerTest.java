@@ -373,4 +373,40 @@ class RemoteApiServerTest {
         assertTrue(response.body().contains("Method not allowed"));
     }
 
+    @Test
+    void dashboard_get_returnsHtml() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/dashboard"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("PrinterHub Dashboard"));
+        assertTrue(response.body().contains("/dashboard/dashboard.css"));
+        assertTrue(response.body().contains("/dashboard/dashboard.js"));
+    }
+
+    @Test
+    void dashboardCss_get_returnsCss() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/dashboard/dashboard.css"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains(".printer-grid"));
+    }
+
+    @Test
+    void dashboardJs_get_returnsJavaScript() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/dashboard/dashboard.js"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("fetch(\"/printers\")"));
+    }
+
+
 }

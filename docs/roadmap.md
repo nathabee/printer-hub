@@ -451,7 +451,7 @@ Expected result:
 
 ## 0.0.16 — Central Monitoring Dashboard
 
-status : planned
+status : done
 
 Goals:
 
