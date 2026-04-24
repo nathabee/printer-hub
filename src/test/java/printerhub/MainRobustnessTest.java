@@ -89,7 +89,7 @@ class MainRobustnessTest {
                 "invalid mode",
                 new String[]{"SIM_PORT", "M105", "1", "1", "banana"},
                 2,
-                "mode must be one of: real, sim, simulated"
+                "mode must be one of: real, sim, simulated, sim-disconnected, sim-timeout, sim-error"
         );
     }
 
