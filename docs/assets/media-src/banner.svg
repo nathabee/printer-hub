@@ -72,7 +72,7 @@
           font-family="Arial, sans-serif"
           font-size="22"
           font-weight="400"
-          fill="#6c5841">Serial communication • printer state tracking • REST status API</text>
+          fill="#6c5841">Serial communication • live monitoring • simulated job API</text>
   </g>
 
   <g transform="translate(78,248)">
@@ -94,14 +94,14 @@
     <text x="422" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#40596a">G-code</text>
 
     <rect x="586" y="68" width="160" height="38" rx="19" fill="#e9eef1"/>
-    <text x="616" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#40596a">REST API</text>
+    <text x="616" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#40596a">REST + Jobs API</text>
 
 
 
     <text x="36" y="136" font-family="Arial, sans-serif" font-size="21" fill="#374151">• USB serial device control</text>
     <text x="36" y="168" font-family="Arial, sans-serif" font-size="21" fill="#374151">• reliable G-code communication</text>
-    <text x="388" y="136" font-family="Arial, sans-serif" font-size="21" fill="#374151">• printer state modeling</text>
-    <text x="388" y="168" font-family="Arial, sans-serif" font-size="21" fill="#374151">• REST-based monitoring endpoints</text>
+    <text x="388" y="136" font-family="Arial, sans-serif" font-size="21" fill="#374151">• state and job modeling</text>
+    <text x="388" y="168" font-family="Arial, sans-serif" font-size="21" fill="#374151">• REST monitoring and job endpoints</text>
   </g>
 
   <g filter="url(#shadow)"> 

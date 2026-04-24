@@ -310,19 +310,20 @@ Current and planned development stages:
 | Simulated serial adapter | Run without real printer | Implemented |
 | Structured logging | Record commands, responses, and errors | Partially implemented |
 | Printer state model | Represent printer lifecycle states | Implemented |
-| REST API | Provide `/health`, `/printer/status`, `/printer/poll` | Implemented |
+| REST API | Provide `/health`, `/printer/status`, and `/printer/poll` | Implemented |
 | Continuous API monitoring | Background polling in API mode | Implemented |
 | API runtime verification | Verify API startup and responses in CI | Implemented |
-| Failure simulation | Simulate disconnect and timeout scenarios | Planned |
-| Job model | Represent print jobs and lifecycle | Planned |
-| Job upload | Upload `.gcode` or simulated job package | Planned |
+| Failure simulation | Simulate disconnect, timeout, and printer error scenarios | Implemented |
+| Job model | Represent print jobs and lifecycle | Implemented |
+| Job upload simulation | Create simulated jobs through the API | Implemented |
+| In-memory job store | Store and retrieve job metadata during runtime | Implemented |
 | Multi-printer simulation | Simulate printer farm | Planned |
 | Monitoring dashboard | Central UI for printers | Planned |
 | Database persistence | Store jobs, states, and history | Planned |
 
+
 ---
  
-
 ## 10. Current Project Status
 
 Current capabilities:
@@ -336,21 +337,32 @@ Current capabilities:
 - continuous background polling in API mode
 - `/health`, `/printer/status`, and `/printer/poll` endpoints available
 - automatic status refresh without manual polling
+- failure scenario simulation available:
+  - disconnected printer
+  - timeout behavior
+  - printer error responses
+- print job domain model implemented:
+  - job identity
+  - lifecycle states
+  - state transition validation
+- in-memory print job storage implemented
+- job API endpoints available:
+  - `POST /jobs`
+  - `GET /jobs`
+  - `GET /jobs/{id}`
 - automated test foundation available
 - API runtime smoke verification executed in CI
 - CI pipeline with Jenkins operational
 - release packaging implemented
- 
 ---
 
 ## 11. Next Steps
 
 Next development goals:
- 
-- improve failure-state simulation
-- define job model
-- add simulated job creation endpoint
+
+- connect job lifecycle to printer state
 - add multi-printer simulation
+- assign jobs to selected printers
 - build monitoring dashboard
 - add database persistence
  

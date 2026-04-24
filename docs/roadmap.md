@@ -396,7 +396,7 @@ Expected result:
 
 ## 0.0.14 — Job Upload Simulation
 
-status : planned
+status : done
 
 Goals:
 

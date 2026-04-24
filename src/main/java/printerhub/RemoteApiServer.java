@@ -17,7 +17,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.ExecutorService;
+// import java.util.concurrent.ExecutorService;
+import printerhub.jobs.PrintJob;
+import printerhub.jobs.PrintJobStore;
+import printerhub.jobs.PrintJobType;
+
 
 public class RemoteApiServer {
 
@@ -32,6 +36,7 @@ public class RemoteApiServer {
     private final long pollDelayMs;
     private final PrinterStateTracker stateTracker;
     private final AtomicBoolean pollingInProgress = new AtomicBoolean(false);
+    private final PrintJobStore jobStore;
 
     private HttpServer server;
     private ExecutorService httpExecutor;
@@ -52,6 +57,7 @@ public class RemoteApiServer {
         this.initDelayMs = initDelayMs;
         this.pollDelayMs = pollDelayMs;
         this.stateTracker = new PrinterStateTracker();
+        this.jobStore = new PrintJobStore();
     }
 
     public void start() throws IOException {
@@ -62,6 +68,7 @@ public class RemoteApiServer {
         server.createContext("/health", this::handleHealth);
         server.createContext("/printer/status", this::handlePrinterStatus);
         server.createContext("/printer/poll", this::handlePrinterPoll);
+        server.createContext("/jobs", this::handleJobs);
         server.setExecutor(httpExecutor);
         server.start();
 
@@ -289,5 +296,99 @@ public class RemoteApiServer {
         return normalized.contains("ok")
                 && normalized.contains("t:")
                 && normalized.contains("b:");
+    }
+
+    private void handleJobs(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/jobs".equals(path)) {
+            handleJobsRoot(exchange);
+            return;
+        }
+
+        if (path.startsWith("/jobs/")) {
+            handleJobById(exchange, path);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson("Job endpoint not found"));
+    }
+
+    private void handleJobsRoot(HttpExchange exchange) throws IOException {
+        if (isMethod(exchange, "GET")) {
+            sendJson(exchange, 200, jobsJson());
+            return;
+        }
+
+        if (isMethod(exchange, "POST")) {
+            PrintJob job = jobStore.create("simulated-job", PrintJobType.SIMULATED);
+            sendJson(exchange, 201, jobJson(job));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson("Method not allowed"));
+    }
+
+    private void handleJobById(HttpExchange exchange, String path) throws IOException {
+        if (!isMethod(exchange, "GET")) {
+            sendJson(exchange, 405, errorJson("Method not allowed"));
+            return;
+        }
+
+        String jobId = path.substring("/jobs/".length());
+
+        jobStore.findById(jobId)
+                .ifPresentOrElse(
+                        job -> sendJsonUnchecked(exchange, 200, jobJson(job)),
+                        () -> sendJsonUnchecked(exchange, 404, errorJson("Job not found"))
+                );
+    }
+
+    private void sendJsonUnchecked(HttpExchange exchange, int statusCode, String body) {
+        try {
+            sendJson(exchange, statusCode, body);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String jobsJson() {
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        json.append("  \"jobs\": [");
+
+        boolean first = true;
+        for (PrintJob job : jobStore.findAll()) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append("\n").append(indent(jobJson(job), 4));
+            first = false;
+        }
+
+        if (!first) {
+            json.append("\n  ");
+        }
+
+        json.append("]\n");
+        json.append("}\n");
+        return json.toString();
+    }
+
+    private String jobJson(PrintJob job) {
+        return "{\n"
+                + "  \"id\": " + nullableString(job.getId()) + ",\n"
+                + "  \"name\": " + nullableString(job.getName()) + ",\n"
+                + "  \"type\": \"" + job.getType() + "\",\n"
+                + "  \"state\": \"" + job.getState() + "\",\n"
+                + "  \"assignedPrinterId\": " + nullableString(job.getAssignedPrinterId()) + ",\n"
+                + "  \"createdAt\": \"" + JSON_TIME_FORMAT.format(job.getCreatedAt()) + "\",\n"
+                + "  \"updatedAt\": \"" + JSON_TIME_FORMAT.format(job.getUpdatedAt()) + "\"\n"
+                + "}\n";
+    }
+
+    private String indent(String value, int spaces) {
+        String prefix = " ".repeat(spaces);
+        return prefix + value.replace("\n", "\n" + prefix).stripTrailing();
     }
 }

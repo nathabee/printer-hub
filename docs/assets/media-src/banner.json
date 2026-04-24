@@ -3,30 +3,28 @@
 
   "tagline": "Java control and monitoring service for USB-connected 3D printers",
 
-  "subline": "Serial communication • printer state tracking • REST status API",
+  "subline": "Serial communication • live monitoring • simulated job API",
 
   "featureTitle": "Industrial-style printer communication",
 
   "featureLeft1": "• USB serial device control",
   "featureLeft2": "• reliable G-code communication",
 
-  "featureRight1": "• printer state modeling",
-  "featureRight2": "• REST-based monitoring endpoints",
+  "featureRight1": "• state and job modeling",
+  "featureRight2": "• REST monitoring and job endpoints",
 
   "chip1": "Java",
   "chip2": "Serial IO",
   "chip3": "G-code",
-  "chip4": "REST API",
+  "chip4": "REST + Jobs API",
 
   "iconFile": "printerhub-icon.svg",
 
   "screenshot1": "printerhub-screenshot-1.png",
   "screenshot1Label": "",
 
-
   "screenshot2": "printerhub-image.png",
   "screenshot2Label": "",
-
 
   "screenshot22": "printerhub-screenshot-2.png",
   "screenshot22Label": "REST API monitoring test",

@@ -6,11 +6,13 @@
 see ROADMAP.md
 
 
-- 0.0.14 Job Upload Simulation
+- 0.0.15 — In-Memory Printer Farm Simulation
+
 ## Version (done)
 
 ### Version 0.0.x : first sprint to create a deployment ready prototype
 
+- 0.0.14 Job Upload Simulation
 - 0.0.13 Job Model Foundation
 - 0.0.12 Failure Scenario Simulation
 - 0.0.11 API Runtime and Smoke Verification

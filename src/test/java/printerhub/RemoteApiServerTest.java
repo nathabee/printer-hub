@@ -191,4 +191,97 @@ class RemoteApiServerTest {
             return socket.getLocalPort();
         }
     }
+
+    @Test
+    void jobs_get_initiallyReturnsEmptyList() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/jobs"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"jobs\""));
+        assertTrue(response.body().contains("["));
+        assertTrue(response.body().contains("]"));
+    }
+
+    @Test
+    void jobs_post_createsSimulatedJob() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("POST", url(port, "/jobs"));
+
+        assertEquals(201, response.statusCode());
+        assertTrue(response.body().contains("\"id\""));
+        assertTrue(response.body().contains("\"name\": \"simulated-job\""));
+        assertTrue(response.body().contains("\"type\": \"SIMULATED\""));
+        assertTrue(response.body().contains("\"state\": \"CREATED\""));
+    }
+
+    @Test
+    void jobs_getAfterPost_returnsCreatedJob() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        send("POST", url(port, "/jobs"));
+
+        HttpResponse<String> response = send("GET", url(port, "/jobs"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"jobs\""));
+        assertTrue(response.body().contains("\"name\": \"simulated-job\""));
+        assertTrue(response.body().contains("\"state\": \"CREATED\""));
+    }
+
+    @Test
+    void jobById_get_returnsCreatedJob() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> created = send("POST", url(port, "/jobs"));
+        String id = extractJsonString(created.body(), "id");
+
+        HttpResponse<String> response = send("GET", url(port, "/jobs/" + id));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"id\": \"" + id + "\""));
+        assertTrue(response.body().contains("\"name\": \"simulated-job\""));
+    }
+
+    @Test
+    void jobById_getUnknown_returns404() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("GET", url(port, "/jobs/unknown-job"));
+
+        assertEquals(404, response.statusCode());
+        assertTrue(response.body().contains("Job not found"));
+    }
+
+    @Test
+    void jobs_invalidMethod_returns405() throws Exception {
+        int port = freePort();
+        startApi(port);
+
+        HttpResponse<String> response = send("PUT", url(port, "/jobs"));
+
+        assertEquals(405, response.statusCode());
+        assertTrue(response.body().contains("Method not allowed"));
+    }
+
+    private String extractJsonString(String body, String fieldName) {
+        Pattern pattern = Pattern.compile("\"" + fieldName + "\"\\s*:\\s*\"([^\"]+)\"");
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            throw new AssertionError(
+                    "No JSON string field found: " + fieldName + " in body: " + body
+            );
+        }
+
+        return matcher.group(1);
+    }
+
 }

@@ -91,6 +91,9 @@ Implemented components:
 * background monitoring in API mode
 * failure scenario simulation (disconnect, timeout, error)
 * print job domain model and lifecycle states
+* in-memory print job store
+* simulated job creation API
+* job listing and job lookup API
 * automated test framework
 * API runtime tests
 * Jenkins CI pipeline
@@ -99,7 +102,7 @@ Implemented components:
 
 Planned extensions:
 
-* job upload simulation
+* connecting job lifecycle to printer state
 * multi-printer simulation
 * centralized monitoring dashboard
 * database persistence
