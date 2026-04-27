@@ -21,7 +21,7 @@ class PersistentPrintJobStoreTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        databaseFile = Files.createTempFile("printerhub-job-store-test-", ".db");
+        databaseFile = Files.createTempFile("printerhub-job-execution-test-", ".db");
         System.setProperty("printerhub.databaseFile", databaseFile.toString());
 
         DatabaseInitializer.initialize();

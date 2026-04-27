@@ -17,7 +17,19 @@ import java.util.List;
  */
 public class PrinterSnapshotStore {
 
-    private static final long DEFAULT_MIN_INTERVAL_SECONDS = 30;
+    private final RuntimeConfigurationStore configurationStore;
+
+    public PrinterSnapshotStore() {
+        this(new RuntimeConfigurationStore());
+    }
+
+    public PrinterSnapshotStore(RuntimeConfigurationStore configurationStore) {
+        if (configurationStore == null) {
+            throw new IllegalArgumentException("configurationStore must not be null");
+        }
+
+        this.configurationStore = configurationStore;
+    }
 
     public void save(String printerId, PrinterSnapshot snapshot) {
         if (printerId == null || printerId.isBlank()) {
@@ -38,21 +50,24 @@ public class PrinterSnapshotStore {
                 INSERT INTO printer_snapshots (
                     printer_id,
                     state,
+                    hotend_temperature,
+                    bed_temperature,
                     last_response,
                     created_at
                 )
-                VALUES (?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?);
                 """;
 
         try (
                 Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
-
             statement.setString(1, normalizedPrinterId);
             statement.setString(2, snapshot.getState().name());
-            statement.setString(3, snapshot.getLastResponse());
-            statement.setString(4, snapshot.getUpdatedAt().toString());
+            statement.setObject(3, snapshot.getHotendTemperature());
+            statement.setObject(4, snapshot.getBedTemperature());
+            statement.setString(5, snapshot.getLastResponse());
+            statement.setString(6, snapshot.getUpdatedAt().toString());
 
             statement.executeUpdate();
 
@@ -71,6 +86,8 @@ public class PrinterSnapshotStore {
         String sql = """
                 SELECT
                     state,
+                    hotend_temperature,
+                    bed_temperature,
                     last_response,
                     created_at
                 FROM printer_snapshots
@@ -85,7 +102,6 @@ public class PrinterSnapshotStore {
                 Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
-
             statement.setString(1, printerId.trim());
             statement.setInt(2, safeLimit);
 
@@ -103,9 +119,13 @@ public class PrinterSnapshotStore {
     }
 
     private boolean shouldStoreSnapshot(String printerId, PrinterSnapshot snapshot) {
+        MonitoringRules rules = configurationStore.loadMonitoringRules();
+
         String sql = """
                 SELECT
                     state,
+                    hotend_temperature,
+                    bed_temperature,
                     created_at
                 FROM printer_snapshots
                 WHERE printer_id = ?
@@ -117,7 +137,6 @@ public class PrinterSnapshotStore {
                 Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
-
             statement.setString(1, printerId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -125,17 +144,32 @@ public class PrinterSnapshotStore {
                     return true;
                 }
 
-                PrinterState lastState = PrinterState.valueOf(resultSet.getString("state"));
-                LocalDateTime lastCreatedAt = LocalDateTime.parse(resultSet.getString("created_at"));
+                PrinterState lastState =
+                        PrinterState.valueOf(resultSet.getString("state"));
 
-                if (lastState != snapshot.getState()) {
+                LocalDateTime lastCreatedAt =
+                        LocalDateTime.parse(resultSet.getString("created_at"));
+
+                if (rules.isSnapshotOnStateChange()
+                        && lastState != snapshot.getState()) {
+                    return true;
+                }
+
+                if (temperatureDifferenceExceeded(
+                        resultSet,
+                        snapshot,
+                        rules.getTemperatureThreshold()
+                )) {
                     return true;
                 }
 
                 long secondsSinceLastSnapshot =
-                        Duration.between(lastCreatedAt, snapshot.getUpdatedAt()).toSeconds();
+                        Duration.between(
+                                lastCreatedAt,
+                                snapshot.getUpdatedAt()
+                        ).toSeconds();
 
-                return secondsSinceLastSnapshot >= minimumSnapshotIntervalSeconds();
+                return secondsSinceLastSnapshot >= rules.getMinIntervalSeconds();
             }
 
         } catch (SQLException e) {
@@ -143,25 +177,64 @@ public class PrinterSnapshotStore {
         }
     }
 
-    private long minimumSnapshotIntervalSeconds() {
-        String configuredValue = System.getProperty("printerhub.snapshot.minIntervalSeconds");
+    private boolean temperatureDifferenceExceeded(
+            ResultSet resultSet,
+            PrinterSnapshot snapshot,
+            double threshold
+    ) throws SQLException {
 
-        if (configuredValue == null || configuredValue.isBlank()) {
-            return DEFAULT_MIN_INTERVAL_SECONDS;
+        if (threshold <= 0) {
+            return false;
         }
 
-        try {
-            return Math.max(0, Long.parseLong(configuredValue.trim()));
-        } catch (NumberFormatException e) {
-            return DEFAULT_MIN_INTERVAL_SECONDS;
+        Double lastHotend =
+                readNullableDouble(resultSet, "hotend_temperature");
+
+        Double lastBed =
+                readNullableDouble(resultSet, "bed_temperature");
+
+        return differenceExceeded(
+                lastHotend,
+                snapshot.getHotendTemperature(),
+                threshold
+        ) || differenceExceeded(
+                lastBed,
+                snapshot.getBedTemperature(),
+                threshold
+        );
+    }
+
+    private Double readNullableDouble(
+            ResultSet resultSet,
+            String columnName
+    ) throws SQLException {
+
+        double value = resultSet.getDouble(columnName);
+
+        if (resultSet.wasNull()) {
+            return null;
         }
+
+        return value;
+    }
+
+    private boolean differenceExceeded(
+            Double previous,
+            Double current,
+            double threshold
+    ) {
+        if (previous == null || current == null) {
+            return false;
+        }
+
+        return Math.abs(current - previous) >= threshold;
     }
 
     private PrinterSnapshot toSnapshot(ResultSet resultSet) throws SQLException {
         return new PrinterSnapshot(
                 PrinterState.valueOf(resultSet.getString("state")),
-                null,
-                null,
+                readNullableDouble(resultSet, "hotend_temperature"),
+                readNullableDouble(resultSet, "bed_temperature"),
                 resultSet.getString("last_response"),
                 LocalDateTime.parse(resultSet.getString("created_at"))
         );

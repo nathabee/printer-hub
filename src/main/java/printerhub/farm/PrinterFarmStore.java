@@ -8,35 +8,29 @@ import java.util.concurrent.ConcurrentMap;
 
 public class PrinterFarmStore {
 
-    private static final String DEFAULT_PRINTER_ID = "printer-1";
-
     private final ConcurrentMap<String, PrinterNode> printers = new ConcurrentHashMap<>();
 
-    public PrinterFarmStore(String primaryPortName, String primaryMode) {
-
-        if (primaryPortName == null || primaryPortName.isBlank()) {
-            throw new IllegalArgumentException("primaryPortName must not be blank");
-        }
-
-        if (primaryMode == null || primaryMode.isBlank()) {
-            throw new IllegalArgumentException("primaryMode must not be blank");
-        }
-
-        add(new PrinterNode(
-                DEFAULT_PRINTER_ID,
-                "Primary printer",
-                primaryPortName,
-                primaryMode
-        ));
+    public PrinterFarmStore(List<PrinterNode> configuredPrinters) {
+        reload(configuredPrinters);
     }
 
-    /*public PrinterFarmStore(String primaryPortName, String primaryMode) {
-        add(new PrinterNode(DEFAULT_PRINTER_ID, "Primary printer", primaryPortName, primaryMode));
-        add(new PrinterNode("printer-2", "Simulated printer 2", "SIM_PORT_2", "sim"));
-        add(new PrinterNode("printer-3", "Simulated printer 3", "SIM_PORT_3", "sim"));
-    }*/
+    public void reload(List<PrinterNode> configuredPrinters) {
+        if (configuredPrinters == null || configuredPrinters.isEmpty()) {
+            throw new IllegalArgumentException("configuredPrinters must not be empty");
+        }
+
+        printers.clear();
+
+        for (PrinterNode printerNode : configuredPrinters) {
+            add(printerNode);
+        }
+    }
 
     public void add(PrinterNode printer) {
+        if (printer == null) {
+            throw new IllegalArgumentException("printer must not be null");
+        }
+
         printers.put(printer.getId(), printer);
     }
 
@@ -53,7 +47,9 @@ public class PrinterFarmStore {
     }
 
     public PrinterNode getDefaultPrinter() {
-        return printers.get(DEFAULT_PRINTER_ID);
+        return findAll().stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No configured printer available"));
     }
 
     public int size() {

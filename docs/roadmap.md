@@ -518,18 +518,20 @@ Expected result:
 
 ---
  
-## 0.0.19 — Local Runtime Configuration and Monitoring Rules
+## 0.0.19 — Local Runtime Configuration and Dashboard Administration
 
-status : planned
+status : done
 
 Goals:
 
 * persist local printer configuration in SQLite
-* configure active printer nodes without source-code changes
+* administer configured printer nodes from the dashboard
+* add, update, enable, and disable printer nodes without source-code changes
 * support multiple local printers with different ports
 * allow real and simulated printers in the same local runtime
-* show only configured printers in the dashboard
+* show only enabled configured printers in the dashboard
 * store monitoring rules in the database
+* administer monitoring rules from the dashboard
 * support configurable snapshot storage rules:
   * store when printer state changes
   * store when temperature difference exceeds threshold
@@ -544,15 +546,7 @@ printer-3 -> SIM_PORT sim
 
 snapshot.minIntervalSeconds = 30
 snapshot.temperatureThreshold = 1.0
-```
-
-Expected result:
-
-* the dashboard represents the actual local printer setup
-* multiple real printers can be monitored from one local JAR
-* simulation remains available as a test/stub mode
-* snapshot history stays useful without flooding the database
-* monitoring settings are ready for later dashboard administration
+snapshot.storeOnStateChange = true
 
 ---
 

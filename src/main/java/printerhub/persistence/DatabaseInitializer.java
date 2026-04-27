@@ -29,6 +29,8 @@ public final class DatabaseInitializer {
             createPrintJobsTable(statement);
             createPrinterSnapshotsTable(statement);
             createPrinterEventsTable(statement);
+            createConfiguredPrintersTable(statement);
+            createMonitoringRulesTable(statement);
 
         } catch (SQLException e) {
 
@@ -69,6 +71,8 @@ public final class DatabaseInitializer {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     printer_id TEXT NOT NULL,
                     state TEXT NOT NULL,
+                    hotend_temperature REAL,
+                    bed_temperature REAL,
                     last_response TEXT,
                     created_at TEXT NOT NULL
                 );
@@ -95,4 +99,40 @@ public final class DatabaseInitializer {
         statement.execute(sql);
     }
 
+    
+    private static void createConfiguredPrintersTable(
+            Statement statement
+    ) throws SQLException {
+
+        String sql = """
+                CREATE TABLE IF NOT EXISTS configured_printers (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    port_name TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                """;
+
+        statement.execute(sql);
+    }
+
+    private static void createMonitoringRulesTable(
+            Statement statement
+    ) throws SQLException {
+
+        String sql = """
+                CREATE TABLE IF NOT EXISTS monitoring_rules (
+                    id TEXT PRIMARY KEY,
+                    snapshot_on_state_change INTEGER NOT NULL,
+                    temperature_threshold REAL NOT NULL,
+                    min_interval_seconds INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                """;
+
+        statement.execute(sql);
+    }
 }

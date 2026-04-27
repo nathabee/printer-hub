@@ -3,13 +3,26 @@ package printerhub;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import printerhub.farm.PrinterFarmStore;
+import printerhub.farm.PrinterNode;
+import printerhub.jobs.PrintJob;
+import printerhub.jobs.PrintJobExecutionService;
+import printerhub.jobs.PrintJobStore;
+import printerhub.jobs.PrintJobType;
+import printerhub.persistence.MonitoringRules;
+import printerhub.persistence.PersistentPrintJobStore;
+import printerhub.persistence.PrinterEventStore;
+import printerhub.persistence.PrinterSnapshotStore;
+import printerhub.persistence.RuntimeConfigurationStore;
 import printerhub.serial.SerialPortAdapterFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -17,17 +30,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import printerhub.jobs.PrintJob;
-import printerhub.jobs.PrintJobStore;
-import printerhub.jobs.PrintJobType;
-import printerhub.persistence.PersistentPrintJobStore; 
-import printerhub.persistence.PrinterEventStore;
-import printerhub.persistence.PrinterSnapshotStore;
-import java.util.List;
-import printerhub.farm.PrinterFarmStore;
-import printerhub.farm.PrinterNode;
-import java.io.InputStream;
-import printerhub.jobs.PrintJobExecutionService;
 
 public class RemoteApiServer {
 
@@ -40,8 +42,9 @@ public class RemoteApiServer {
     private final int baudRate;
     private final long initDelayMs;
     private final long pollDelayMs;
-    private final PrinterStateTracker stateTracker;
     private final AtomicBoolean pollingInProgress = new AtomicBoolean(false);
+
+    private final RuntimeConfigurationStore configurationStore;
     private final PrintJobStore jobStore;
     private final PrinterFarmStore printerFarmStore;
     private final PrinterEventStore eventStore;
@@ -50,31 +53,39 @@ public class RemoteApiServer {
 
     private HttpServer server;
     private ExecutorService httpExecutor;
-    private ScheduledExecutorService pollingExecutor; 
+    private ScheduledExecutorService pollingExecutor;
 
-    public RemoteApiServer(int apiPort,
+    public RemoteApiServer(
+            int apiPort,
             String printerPortName,
             String printerMode,
             int baudRate,
             long initDelayMs,
-            long pollDelayMs) {
+            long pollDelayMs
+    ) {
         this.apiPort = apiPort;
         this.printerPortName = printerPortName;
         this.printerMode = printerMode;
         this.baudRate = baudRate;
         this.initDelayMs = initDelayMs;
         this.pollDelayMs = pollDelayMs;
-        this.printerFarmStore = new PrinterFarmStore(printerPortName, printerMode);
-        this.stateTracker = printerFarmStore.getDefaultPrinter().getStateTracker();
+
+        this.configurationStore = new RuntimeConfigurationStore();
+        this.configurationStore.ensureDefaultPrinter(printerPortName, printerMode);
+        this.configurationStore.ensureDefaultMonitoringRules();
+
+        this.printerFarmStore = new PrinterFarmStore(
+                this.configurationStore.findEnabledPrinters()
+        );
+
         this.jobStore = new PersistentPrintJobStore();
         this.eventStore = new PrinterEventStore();
+        this.snapshotStore = new PrinterSnapshotStore(this.configurationStore);
         this.jobExecutionService = new PrintJobExecutionService(
                 this.jobStore,
                 this.printerFarmStore,
                 this.eventStore
         );
-        this.snapshotStore = new PrinterSnapshotStore();
-
     }
 
     public void start() throws IOException {
@@ -87,6 +98,7 @@ public class RemoteApiServer {
         server.createContext("/printer/poll", this::handlePrinterPoll);
         server.createContext("/jobs", this::handleJobs);
         server.createContext("/printers", this::handlePrinters);
+        server.createContext("/config", this::handleConfig);
         server.createContext("/dashboard", this::handleDashboard);
         server.setExecutor(httpExecutor);
         server.start();
@@ -95,13 +107,15 @@ public class RemoteApiServer {
                 this::runBackgroundPollSafely,
                 0,
                 pollDelayMs,
-                TimeUnit.MILLISECONDS);
+                TimeUnit.MILLISECONDS
+        );
 
         System.out.println(OperationMessages.infoMessage(
-                "Remote API started on http://localhost:" + apiPort));
+                "Remote API started on http://localhost:" + apiPort
+        ));
         System.out.println(OperationMessages.infoMessage(
-                "Background printer monitoring started for port '" + printerPortName + "' in mode '" + printerMode
-                        + "'."));
+                "Background printer monitoring started for configured local runtime."
+        ));
     }
 
     public void stop() {
@@ -119,7 +133,10 @@ public class RemoteApiServer {
             httpExecutor.shutdownNow();
         }
 
-        stateTracker.markDisconnected();
+        for (PrinterNode printerNode : printerFarmStore.findAll()) {
+            printerNode.getStateTracker().markDisconnected();
+        }
+
         System.out.println(OperationMessages.infoMessage("Remote API server stopped."));
     }
 
@@ -143,7 +160,7 @@ public class RemoteApiServer {
             return;
         }
 
-        sendJson(exchange, 200, snapshotJson(stateTracker.getCurrentSnapshot()));
+        sendJson(exchange, 200, snapshotJson(printerFarmStore.getDefaultPrinter().getSnapshot()));
     }
 
     private void handlePrinterPoll(HttpExchange exchange) throws IOException {
@@ -154,7 +171,8 @@ public class RemoteApiServer {
 
         PrinterSnapshot snapshot = pollPrinterOnce();
 
-        if (snapshot.getState() == PrinterState.ERROR || snapshot.getState() == PrinterState.DISCONNECTED) {
+        if (snapshot.getState() == PrinterState.ERROR
+                || snapshot.getState() == PrinterState.DISCONNECTED) {
             sendJson(exchange, 502, snapshotJson(snapshot));
             return;
         }
@@ -164,12 +182,20 @@ public class RemoteApiServer {
 
     private void runBackgroundPollSafely() {
         try {
-            pollPrinterOnce();
+            for (PrinterNode printerNode : printerFarmStore.findAll()) {
+                pollPrinterNode(printerNode);
+            }
+
             jobExecutionService.advanceJobs();
+
         } catch (Exception e) {
-            stateTracker.markError("Background polling failed: " + e.getMessage());
+            printerFarmStore.getDefaultPrinter()
+                    .getStateTracker()
+                    .markError("Background polling failed: " + e.getMessage());
+
             System.err.println(OperationMessages.errorMessage(
-                    "Background polling failed: " + e.getMessage()));
+                    "Background polling failed: " + e.getMessage()
+            ));
         }
     }
 
@@ -185,7 +211,11 @@ public class RemoteApiServer {
         PrinterPort port = new SerialConnection(
                 printerNode.getPortName(),
                 baudRate,
-                SerialPortAdapterFactory.create(printerNode.getPortName(), printerNode.getMode()));
+                SerialPortAdapterFactory.create(
+                        printerNode.getPortName(),
+                        printerNode.getMode()
+                )
+        );
 
         PrinterStateTracker tracker = printerNode.getStateTracker();
 
@@ -235,13 +265,12 @@ public class RemoteApiServer {
                     printerNode.getId(),
                     printerNode.getAssignedJobId(),
                     "PRINTER_POLLED",
-                    "Printer poll completed successfully");
+                    "Printer poll completed successfully"
+            );
 
             return snapshot;
 
-
         } catch (TimeoutException e) {
-
             PrinterSnapshot snapshot = tracker.markError("Printer timeout: " + e.getMessage());
 
             snapshotStore.save(printerNode.getId(), snapshot);
@@ -250,7 +279,8 @@ public class RemoteApiServer {
                     printerNode.getId(),
                     printerNode.getAssignedJobId(),
                     "PRINTER_ERROR",
-                    "Printer timeout: " + e.getMessage());
+                    "Printer timeout: " + e.getMessage()
+            );
 
             return snapshot;
 
@@ -259,8 +289,6 @@ public class RemoteApiServer {
             return tracker.markError("Printer polling interrupted: " + e.getMessage());
 
         } catch (Exception e) {
-
-            
             PrinterSnapshot snapshot = tracker.markDisconnected();
 
             snapshotStore.save(printerNode.getId(), snapshot);
@@ -269,10 +297,10 @@ public class RemoteApiServer {
                     printerNode.getId(),
                     printerNode.getAssignedJobId(),
                     "PRINTER_DISCONNECTED",
-                    "Printer disconnected during polling");
+                    "Printer disconnected during polling"
+            );
 
             return snapshot;
-
 
         } finally {
             try {
@@ -283,98 +311,168 @@ public class RemoteApiServer {
         }
     }
 
-    private void sleepInitDelay() throws InterruptedException {
-        if (initDelayMs > 0) {
-            Thread.sleep(initDelayMs);
-        }
-    }
+    private void handleConfig(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
 
-    private boolean isMethod(HttpExchange exchange, String expectedMethod) {
-        return expectedMethod.equalsIgnoreCase(exchange.getRequestMethod());
-    }
-
-    private void sendJson(HttpExchange exchange, int statusCode, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-
-        Headers headers = exchange.getResponseHeaders();
-        headers.set("Content-Type", "application/json; charset=utf-8");
-
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-
-        try (OutputStream outputStream = exchange.getResponseBody()) {
-            outputStream.write(bytes);
-        }
-    }
-
-    private String snapshotJson(PrinterSnapshot snapshot) {
-        return "{\n"
-                + "  \"state\": \"" + snapshot.getState() + "\",\n"
-                + "  \"hotendTemperature\": " + nullableNumber(snapshot.getHotendTemperature()) + ",\n"
-                + "  \"bedTemperature\": " + nullableNumber(snapshot.getBedTemperature()) + ",\n"
-                + "  \"lastResponse\": " + nullableString(snapshot.getLastResponse()) + ",\n"
-                + "  \"updatedAt\": \"" + JSON_TIME_FORMAT.format(snapshot.getUpdatedAt()) + "\"\n"
-                + "}\n";
-    }
-
-    private String errorJson(String message) {
-        return "{\n"
-                + "  \"error\": " + nullableString(message) + "\n"
-                + "}\n";
-    }
-
-    private String nullableNumber(Double value) {
-        if (value == null) {
-            return "null";
+        if ("/config/printers".equals(path)) {
+            handleConfigPrintersRoot(exchange);
+            return;
         }
 
-        return String.format(Locale.ROOT, "%.2f", value);
-    }
-
-    private String nullableString(String value) {
-        if (value == null) {
-            return "null";
+        if (path.startsWith("/config/printers/")) {
+            handleConfigPrinterById(exchange, path);
+            return;
         }
 
-        return "\"" + escapeJson(value) + "\"";
+        if ("/config/monitoring-rules".equals(path)) {
+            handleConfigMonitoringRules(exchange);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson("Configuration endpoint not found"));
     }
 
-    private String escapeJson(String value) {
-        StringBuilder escaped = new StringBuilder();
+    private void handleConfigPrintersRoot(HttpExchange exchange) throws IOException {
+        if (isMethod(exchange, "GET")) {
+            sendJson(exchange, 200, configuredPrintersJson());
+            return;
+        }
 
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
+        if (isMethod(exchange, "POST")) {
+            String body = readBody(exchange);
 
-            switch (c) {
-                case '\\' -> escaped.append("\\\\");
-                case '"' -> escaped.append("\\\"");
-                case '\b' -> escaped.append("\\b");
-                case '\f' -> escaped.append("\\f");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\t' -> escaped.append("\\t");
-                default -> {
-                    if (c < 0x20 || c > 0x7E) {
-                        escaped.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        escaped.append(c);
-                    }
-                }
+            PrinterNode printerNode = new PrinterNode(
+                    requiredJsonString(body, "id"),
+                    requiredJsonString(body, "name"),
+                    requiredJsonString(body, "portName"),
+                    requiredJsonString(body, "mode")
+            );
+
+            configurationStore.savePrinter(printerNode);
+            reloadPrinterFarm();
+
+            sendJson(exchange, 201, printerJson(printerNode));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson("Method not allowed"));
+    }
+
+    private void handleConfigPrinterById(HttpExchange exchange, String path) throws IOException {
+        String remaining = path.substring("/config/printers/".length());
+
+        if (remaining.isBlank()) {
+            sendJson(exchange, 404, errorJson("Configured printer endpoint not found"));
+            return;
+        }
+
+        String[] parts = remaining.split("/");
+        String printerId = parts[0];
+
+        if (parts.length == 1 && isMethod(exchange, "PUT")) {
+            String body = readBody(exchange);
+
+            PrinterNode printerNode = new PrinterNode(
+                    printerId,
+                    requiredJsonString(body, "name"),
+                    requiredJsonString(body, "portName"),
+                    requiredJsonString(body, "mode")
+            );
+
+            configurationStore.savePrinter(printerNode);
+            reloadPrinterFarm();
+
+            sendJson(exchange, 200, printerJson(printerNode));
+            return;
+        }
+
+        if (parts.length == 2 && isMethod(exchange, "POST")) {
+            if ("enable".equals(parts[1])) {
+                configurationStore.enablePrinter(printerId);
+                reloadPrinterFarm();
+                sendJson(exchange, 200, configuredPrintersJson());
+                return;
+            }
+
+            if ("disable".equals(parts[1])) {
+                configurationStore.disablePrinter(printerId);
+                reloadPrinterFarmAllowingEmpty();
+                sendJson(exchange, 200, configuredPrintersJson());
+                return;
             }
         }
 
-        return escaped.toString();
+        sendJson(exchange, 404, errorJson("Configured printer endpoint not found"));
     }
 
-    private boolean isValidTemperatureResponse(String response) {
-        if (response == null || response.isBlank()) {
-            return false;
+    private void handleConfigMonitoringRules(HttpExchange exchange) throws IOException {
+        if (isMethod(exchange, "GET")) {
+            sendJson(exchange, 200, monitoringRulesJson(configurationStore.loadMonitoringRules()));
+            return;
         }
 
-        String normalized = response.toLowerCase(Locale.ROOT);
+        if (isMethod(exchange, "PUT")) {
+            String body = readBody(exchange);
 
-        return normalized.contains("ok")
-                && normalized.contains("t:")
-                && normalized.contains("b:");
+            MonitoringRules rules = new MonitoringRules(
+                    optionalJsonBoolean(body, "snapshotOnStateChange", true),
+                    optionalJsonDouble(body, "temperatureThreshold", 1.0),
+                    optionalJsonLong(body, "minIntervalSeconds", 30)
+            );
+
+            configurationStore.saveMonitoringRules(rules);
+
+            sendJson(exchange, 200, monitoringRulesJson(rules));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson("Method not allowed"));
+    }
+
+    private void reloadPrinterFarm() {
+        printerFarmStore.reload(configurationStore.findEnabledPrinters());
+    }
+
+    private void reloadPrinterFarmAllowingEmpty() {
+        List<PrinterNode> enabledPrinters = configurationStore.findEnabledPrinters();
+
+        if (!enabledPrinters.isEmpty()) {
+            printerFarmStore.reload(enabledPrinters);
+        }
+    }
+
+    private String configuredPrintersJson() {
+        StringBuilder json = new StringBuilder();
+
+        json.append("{\n");
+        json.append("  \"printers\": [");
+
+        boolean first = true;
+        for (PrinterNode printerNode : configurationStore.findAllPrinters()) {
+            if (!first) {
+                json.append(",");
+            }
+
+            json.append("\n").append(indent(printerJson(printerNode), 4));
+            first = false;
+        }
+
+        if (!first) {
+            json.append("\n  ");
+        }
+
+        json.append("]\n");
+        json.append("}\n");
+
+        return json.toString();
+    }
+
+    private String monitoringRulesJson(MonitoringRules rules) {
+        return "{\n"
+                + "  \"snapshotOnStateChange\": " + rules.isSnapshotOnStateChange() + ",\n"
+                + "  \"temperatureThreshold\": " + nullableNumber(rules.getTemperatureThreshold()) + ",\n"
+                + "  \"minIntervalSeconds\": " + rules.getMinIntervalSeconds() + "\n"
+                + "}\n";
     }
 
     private void handleJobs(HttpExchange exchange) throws IOException {
@@ -406,7 +504,8 @@ public class RemoteApiServer {
                     null,
                     job.getId(),
                     "JOB_CREATED",
-                    "Print job created through API");
+                    "Print job created through API"
+            );
 
             sendJson(exchange, 201, jobJson(job));
             return;
@@ -426,7 +525,8 @@ public class RemoteApiServer {
         jobStore.findById(jobId)
                 .ifPresentOrElse(
                         job -> sendJsonUnchecked(exchange, 200, jobJson(job)),
-                        () -> sendJsonUnchecked(exchange, 404, errorJson("Job not found")));
+                        () -> sendJsonUnchecked(exchange, 404, errorJson("Job not found"))
+                );
     }
 
     private void handlePrinters(HttpExchange exchange) throws IOException {
@@ -508,43 +608,6 @@ public class RemoteApiServer {
         sendJson(exchange, 200, printerHistoryJson(printerNode.getId(), snapshots));
     }
 
-    private String printerHistoryJson(String printerId, List<PrinterSnapshot> snapshots) {
-        StringBuilder json = new StringBuilder();
-
-        json.append("{\n");
-        json.append("  \"printerId\": ").append(nullableString(printerId)).append(",\n");
-        json.append("  \"history\": [");
-
-        boolean first = true;
-        for (PrinterSnapshot snapshot : snapshots) {
-            if (!first) {
-                json.append(",");
-            }
-
-            json.append("\n").append(indent(snapshotHistoryJson(snapshot), 4));
-            first = false;
-        }
-
-        if (!first) {
-            json.append("\n  ");
-        }
-
-        json.append("]\n");
-        json.append("}\n");
-
-        return json.toString();
-    }
-
-    private String snapshotHistoryJson(PrinterSnapshot snapshot) {
-        return "{\n"
-                + "  \"state\": \"" + snapshot.getState() + "\",\n"
-                + "  \"lastResponse\": " + nullableString(snapshot.getLastResponse()) + ",\n"
-                + "  \"createdAt\": \"" + JSON_TIME_FORMAT.format(snapshot.getUpdatedAt()) + "\"\n"
-                + "}\n";
-    }
-
-
-
     private void handlePrinterStatusById(HttpExchange exchange, PrinterNode printerNode) throws IOException {
         if (!isMethod(exchange, "GET")) {
             sendJson(exchange, 405, errorJson("Method not allowed"));
@@ -562,7 +625,8 @@ public class RemoteApiServer {
 
         PrinterSnapshot snapshot = pollPrinterNode(printerNode);
 
-        if (snapshot.getState() == PrinterState.ERROR || snapshot.getState() == PrinterState.DISCONNECTED) {
+        if (snapshot.getState() == PrinterState.ERROR
+                || snapshot.getState() == PrinterState.DISCONNECTED) {
             sendJson(exchange, 502, printerJson(printerNode));
             return;
         }
@@ -579,7 +643,8 @@ public class RemoteApiServer {
         PrintJob job = jobStore.createAssigned(
                 "simulated-job-for-" + printerNode.getId(),
                 PrintJobType.SIMULATED,
-                printerNode.getId());
+                printerNode.getId()
+        );
 
         printerNode.assignJob(job.getId());
 
@@ -587,9 +652,45 @@ public class RemoteApiServer {
                 printerNode.getId(),
                 job.getId(),
                 "JOB_ASSIGNED",
-                "Print job assigned to printer");
+                "Print job assigned to printer"
+        );
 
         sendJson(exchange, 201, jobJson(job));
+    }
+
+    private void sleepInitDelay() throws InterruptedException {
+        if (initDelayMs > 0) {
+            Thread.sleep(initDelayMs);
+        }
+    }
+
+    private boolean isMethod(HttpExchange exchange, String expectedMethod) {
+        return expectedMethod.equalsIgnoreCase(exchange.getRequestMethod());
+    }
+
+    private String readBody(HttpExchange exchange) throws IOException {
+        return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+    }
+
+    private void sendJson(HttpExchange exchange, int statusCode, String body) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+
+        Headers headers = exchange.getResponseHeaders();
+        headers.set("Content-Type", "application/json; charset=utf-8");
+
+        exchange.sendResponseHeaders(statusCode, bytes.length);
+
+        try (OutputStream outputStream = exchange.getResponseBody()) {
+            outputStream.write(bytes);
+        }
+    }
+
+    private void sendJsonUnchecked(HttpExchange exchange, int statusCode, String body) {
+        try {
+            sendJson(exchange, statusCode, body);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private String printersJson() {
@@ -634,12 +735,49 @@ public class RemoteApiServer {
                 + "}\n";
     }
 
-    private void sendJsonUnchecked(HttpExchange exchange, int statusCode, String body) {
-        try {
-            sendJson(exchange, statusCode, body);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+    private String printerHistoryJson(String printerId, List<PrinterSnapshot> snapshots) {
+        StringBuilder json = new StringBuilder();
+
+        json.append("{\n");
+        json.append("  \"printerId\": ").append(nullableString(printerId)).append(",\n");
+        json.append("  \"history\": [");
+
+        boolean first = true;
+        for (PrinterSnapshot snapshot : snapshots) {
+            if (!first) {
+                json.append(",");
+            }
+
+            json.append("\n").append(indent(snapshotHistoryJson(snapshot), 4));
+            first = false;
         }
+
+        if (!first) {
+            json.append("\n  ");
+        }
+
+        json.append("]\n");
+        json.append("}\n");
+
+        return json.toString();
+    }
+
+    private String snapshotHistoryJson(PrinterSnapshot snapshot) {
+        return "{\n"
+                + "  \"state\": \"" + snapshot.getState() + "\",\n"
+                + "  \"lastResponse\": " + nullableString(snapshot.getLastResponse()) + ",\n"
+                + "  \"createdAt\": \"" + JSON_TIME_FORMAT.format(snapshot.getUpdatedAt()) + "\"\n"
+                + "}\n";
+    }
+
+    private String snapshotJson(PrinterSnapshot snapshot) {
+        return "{\n"
+                + "  \"state\": \"" + snapshot.getState() + "\",\n"
+                + "  \"hotendTemperature\": " + nullableNumber(snapshot.getHotendTemperature()) + ",\n"
+                + "  \"bedTemperature\": " + nullableNumber(snapshot.getBedTemperature()) + ",\n"
+                + "  \"lastResponse\": " + nullableString(snapshot.getLastResponse()) + ",\n"
+                + "  \"updatedAt\": \"" + JSON_TIME_FORMAT.format(snapshot.getUpdatedAt()) + "\"\n"
+                + "}\n";
     }
 
     private String jobsJson() {
@@ -652,6 +790,7 @@ public class RemoteApiServer {
             if (!first) {
                 json.append(",");
             }
+
             json.append("\n").append(indent(jobJson(job), 4));
             first = false;
         }
@@ -675,6 +814,173 @@ public class RemoteApiServer {
                 + "  \"createdAt\": \"" + JSON_TIME_FORMAT.format(job.getCreatedAt()) + "\",\n"
                 + "  \"updatedAt\": \"" + JSON_TIME_FORMAT.format(job.getUpdatedAt()) + "\"\n"
                 + "}\n";
+    }
+
+    private String errorJson(String message) {
+        return "{\n"
+                + "  \"error\": " + nullableString(message) + "\n"
+                + "}\n";
+    }
+
+    private String nullableNumber(Double value) {
+        if (value == null) {
+            return "null";
+        }
+
+        return String.format(Locale.ROOT, "%.2f", value);
+    }
+
+    private String nullableString(String value) {
+        if (value == null) {
+            return "null";
+        }
+
+        return "\"" + escapeJson(value) + "\"";
+    }
+
+    private String escapeJson(String value) {
+        StringBuilder escaped = new StringBuilder();
+
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+
+            switch (c) {
+                case '\\' -> escaped.append("\\\\");
+                case '"' -> escaped.append("\\\"");
+                case '\b' -> escaped.append("\\b");
+                case '\f' -> escaped.append("\\f");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (c < 0x20 || c > 0x7E) {
+                        escaped.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        escaped.append(c);
+                    }
+                }
+            }
+        }
+
+        return escaped.toString();
+    }
+
+    private boolean isValidTemperatureResponse(String response) {
+        if (response == null || response.isBlank()) {
+            return false;
+        }
+
+        String normalized = response.toLowerCase(Locale.ROOT);
+
+        return normalized.contains("ok")
+                && normalized.contains("t:")
+                && normalized.contains("b:");
+    }
+
+    private String requiredJsonString(String body, String fieldName) {
+        String value = optionalJsonString(body, fieldName, null);
+
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+
+        return value.trim();
+    }
+
+    private String optionalJsonString(String body, String fieldName, String fallback) {
+        String pattern = "\"" + fieldName + "\"\\s*:\\s*\"";
+        int start = body.indexOf(pattern);
+
+        if (start < 0) {
+            return fallback;
+        }
+
+        int valueStart = start + pattern.length();
+        int valueEnd = body.indexOf('"', valueStart);
+
+        if (valueEnd < 0) {
+            return fallback;
+        }
+
+        return body.substring(valueStart, valueEnd);
+    }
+
+    private boolean optionalJsonBoolean(String body, String fieldName, boolean fallback) {
+        String pattern = "\"" + fieldName + "\"\\s*:\\s*";
+        int start = body.indexOf(pattern);
+
+        if (start < 0) {
+            return fallback;
+        }
+
+        int valueStart = start + pattern.length();
+        String tail = body.substring(valueStart).trim();
+
+        if (tail.startsWith("true")) {
+            return true;
+        }
+
+        if (tail.startsWith("false")) {
+            return false;
+        }
+
+        return fallback;
+    }
+
+    private double optionalJsonDouble(String body, String fieldName, double fallback) {
+        String rawValue = optionalJsonRawNumber(body, fieldName);
+
+        if (rawValue == null) {
+            return fallback;
+        }
+
+        try {
+            return Double.parseDouble(rawValue);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private long optionalJsonLong(String body, String fieldName, long fallback) {
+        String rawValue = optionalJsonRawNumber(body, fieldName);
+
+        if (rawValue == null) {
+            return fallback;
+        }
+
+        try {
+            return Long.parseLong(rawValue);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private String optionalJsonRawNumber(String body, String fieldName) {
+        String pattern = "\"" + fieldName + "\"\\s*:\\s*";
+        int start = body.indexOf(pattern);
+
+        if (start < 0) {
+            return null;
+        }
+
+        int valueStart = start + pattern.length();
+        int valueEnd = valueStart;
+
+        while (valueEnd < body.length()) {
+            char c = body.charAt(valueEnd);
+
+            if ((c >= '0' && c <= '9') || c == '.' || c == '-') {
+                valueEnd++;
+            } else {
+                break;
+            }
+        }
+
+        if (valueEnd == valueStart) {
+            return null;
+        }
+
+        return body.substring(valueStart, valueEnd);
     }
 
     private String indent(String value, int spaces) {
@@ -708,7 +1014,11 @@ public class RemoteApiServer {
         sendJson(exchange, 404, errorJson("Dashboard resource not found"));
     }
 
-    private void sendResource(HttpExchange exchange, String resourcePath, String contentType) throws IOException {
+    private void sendResource(
+            HttpExchange exchange,
+            String resourcePath,
+            String contentType
+    ) throws IOException {
         try (InputStream inputStream = RemoteApiServer.class.getResourceAsStream(resourcePath)) {
             if (inputStream == null) {
                 sendJson(exchange, 404, errorJson("Resource not found: " + resourcePath));
@@ -727,5 +1037,4 @@ public class RemoteApiServer {
             }
         }
     }
-
 }

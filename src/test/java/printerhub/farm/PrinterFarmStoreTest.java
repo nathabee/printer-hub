@@ -3,13 +3,17 @@ package printerhub.farm;
 import org.junit.jupiter.api.Test;
 import printerhub.PrinterState;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class PrinterFarmStoreTest {
 
     @Test
-    void constructor_createsDefaultPrinterFarm() {
-        PrinterFarmStore store = new PrinterFarmStore("SIM_PORT", "sim");
+    void constructor_createsConfiguredPrinterFarm() {
+        PrinterFarmStore store = new PrinterFarmStore(List.of(
+                new PrinterNode("printer-1", "Primary printer", "SIM_PORT", "sim")
+        ));
 
         assertEquals(1, store.size());
         assertTrue(store.findById("printer-1").isPresent());
@@ -17,7 +21,9 @@ class PrinterFarmStoreTest {
 
     @Test
     void defaultPrinter_usesConfiguredPortAndMode() {
-        PrinterFarmStore store = new PrinterFarmStore("CUSTOM_PORT", "sim-error");
+        PrinterFarmStore store = new PrinterFarmStore(List.of(
+                new PrinterNode("printer-1", "Primary printer", "CUSTOM_PORT", "sim-error")
+        ));
 
         PrinterNode defaultPrinter = store.getDefaultPrinter();
 
@@ -28,7 +34,9 @@ class PrinterFarmStoreTest {
 
     @Test
     void findById_blank_returnsEmpty() {
-        PrinterFarmStore store = new PrinterFarmStore("SIM_PORT", "sim");
+        PrinterFarmStore store = new PrinterFarmStore(List.of(
+                new PrinterNode("printer-1", "Primary printer", "SIM_PORT", "sim")
+        ));
 
         assertTrue(store.findById(null).isEmpty());
         assertTrue(store.findById(" ").isEmpty());
