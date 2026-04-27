@@ -547,7 +547,7 @@ printer-3 -> SIM_PORT sim
 snapshot.minIntervalSeconds = 30
 snapshot.temperatureThreshold = 1.0
 snapshot.storeOnStateChange = true
-
+```
 ---
 
 ## 0.0.20 — Local Runtime Administration API

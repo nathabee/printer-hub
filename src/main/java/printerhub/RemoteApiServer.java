@@ -30,6 +30,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class RemoteApiServer {
 
@@ -61,8 +63,7 @@ public class RemoteApiServer {
             String printerMode,
             int baudRate,
             long initDelayMs,
-            long pollDelayMs
-    ) {
+            long pollDelayMs) {
         this.apiPort = apiPort;
         this.printerPortName = printerPortName;
         this.printerMode = printerMode;
@@ -75,8 +76,7 @@ public class RemoteApiServer {
         this.configurationStore.ensureDefaultMonitoringRules();
 
         this.printerFarmStore = new PrinterFarmStore(
-                this.configurationStore.findEnabledPrinters()
-        );
+                this.configurationStore.findEnabledPrinters());
 
         this.jobStore = new PersistentPrintJobStore();
         this.eventStore = new PrinterEventStore();
@@ -84,8 +84,7 @@ public class RemoteApiServer {
         this.jobExecutionService = new PrintJobExecutionService(
                 this.jobStore,
                 this.printerFarmStore,
-                this.eventStore
-        );
+                this.eventStore);
     }
 
     public void start() throws IOException {
@@ -107,15 +106,12 @@ public class RemoteApiServer {
                 this::runBackgroundPollSafely,
                 0,
                 pollDelayMs,
-                TimeUnit.MILLISECONDS
-        );
+                TimeUnit.MILLISECONDS);
 
         System.out.println(OperationMessages.infoMessage(
-                "Remote API started on http://localhost:" + apiPort
-        ));
+                "Remote API started on http://localhost:" + apiPort));
         System.out.println(OperationMessages.infoMessage(
-                "Background printer monitoring started for configured local runtime."
-        ));
+                "Background printer monitoring started for configured local runtime."));
     }
 
     public void stop() {
@@ -194,8 +190,7 @@ public class RemoteApiServer {
                     .markError("Background polling failed: " + e.getMessage());
 
             System.err.println(OperationMessages.errorMessage(
-                    "Background polling failed: " + e.getMessage()
-            ));
+                    "Background polling failed: " + e.getMessage()));
         }
     }
 
@@ -213,9 +208,7 @@ public class RemoteApiServer {
                 baudRate,
                 SerialPortAdapterFactory.create(
                         printerNode.getPortName(),
-                        printerNode.getMode()
-                )
-        );
+                        printerNode.getMode()));
 
         PrinterStateTracker tracker = printerNode.getStateTracker();
 
@@ -231,8 +224,7 @@ public class RemoteApiServer {
                         printerNode.getId(),
                         printerNode.getAssignedJobId(),
                         "PRINTER_DISCONNECTED",
-                        "Printer connection failed"
-                );
+                        "Printer connection failed");
 
                 return snapshot;
             }
@@ -251,8 +243,7 @@ public class RemoteApiServer {
                         printerNode.getId(),
                         printerNode.getAssignedJobId(),
                         "PRINTER_ERROR",
-                        "Invalid printer response: " + response
-                );
+                        "Invalid printer response: " + response);
 
                 return snapshot;
             }
@@ -265,8 +256,7 @@ public class RemoteApiServer {
                     printerNode.getId(),
                     printerNode.getAssignedJobId(),
                     "PRINTER_POLLED",
-                    "Printer poll completed successfully"
-            );
+                    "Printer poll completed successfully");
 
             return snapshot;
 
@@ -279,8 +269,7 @@ public class RemoteApiServer {
                     printerNode.getId(),
                     printerNode.getAssignedJobId(),
                     "PRINTER_ERROR",
-                    "Printer timeout: " + e.getMessage()
-            );
+                    "Printer timeout: " + e.getMessage());
 
             return snapshot;
 
@@ -297,8 +286,7 @@ public class RemoteApiServer {
                     printerNode.getId(),
                     printerNode.getAssignedJobId(),
                     "PRINTER_DISCONNECTED",
-                    "Printer disconnected during polling"
-            );
+                    "Printer disconnected during polling");
 
             return snapshot;
 
@@ -345,8 +333,7 @@ public class RemoteApiServer {
                     requiredJsonString(body, "id"),
                     requiredJsonString(body, "name"),
                     requiredJsonString(body, "portName"),
-                    requiredJsonString(body, "mode")
-            );
+                    requiredJsonString(body, "mode"));
 
             configurationStore.savePrinter(printerNode);
             reloadPrinterFarm();
@@ -376,8 +363,7 @@ public class RemoteApiServer {
                     printerId,
                     requiredJsonString(body, "name"),
                     requiredJsonString(body, "portName"),
-                    requiredJsonString(body, "mode")
-            );
+                    requiredJsonString(body, "mode"));
 
             configurationStore.savePrinter(printerNode);
             reloadPrinterFarm();
@@ -417,8 +403,7 @@ public class RemoteApiServer {
             MonitoringRules rules = new MonitoringRules(
                     optionalJsonBoolean(body, "snapshotOnStateChange", true),
                     optionalJsonDouble(body, "temperatureThreshold", 1.0),
-                    optionalJsonLong(body, "minIntervalSeconds", 30)
-            );
+                    optionalJsonLong(body, "minIntervalSeconds", 30));
 
             configurationStore.saveMonitoringRules(rules);
 
@@ -504,8 +489,7 @@ public class RemoteApiServer {
                     null,
                     job.getId(),
                     "JOB_CREATED",
-                    "Print job created through API"
-            );
+                    "Print job created through API");
 
             sendJson(exchange, 201, jobJson(job));
             return;
@@ -525,8 +509,7 @@ public class RemoteApiServer {
         jobStore.findById(jobId)
                 .ifPresentOrElse(
                         job -> sendJsonUnchecked(exchange, 200, jobJson(job)),
-                        () -> sendJsonUnchecked(exchange, 404, errorJson("Job not found"))
-                );
+                        () -> sendJsonUnchecked(exchange, 404, errorJson("Job not found")));
     }
 
     private void handlePrinters(HttpExchange exchange) throws IOException {
@@ -602,8 +585,7 @@ public class RemoteApiServer {
             return;
         }
 
-        List<PrinterSnapshot> snapshots =
-                snapshotStore.findRecentByPrinterId(printerNode.getId(), 20);
+        List<PrinterSnapshot> snapshots = snapshotStore.findRecentByPrinterId(printerNode.getId(), 20);
 
         sendJson(exchange, 200, printerHistoryJson(printerNode.getId(), snapshots));
     }
@@ -643,8 +625,7 @@ public class RemoteApiServer {
         PrintJob job = jobStore.createAssigned(
                 "simulated-job-for-" + printerNode.getId(),
                 PrintJobType.SIMULATED,
-                printerNode.getId()
-        );
+                printerNode.getId());
 
         printerNode.assignJob(job.getId());
 
@@ -652,8 +633,7 @@ public class RemoteApiServer {
                 printerNode.getId(),
                 job.getId(),
                 "JOB_ASSIGNED",
-                "Print job assigned to printer"
-        );
+                "Print job assigned to printer");
 
         sendJson(exchange, 201, jobJson(job));
     }
@@ -888,43 +868,42 @@ public class RemoteApiServer {
     }
 
     private String optionalJsonString(String body, String fieldName, String fallback) {
-        String pattern = "\"" + fieldName + "\"\\s*:\\s*\"";
-        int start = body.indexOf(pattern);
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*\"([^\"]*)\"");
 
-        if (start < 0) {
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
             return fallback;
         }
 
-        int valueStart = start + pattern.length();
-        int valueEnd = body.indexOf('"', valueStart);
-
-        if (valueEnd < 0) {
-            return fallback;
-        }
-
-        return body.substring(valueStart, valueEnd);
+        return matcher.group(1);
     }
 
     private boolean optionalJsonBoolean(String body, String fieldName, boolean fallback) {
-        String pattern = "\"" + fieldName + "\"\\s*:\\s*";
-        int start = body.indexOf(pattern);
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(true|false)");
 
-        if (start < 0) {
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
             return fallback;
         }
 
-        int valueStart = start + pattern.length();
-        String tail = body.substring(valueStart).trim();
+        return Boolean.parseBoolean(matcher.group(1));
+    }
 
-        if (tail.startsWith("true")) {
-            return true;
+    private String optionalJsonRawNumber(String body, String fieldName) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return null;
         }
 
-        if (tail.startsWith("false")) {
-            return false;
-        }
-
-        return fallback;
+        return matcher.group(1);
     }
 
     private double optionalJsonDouble(String body, String fieldName, double fallback) {
@@ -953,34 +932,6 @@ public class RemoteApiServer {
         } catch (NumberFormatException e) {
             return fallback;
         }
-    }
-
-    private String optionalJsonRawNumber(String body, String fieldName) {
-        String pattern = "\"" + fieldName + "\"\\s*:\\s*";
-        int start = body.indexOf(pattern);
-
-        if (start < 0) {
-            return null;
-        }
-
-        int valueStart = start + pattern.length();
-        int valueEnd = valueStart;
-
-        while (valueEnd < body.length()) {
-            char c = body.charAt(valueEnd);
-
-            if ((c >= '0' && c <= '9') || c == '.' || c == '-') {
-                valueEnd++;
-            } else {
-                break;
-            }
-        }
-
-        if (valueEnd == valueStart) {
-            return null;
-        }
-
-        return body.substring(valueStart, valueEnd);
     }
 
     private String indent(String value, int spaces) {
@@ -1017,8 +968,7 @@ public class RemoteApiServer {
     private void sendResource(
             HttpExchange exchange,
             String resourcePath,
-            String contentType
-    ) throws IOException {
+            String contentType) throws IOException {
         try (InputStream inputStream = RemoteApiServer.class.getResourceAsStream(resourcePath)) {
             if (inputStream == null) {
                 sendJson(exchange, 404, errorJson("Resource not found: " + resourcePath));
