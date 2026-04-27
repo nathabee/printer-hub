@@ -11,10 +11,8 @@ class PrinterFarmStoreTest {
     void constructor_createsDefaultPrinterFarm() {
         PrinterFarmStore store = new PrinterFarmStore("SIM_PORT", "sim");
 
-        assertEquals(3, store.size());
+        assertEquals(1, store.size());
         assertTrue(store.findById("printer-1").isPresent());
-        assertTrue(store.findById("printer-2").isPresent());
-        assertTrue(store.findById("printer-3").isPresent());
     }
 
     @Test

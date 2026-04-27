@@ -27,6 +27,7 @@ import java.util.List;
 import printerhub.farm.PrinterFarmStore;
 import printerhub.farm.PrinterNode;
 import java.io.InputStream;
+import printerhub.jobs.PrintJobExecutionService;
 
 public class RemoteApiServer {
 
@@ -45,6 +46,7 @@ public class RemoteApiServer {
     private final PrinterFarmStore printerFarmStore;
     private final PrinterEventStore eventStore;
     private final PrinterSnapshotStore snapshotStore;
+    private final PrintJobExecutionService jobExecutionService;
 
     private HttpServer server;
     private ExecutorService httpExecutor;
@@ -66,6 +68,11 @@ public class RemoteApiServer {
         this.stateTracker = printerFarmStore.getDefaultPrinter().getStateTracker();
         this.jobStore = new PersistentPrintJobStore();
         this.eventStore = new PrinterEventStore();
+        this.jobExecutionService = new PrintJobExecutionService(
+                this.jobStore,
+                this.printerFarmStore,
+                this.eventStore
+        );
         this.snapshotStore = new PrinterSnapshotStore();
 
     }
@@ -158,6 +165,7 @@ public class RemoteApiServer {
     private void runBackgroundPollSafely() {
         try {
             pollPrinterOnce();
+            jobExecutionService.advanceJobs();
         } catch (Exception e) {
             stateTracker.markError("Background polling failed: " + e.getMessage());
             System.err.println(OperationMessages.errorMessage(

@@ -495,18 +495,20 @@ Expected result:
 
 ---
  
- 
-## 0.0.18 — Job Execution Simulation
+## 0.0.18 — Job Execution Simulation and Dashboard Cleanup
 
-status : planned
+status : done
 
 Goals:
 
 * reduce snapshot noise
+* show only configured/active printers in the dashboard
+* remove misleading fake printer cards when only one printer is active
 * move assigned jobs from ASSIGNED to RUNNING
 * simulate completion and failure
 * connect job state changes to printer state
-* expose active job per printer
+* expose active job per print
+
 
 Expected result:
 
@@ -515,17 +517,23 @@ Expected result:
 * printer state and job state start moving together
 
 ---
-
-## 0.0.19 — Local Printer Farm Configuration
+ 
+## 0.0.19 — Local Runtime Configuration and Monitoring Rules
 
 status : planned
 
 Goals:
 
-* configure local printer nodes at startup
+* persist local printer configuration in SQLite
+* configure active printer nodes without source-code changes
 * support multiple local printers with different ports
 * allow real and simulated printers in the same local runtime
-* add or remove printer definitions without code changes
+* show only configured printers in the dashboard
+* store monitoring rules in the database
+* support configurable snapshot storage rules:
+  * store when printer state changes
+  * store when temperature difference exceeds threshold
+  * store when minimum interval has passed
 
 Example configuration:
 
@@ -533,6 +541,9 @@ Example configuration:
 printer-1 -> /dev/ttyUSB0 real
 printer-2 -> /dev/ttyUSB1 real
 printer-3 -> SIM_PORT sim
+
+snapshot.minIntervalSeconds = 30
+snapshot.temperatureThreshold = 1.0
 ```
 
 Expected result:
@@ -540,10 +551,67 @@ Expected result:
 * the dashboard represents the actual local printer setup
 * multiple real printers can be monitored from one local JAR
 * simulation remains available as a test/stub mode
+* snapshot history stays useful without flooding the database
+* monitoring settings are ready for later dashboard administration
 
 ---
 
-## 0.0.20 — Local Dashboard Job Control
+## 0.0.20 — Local Runtime Administration API
+
+status : planned
+
+Goals:
+
+* add API endpoints for printer registration and removal
+* enable and disable printer nodes at runtime
+* update printer mode, port, and display name
+* persist printer configuration
+* expose monitoring configuration through the API
+
+Example endpoints:
+
+```text
+GET    /printers
+POST   /printers
+PUT    /printers/{id}
+DELETE /printers/{id}
+POST   /printers/{id}/enable
+POST   /printers/{id}/disable
+GET    /settings/monitoring
+PUT    /settings/monitoring
+```
+
+Expected result:
+
+* printers can be managed without changing source code
+* local printer farm configuration becomes persistent
+* monitoring rules can be changed through API calls
+* the system prepares for dashboard-based administration
+
+---
+
+## 0.0.21 — Local Dashboard Administration
+
+status : planned
+
+Goals:
+
+* add dashboard screens for local runtime administration
+* create, edit, enable, and disable printer nodes from the dashboard
+* configure snapshot storage rules from the dashboard
+* display current local runtime configuration
+* keep dashboard behavior aligned with configured printers only
+
+Expected result:
+
+* local users can manage printer configuration visually
+* no fake printer cards are shown unless configured
+* monitoring behavior can be tuned without restarting or editing code
+* PrinterHub becomes a usable local printer-farm administration prototype
+
+---
+
+## 0.0.22 — Local Dashboard Job Control
 
 status : planned
 
@@ -563,36 +631,7 @@ Expected result:
 
 ---
 
-## 0.0.21 — Local Runtime Administration API
-
-status : planned
-
-Goals:
-
-* add API endpoints for printer registration and removal
-* enable/disable printer nodes at runtime
-* persist printer configuration
-* expose configured printer mode, port, and status
-
-Example endpoints:
-
-```text
-GET    /printers
-POST   /printers
-DELETE /printers/{id}
-POST   /printers/{id}/enable
-POST   /printers/{id}/disable
-```
-
-Expected result:
-
-* printers can be managed without changing source code
-* local printer farm configuration becomes persistent
-* the system prepares for remote administration
-
----
-
-## 0.0.22 — Cloud Synchronization Foundation
+## 0.0.23 — Cloud Synchronization Foundation
 
 status : planned
 
@@ -602,15 +641,17 @@ Goals:
 * send printer state, job state, and events to a central server
 * keep local operation possible when cloud connection is unavailable
 * define local-versus-remote ownership of actions
+* prepare site identity for each local PrinterHub installation
 
 Expected result:
 
 * local PrinterHub instances can report to a central monitoring backend
+* local operation remains independent from cloud availability
 * the project starts moving from local dashboard to distributed monitoring
 
 ---
 
-## 0.0.23 — Central Monitoring Backend
+## 0.0.24 — Central Monitoring Backend
 
 status : planned
 
@@ -620,15 +661,17 @@ Goals:
 * collect states from several local installations
 * expose site, printer, job, and event data centrally
 * prepare authentication and site identity
+* store synchronized monitoring data centrally
 
 Expected result:
 
 * one central system can monitor several local printer farms
 * PrinterHub matches the industrial multi-site monitoring goal
+* local and central responsibilities become clearly separated
 
 ---
 
-## 0.0.24 — Remote Dashboard for Multi-Site Monitoring
+## 0.0.25 — Remote Dashboard for Multi-Site Monitoring
 
 status : planned
 
@@ -638,15 +681,17 @@ Goals:
 * show multiple sites and printer farms
 * inspect local printer history remotely
 * display job and event history across sites
+* distinguish local dashboard from central dashboard
 
 Expected result:
 
 * remote supervisors can monitor several printer locations
 * local dashboard and cloud dashboard have clearly separated roles
+* PrinterHub demonstrates centralized industrial monitoring
 
 ---
 
-## 0.0.25 — Remote Job Dispatch
+## 0.0.26 — Remote Job Dispatch
 
 status : planned
 
@@ -656,16 +701,16 @@ Goals:
 * dispatch jobs to selected local PrinterHub instances
 * synchronize job state back to the cloud
 * keep local confirmation and safety checks
+* prevent unsafe remote execution without local readiness
 
 Expected result:
 
 * jobs can be created centrally and executed locally
 * PrinterHub demonstrates distributed job orchestration
-
-
-
+* remote control remains compatible with local safety constraints
 
 ---
+
 ## 0.0.xxx — Hardware Simulation with Arduino
 
 status : planned
@@ -699,4 +744,5 @@ Expected result:
 * reproducible CI environment
 * easier Jenkins portability
 * stronger container-based DevOps workflow
+
  

@@ -5,12 +5,14 @@
 
 see ROADMAP.md
 
-
+planned :
+- 0.0.19 Local Runtime Configuration and Monitoring Rules
 
 ## Version (done)
 
 ### Version 0.0.x : first sprint to create a deployment ready prototype
 
+- 0.0.18 Job Execution Simulation and Dashboard Cleanup
 - 0.0.17 Database Persistence
 - 0.0.16 Central Monitoring Dashboard
 - 0.0.15 In-Memory Printer Farm Simulation

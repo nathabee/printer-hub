@@ -286,7 +286,7 @@ class RemoteApiServerTest {
 
 
     @Test
-    void printers_get_returnsPrinterFleet() throws Exception {
+    void printers_get_returnsConfiguredPrinterOnly() throws Exception {
         int port = freePort();
         startApi(port);
 
@@ -295,8 +295,11 @@ class RemoteApiServerTest {
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("\"printers\""));
         assertTrue(response.body().contains("\"id\": \"printer-1\""));
-        assertTrue(response.body().contains("\"id\": \"printer-2\""));
-        assertTrue(response.body().contains("\"id\": \"printer-3\""));
+        assertTrue(response.body().contains("\"name\": \"Primary printer\""));
+        assertTrue(response.body().contains("\"portName\": \"SIM_PORT\""));
+
+        assertTrue(!response.body().contains("\"id\": \"printer-2\""));
+        assertTrue(!response.body().contains("\"id\": \"printer-3\""));
     }
 
     @Test
@@ -329,12 +332,12 @@ class RemoteApiServerTest {
         int port = freePort();
         startApi(port);
 
-        HttpResponse<String> response = send("POST", url(port, "/printers/printer-2/jobs"));
+        HttpResponse<String> response = send("POST", url(port, "/printers/printer-1/jobs"));
 
         assertEquals(201, response.statusCode());
         assertTrue(response.body().contains("\"type\": \"SIMULATED\""));
         assertTrue(response.body().contains("\"state\": \"ASSIGNED\""));
-        assertTrue(response.body().contains("\"assignedPrinterId\": \"printer-2\""));
+        assertTrue(response.body().contains("\"assignedPrinterId\": \"printer-1\""));
     }
 
     @Test
@@ -342,10 +345,10 @@ class RemoteApiServerTest {
         int port = freePort();
         startApi(port);
 
-        HttpResponse<String> created = send("POST", url(port, "/printers/printer-2/jobs"));
+        HttpResponse<String> created = send("POST", url(port, "/printers/printer-1/jobs"));
         String jobId = extractJsonString(created.body(), "id");
 
-        HttpResponse<String> response = send("GET", url(port, "/printers/printer-2/status"));
+        HttpResponse<String> response = send("GET", url(port, "/printers/printer-1/status"));
 
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("\"assignedJobId\": \"" + jobId + "\""));
@@ -408,5 +411,36 @@ class RemoteApiServerTest {
         assertTrue(response.body().contains("fetch(\"/printers\")"));
     }
 
+    @Test
+    void backgroundExecution_movesAssignedJobToCompleted() throws Exception {
+        int port = freePort();
+        startApi(port, 50);
 
+        HttpResponse<String> created =
+                send("POST", url(port, "/printers/printer-1/jobs"));
+
+        String jobId = extractJsonString(created.body(), "id");
+
+        String jobBody = waitForJobContaining(port, jobId, "\"state\": \"COMPLETED\"");
+
+        assertTrue(jobBody.contains("\"id\": \"" + jobId + "\""));
+        assertTrue(jobBody.contains("\"state\": \"COMPLETED\""));
+    }
+
+
+    private String waitForJobContaining(int port, String jobId, String expectedText) throws Exception {
+    long deadline = System.currentTimeMillis() + 3000;
+
+    while (System.currentTimeMillis() < deadline) {
+        HttpResponse<String> response = send("GET", url(port, "/jobs/" + jobId));
+
+        if (response.statusCode() == 200 && response.body().contains(expectedText)) {
+            return response.body();
+        }
+
+        Thread.sleep(50);
+    }
+
+    throw new AssertionError("Job did not contain expected text: " + expectedText);
+}
 }

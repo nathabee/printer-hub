@@ -99,12 +99,14 @@ Implemented:
 - embedded monitoring dashboard
 - SQLite-based persistence for jobs, events, and printer snapshots
 - snapshot history API
-- automated tests with CI verification
+- automated tests with CI verification 
+- job execution lifecycle simulation (ASSIGNED → RUNNING → COMPLETED)
+- database migration strategy preparation (SQLite → PostgreSQL)
 
 Planned:
 
-- job execution lifecycle simulation
-- database migration strategy (SQLite → PostgreSQL)
+- connection of job execution to real printer runtime
+- advanced snapshot filtering (temperature threshold)
 
 See full roadmap:
 

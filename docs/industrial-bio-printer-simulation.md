@@ -315,7 +315,7 @@ Purpose:
 | Monitoring dashboard | Embedded UI for printer farm monitoring | Implemented |
 | Database persistence | Store jobs, printer events, and printer snapshots in SQLite | Implemented |
 | Printer history API | Expose recent printer snapshot history | Implemented |
-| Job execution simulation | Move jobs through ASSIGNED, RUNNING, COMPLETED, and FAILED | Planned |
+| Job execution simulation | Move jobs through ASSIGNED, RUNNING, COMPLETED lifecycle | Implemented |
 
 ---
   
@@ -348,19 +348,25 @@ Current capabilities:
   - `GET /dashboard/dashboard.css`
   - `GET /dashboard/dashboard.js`
 - automated tests and Jenkins CI verification
-
+- automatic job execution simulation:
+  - assigned jobs advance automatically
+  - lifecycle transitions handled in background polling
+- snapshot storage optimization:
+  - duplicate snapshots suppressed
+  - minimum storage interval enforced
 ---
 
 ## 11. Next Steps
 
 Next development goals:
 
-- reduce duplicate snapshot storage
-- simulate job execution lifecycle
+- connect job execution to real printer runtime
+- expose active job execution progress
+- extend snapshot filtering with temperature thresholds
 - connect assigned jobs to printer runtime state
 - expose active job per printer
 - prepare later database evolution from SQLite to PostgreSQL
-
+ 
 
 ---
 

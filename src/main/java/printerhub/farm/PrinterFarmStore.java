@@ -13,10 +13,28 @@ public class PrinterFarmStore {
     private final ConcurrentMap<String, PrinterNode> printers = new ConcurrentHashMap<>();
 
     public PrinterFarmStore(String primaryPortName, String primaryMode) {
+
+        if (primaryPortName == null || primaryPortName.isBlank()) {
+            throw new IllegalArgumentException("primaryPortName must not be blank");
+        }
+
+        if (primaryMode == null || primaryMode.isBlank()) {
+            throw new IllegalArgumentException("primaryMode must not be blank");
+        }
+
+        add(new PrinterNode(
+                DEFAULT_PRINTER_ID,
+                "Primary printer",
+                primaryPortName,
+                primaryMode
+        ));
+    }
+
+    /*public PrinterFarmStore(String primaryPortName, String primaryMode) {
         add(new PrinterNode(DEFAULT_PRINTER_ID, "Primary printer", primaryPortName, primaryMode));
         add(new PrinterNode("printer-2", "Simulated printer 2", "SIM_PORT_2", "sim"));
         add(new PrinterNode("printer-3", "Simulated printer 3", "SIM_PORT_3", "sim"));
-    }
+    }*/
 
     public void add(PrinterNode printer) {
         printers.put(printer.getId(), printer);

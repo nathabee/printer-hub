@@ -67,4 +67,8 @@ public class PrinterNode {
 
         return value.trim();
     }
+
+    public synchronized void clearAssignedJob() {
+        assignedJobId = null;
+    }
 }
