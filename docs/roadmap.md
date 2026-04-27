@@ -550,37 +550,56 @@ snapshot.storeOnStateChange = true
 ```
 ---
 
-## 0.0.20 — Local Runtime Administration API
+## 0.0.20 — Local Runtime Administration API and Dashboard UX
 
 status : planned
 
 Goals:
 
-* add API endpoints for printer registration and removal
-* enable and disable printer nodes at runtime
-* update printer mode, port, and display name
-* persist printer configuration
-* expose monitoring configuration through the API
+* split `RemoteApiServer` into smaller API handler classes
+* add clear administration endpoints for printer registration, update, enable, disable, and removal
+* separate “add new printer” and “edit existing printer” workflows in the dashboard
+* prevent accidental printer duplication when editing
+* persist printer configuration in SQLite
+* expose monitoring configuration through dedicated API endpoints
+* add help text for monitoring settings:
+  * dashboard refresh interval
+  * printer polling interval
+  * snapshot minimum storage interval
+  * temperature threshold for snapshot storage
+* prepare runtime configuration for later multi-printer production use
 
 Example endpoints:
 
 ```text
-GET    /printers
-POST   /printers
-PUT    /printers/{id}
-DELETE /printers/{id}
-POST   /printers/{id}/enable
-POST   /printers/{id}/disable
-GET    /settings/monitoring
-PUT    /settings/monitoring
+GET    /config/printers
+POST   /config/printers
+PUT    /config/printers/{id}
+DELETE /config/printers/{id}
+POST   /config/printers/{id}/enable
+POST   /config/printers/{id}/disable
+GET    /config/monitoring-rules
+PUT    /config/monitoring-rules
 ```
+
+Dashboard administration improvements:
+
+* “Add printer” creates a new configured printer
+* “Edit printer” updates an existing configured printer
+* printer ID is locked during edit
+* cancel edit returns to add mode
+* enabled and disabled status is visible
+* help text explains what each setting changes
+* monitoring storage rules are clearly separated from dashboard refresh behavior
 
 Expected result:
 
 * printers can be managed without changing source code
-* local printer farm configuration becomes persistent
+* editing a printer no longer creates accidental duplicates
+* local printer farm configuration remains persistent
 * monitoring rules can be changed through API calls
-* the system prepares for dashboard-based administration
+* dashboard administration becomes understandable and safe to use
+* `RemoteApiServer` is reduced to routing and lifecycle coordination
 
 ---
 
