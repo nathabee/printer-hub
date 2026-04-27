@@ -298,80 +298,58 @@ Purpose:
 * handle connection failures
 
 ---
- 
-## 9. Development Steps
 
-Current and planned development stages:
+## 9. Development Steps
 
 | Step | Goal | Status |
 |---|---|---|
 | Basic serial communication | Connect to printer and send commands | Implemented |
 | Continuous polling | Read printer status repeatedly | Implemented |
 | Simulated serial adapter | Run without real printer | Implemented |
-| Structured logging | Record commands, responses, and errors | Partially implemented |
 | Printer state model | Represent printer lifecycle states | Implemented |
-| REST API | Provide `/health`, `/printer/status`, and `/printer/poll` | Implemented |
-| Continuous API monitoring | Background polling in API mode | Implemented |
-| API runtime verification | Verify API startup and responses in CI | Implemented |
+| REST API | Expose health, printer status, polling, jobs, and fleet endpoints | Implemented |
 | Failure simulation | Simulate disconnect, timeout, and printer error scenarios | Implemented |
-| Job model | Represent print jobs and lifecycle | Implemented |
-| Job upload simulation | Create simulated jobs through the API | Implemented |
-| In-memory job store | Store and retrieve job metadata during runtime | Implemented |
-| Multi-printer simulation | Simulate printer farm | Implemented |
-| Printer-specific job assignment | Assign jobs to selected printers | Implemented |
-| Monitoring dashboard | Central UI for printers | Planned |
-| Database persistence | Store jobs, states, and history | Planned | 
-| Multi-printer simulation | Simulate printer farm | Implemented |
-| Printer-specific job assignment | Assign jobs to selected printers | Implemented |
+| Job model | Represent print jobs and lifecycle states | Implemented |
+| Job API | Create, list, inspect, and assign jobs | Implemented |
+| Multi-printer simulation | Simulate a small printer farm | Implemented |
 | Monitoring dashboard | Embedded UI for printer farm monitoring | Implemented |
-| Database persistence | Store jobs, states, and history | Planned |
+| Database persistence | Store jobs, printer events, and printer snapshots in SQLite | Implemented |
+| Printer history API | Expose recent printer snapshot history | Implemented |
+| Job execution simulation | Move jobs through ASSIGNED, RUNNING, COMPLETED, and FAILED | Planned |
 
 ---
  
 ## 10. Current Project Status
 
+## 10. Current Project Status
+
 Current capabilities:
 
-- serial communication implemented
-- repeated polling workflow implemented
-- simulated serial adapter available
-- printer state model implemented
-- printer snapshot parsing available
-- REST API mode implemented
-- continuous background polling in API mode
-- `/health`, `/printer/status`, and `/printer/poll` endpoints available
-- automatic status refresh without manual polling
-- failure scenario simulation available:
-  - disconnected printer
-  - timeout behavior
-  - printer error responses
-- print job domain model implemented:
-  - job identity
-  - lifecycle states
-  - state transition validation
-- in-memory print job storage implemented
-- job API endpoints available:
+- serial communication with real and simulated printers
+- repeated polling workflow
+- printer state tracking and snapshot parsing
+- REST API mode with background monitoring
+- failure scenario simulation
+- print job domain model and lifecycle states
+- persistent SQLite storage for jobs
+- persistent printer event audit trail
+- persistent printer snapshot history
+- printer history API:
+  - `GET /printers/{id}/history`
+- job API endpoints:
   - `POST /jobs`
   - `GET /jobs`
   - `GET /jobs/{id}`
-- automated test foundation available
-- API runtime smoke verification executed in CI
-- CI pipeline with Jenkins operational
-- release packaging implemented
-- in-memory printer farm simulation implemented
-- printer fleet API endpoints available:
+- printer fleet API endpoints:
   - `GET /printers`
   - `GET /printers/{id}/status`
   - `POST /printers/{id}/poll`
   - `POST /printers/{id}/jobs`
-- jobs can be assigned to selected logical printers
-- embedded monitoring dashboard implemented:
+- embedded monitoring dashboard:
   - `GET /dashboard`
   - `GET /dashboard/dashboard.css`
   - `GET /dashboard/dashboard.js`
-- dashboard displays printer fleet state, temperatures, assigned jobs, and update time
-- dashboard refreshes from REST API periodically
-
+- automated tests and Jenkins CI verification
 
 ---
 
@@ -379,12 +357,13 @@ Current capabilities:
 
 Next development goals:
 
+- reduce duplicate snapshot storage
 - simulate job execution lifecycle
 - connect assigned jobs to printer runtime state
 - expose active job per printer
-- add database persistence
-- store printer state and job history across restarts
- 
+- prepare later database evolution from SQLite to PostgreSQL
+
+
 ---
 
 ## 12. Long-Term Vision

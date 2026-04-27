@@ -1,9 +1,11 @@
 package printerhub;
 
+import printerhub.persistence.DatabaseInitializer;
 import printerhub.serial.SerialPortAdapterFactory;
 
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
+
 
 public class Main {
 
@@ -14,9 +16,10 @@ public class Main {
     private static final long DEFAULT_INIT_DELAY_MS = 2000L;
     private static final int DEFAULT_BAUD_RATE = 115200;
     private static final String DEFAULT_MODE = "real";
-    private static final int DEFAULT_API_PORT = 18080;
+    private static final int DEFAULT_API_PORT = 18080; 
 
     public static void main(String[] args) {
+        DatabaseInitializer.initialize();
         int exitCode = run(args);
         if (exitCode != 0) {
             System.exit(exitCode);

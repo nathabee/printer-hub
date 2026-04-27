@@ -11,6 +11,7 @@ see ROADMAP.md
 
 ### Version 0.0.x : first sprint to create a deployment ready prototype
 
+- 0.0.17 Database Persistence
 - 0.0.16 Central Monitoring Dashboard
 - 0.0.15 In-Memory Printer Farm Simulation
 - 0.0.14 Job Upload Simulation

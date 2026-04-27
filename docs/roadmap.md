@@ -471,7 +471,8 @@ Expected result:
 
 ## 0.0.17 — Database Persistence
 
-status : planned
+status : done
+
 
 Goals:
 
@@ -493,11 +494,15 @@ Expected result:
 * the project gains a foundation for reporting and audit trails
 
 ---
+ 
 
 ## 0.0.18 — Job Execution Simulation
 
+status : planned
+
 Goals:
 
+* reduce snapshot noise
 * move assigned jobs from ASSIGNED to RUNNING
 * simulate completion and failure
 * connect job state changes to printer state

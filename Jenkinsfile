@@ -123,6 +123,10 @@ pipeline {
 
                     test "${BEFORE_UPDATED_AT}" != "${AFTER_UPDATED_AT}"
 
+
+                    curl -fsS "http://localhost:${API_PORT}/printers/printer-1/history" > target/api-history.json
+                    grep -q '"history"' target/api-history.json
+
                     curl -fsS "http://localhost:${API_PORT}/dashboard" > target/dashboard.html
                     curl -fsS "http://localhost:${API_PORT}/dashboard/dashboard.css" > target/dashboard.css
                     curl -fsS "http://localhost:${API_PORT}/dashboard/dashboard.js" > target/dashboard.js
@@ -273,6 +277,7 @@ PY
             archiveArtifacts artifacts: 'target/api-smoke.log', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/api-status-before.json', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/api-status-after.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/api-history.json', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard.html', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard.css', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard.js', allowEmptyArchive: true

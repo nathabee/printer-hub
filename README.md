@@ -97,12 +97,14 @@ Implemented:
 - in-memory printer farm simulation
 - job creation and assignment to printers
 - embedded monitoring dashboard
+- SQLite-based persistence for jobs, events, and printer snapshots
+- snapshot history API
 - automated tests with CI verification
 
 Planned:
 
 - job execution lifecycle simulation
-- persistent storage (SQLite → PostgreSQL)
+- database migration strategy (SQLite → PostgreSQL)
 
 See full roadmap:
 

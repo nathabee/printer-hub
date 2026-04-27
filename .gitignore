@@ -13,4 +13,8 @@ jacoco-pretty.xml
 .DS_Store
 
 
+# db
+printerhub.db
+*.db
+
 chat.txt

@@ -6,7 +6,7 @@
 mvn test
 mvn clean verify
 mvn clean package
-````
+```
 
 Generated artifacts:
 
@@ -24,8 +24,9 @@ Production code:
 
 * `src/main/java/printerhub` — CLI, polling, serial communication, API server, printer state model
 * `src/main/java/printerhub/serial` — real and simulated serial adapters
-* `src/main/java/printerhub/jobs` — print job model and in-memory job store
-* `src/main/java/printerhub/farm` — in-memory printer farm model
+* `src/main/java/printerhub/jobs` — print job model and job store abstraction
+* `src/main/java/printerhub/farm` — printer farm model
+* `src/main/java/printerhub/persistence` — SQLite persistence for jobs, printer events, and printer snapshots
 * `src/main/resources/dashboard` — embedded monitoring dashboard
 
 Test code:
@@ -38,6 +39,7 @@ Test code:
 * `SimulationProfileTest` — simulated failure profiles
 * `PrintJobTest`, `PrintJobValidatorTest`, `PrintJobStoreTest` — job domain model
 * `PrinterFarmStoreTest` — logical printer farm model
+* `PersistentPrintJobStoreTest`, `PrinterEventStoreTest`, `PrinterSnapshotStoreTest` — SQLite persistence layer
 
 Test helpers:
 
@@ -102,6 +104,17 @@ curl http://localhost:18080/printers/printer-1/status
 curl -X POST http://localhost:18080/printers/printer-1/poll
 ```
 
+Printer history:
+
+```bash
+curl http://localhost:18080/printers/printer-1/history
+```
+
+Expected result:
+
+* recent persisted printer snapshots are returned
+* newest entries appear first
+
 Jobs:
 
 ```bash
@@ -137,6 +150,50 @@ Expected dashboard behavior:
 * displays state, temperatures, update time, and assigned job
 * refreshes automatically every 3 seconds
 * reads data from the REST API only
+
+---
+
+## Persistence checks
+
+The application creates a local SQLite database file:
+
+```text
+printerhub.db
+```
+
+Check tables:
+
+```bash
+sqlite3 printerhub.db ".tables"
+```
+
+Expected tables:
+
+```text
+print_jobs
+printer_events
+printer_snapshots
+```
+
+Check persisted jobs:
+
+```bash
+sqlite3 printerhub.db "SELECT id, name, state, printer_id, created_at FROM print_jobs;"
+```
+
+Check persisted printer events:
+
+```bash
+sqlite3 printerhub.db "SELECT event_type, printer_id, job_id, message FROM printer_events ORDER BY id DESC LIMIT 10;"
+```
+
+Check persisted printer snapshots:
+
+```bash
+sqlite3 printerhub.db "SELECT printer_id, state, last_response, created_at FROM printer_snapshots ORDER BY id DESC LIMIT 10;"
+```
+
+The runtime database is intentionally ignored by Git.
 
 ---
 
@@ -246,6 +303,7 @@ Then test:
 ```bash
 curl http://localhost:18080/health
 curl http://localhost:18080/printers
+curl http://localhost:18080/printers/printer-1/history
 curl http://localhost:18080/dashboard
 ```
 
@@ -261,6 +319,9 @@ The test strategy covers:
 4. simulated failure modes
 5. job model and job API
 6. printer farm API
-7. embedded dashboard resources
-8. CI evidence through Jenkins, JaCoCo, and archived reports
+7. SQLite persistence for jobs, events, and snapshots
+8. printer history API
+9. embedded dashboard resources
+10. CI evidence through Jenkins, JaCoCo, and archived reports
+
  

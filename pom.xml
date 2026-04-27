@@ -7,7 +7,7 @@
 
     <groupId>printerhub</groupId>
     <artifactId>printer-hub</artifactId>
-    <version>0.0.16</version>
+    <version>0.0.17</version>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
@@ -37,6 +37,12 @@
             <scope>test</scope>
         </dependency>
         
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.45.3.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>
