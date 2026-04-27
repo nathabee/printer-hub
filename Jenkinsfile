@@ -62,7 +62,10 @@ pipeline {
 
         stage('Verify') {
             steps {
-                sh 'mvn -B -ntp clean verify'
+                sh '''
+                    rm -f printerhub.db printerhub-real.db printerhub-test.db
+                    mvn -B -ntp clean verify
+                '''
             }
         }
 

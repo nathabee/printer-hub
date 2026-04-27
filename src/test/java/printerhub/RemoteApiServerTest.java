@@ -15,6 +15,12 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import printerhub.persistence.DatabaseInitializer;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 
 class RemoteApiServerTest {
 
@@ -22,18 +28,34 @@ class RemoteApiServerTest {
             Pattern.compile("\"updatedAt\"\\s*:\\s*\"([^\"]+)\"");
 
     private RemoteApiServer apiServer;
+    private Path databaseFile;
+
+
+    @BeforeEach
+    void setUpDatabase() throws IOException {
+        databaseFile = Files.createTempFile("printerhub-remote-api-test-", ".db");
+        System.setProperty("printerhub.databaseFile", databaseFile.toString());
+
+        DatabaseInitializer.initialize();
+    }
 
     @AfterEach
-    void cleanup() {
+    void cleanup() throws IOException {
         if (apiServer != null) {
             apiServer.stop();
         }
 
         Set<String> keys = System.getProperties().stringPropertyNames();
         for (String key : keys) {
-            if (key.startsWith("printerhub.sim.") || key.equals("printerhub.initDelayMs")) {
+            if (key.startsWith("printerhub.sim.")
+                    || key.equals("printerhub.initDelayMs")
+                    || key.equals("printerhub.databaseFile")) {
                 System.clearProperty(key);
             }
+        }
+
+        if (databaseFile != null) {
+            Files.deleteIfExists(databaseFile);
         }
     }
 
