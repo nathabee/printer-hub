@@ -318,9 +318,7 @@ Purpose:
 | Job execution simulation | Move jobs through ASSIGNED, RUNNING, COMPLETED, and FAILED | Planned |
 
 ---
- 
-## 10. Current Project Status
-
+  
 ## 10. Current Project Status
 
 Current capabilities:
