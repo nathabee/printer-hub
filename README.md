@@ -39,6 +39,38 @@ For the full design plan:
 
 # Local Runtime Architecture
 
+```text
+PrinterHub Java Runtime
+├── Web server thread pool
+│   └── handles REST API / dashboard HTTP requests
+│
+├── Monitoring scheduler
+│   ├── printer-1 polling task
+│   ├── printer-2 polling task
+│   ├── printer-3 polling task
+│   └── ...
+│
+├── Runtime state cache
+│   └── latest known printer state per configured printer
+│
+├── Database access layer
+│   └── persists snapshots, events, jobs, config
+│
+└── Serial communication layer
+    ├── /dev/ttyUSB0
+    ├── /dev/ttyUSB1
+    └── SIM_PORT
+```
+
+Important rule:
+
+```text
+The API must not poll printers directly during normal dashboard/status reads.
+The monitoring scheduler polls printers in the background.
+The API reads the latest known state from the runtime state cache.
+```
+
+
 ```mermaid
 flowchart TB
     runtime["PrinterHub Java Runtime"]
