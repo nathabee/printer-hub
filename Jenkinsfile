@@ -80,8 +80,8 @@ pipeline {
             steps {
                 sh '''
                     set -eu
-
-                    API_PORT="${API_SMOKE_PORT}"
+ 
+                    API_PORT="${API_SMOKE_PORT:-18090}"
 
                     echo "Starting PrinterHub local runtime on port ${API_PORT}"
 
