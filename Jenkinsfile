@@ -17,6 +17,16 @@ pipeline {
             defaultValue: '18090',
             description: 'Port used for the local runtime smoke test.'
         )
+        string(
+            name: 'RELEASE_VERSION',
+            defaultValue: '',
+            description: 'Optional release version, for example 0.1.0. Leave empty for CI-only runs.'
+        )
+        booleanParam(
+            name: 'PUBLISH_GITHUB_RELEASE',
+            defaultValue: false,
+            description: 'Publish the prepared release bundle to GitHub Releases. Only use for stable main releases.'
+        )
     }
 
     options {
@@ -80,18 +90,16 @@ pipeline {
             steps {
                 sh '''
                     set -eu
- 
+
                     API_PORT="${API_SMOKE_PORT:-18090}"
 
                     echo "Starting PrinterHub local runtime on port ${API_PORT}"
- 
 
                     mvn -B -ntp exec:java \
-                        -Dexec.mainClass="printerhub.Main" \
-                        -Dprinterhub.api.port="${API_PORT}" \
-                        -Dprinterhub.monitoring.intervalSeconds=1 \
-                        > target/runtime-smoke.log 2>&1 &
-
+                      -Dexec.mainClass="printerhub.Main" \
+                      -Dprinterhub.api.port="${API_PORT}" \
+                      -Dprinterhub.monitoring.intervalSeconds=1 \
+                      > target/runtime-smoke.log 2>&1 &
 
                     APP_PID=$!
 
@@ -140,6 +148,178 @@ pipeline {
                 '''
             }
         }
+
+        /*
+         * Future smoke stages:
+         *
+         * These are intentionally disabled during 0.1.0.
+         * They will be reintroduced when the corresponding runtime features exist again.
+         *
+         * Planned later:
+         *
+         * stage('Dashboard Smoke Test') {
+         *     // Requires:
+         *     // GET /dashboard
+         *     // GET /dashboard/dashboard.css
+         *     // GET /dashboard/dashboard.js
+         * }
+         *
+         * stage('Job API Smoke Test') {
+         *     // Requires:
+         *     // GET /jobs
+         *     // POST /jobs
+         *     // POST /printers/{id}/jobs
+         * }
+         *
+         * stage('Runtime Configuration Smoke Test') {
+         *     // Requires:
+         *     // GET /config/printers
+         *     // POST /config/printers
+         *     // GET /config/monitoring-rules
+         *     // PUT /config/monitoring-rules
+         * }
+         *
+         * stage('Printer History Smoke Test') {
+         *     // Requires:
+         *     // GET /printers/{id}/history
+         * }
+         */
+
+        stage('Prepare Release Bundle') {
+            when {
+                expression {
+                    return params.RELEASE_VERSION?.trim()
+                }
+            }
+            steps {
+                sh '''
+                    set -eu
+
+                    rm -rf release
+                    mkdir -p release
+
+                    if ls target/*-all.jar >/dev/null 2>&1; then
+                      cp target/*-all.jar release/
+                    fi
+
+                    if [ -f target/operator-message-report.md ]; then
+                      cp target/operator-message-report.md release/
+                    fi
+
+                    if [ -d target/site/jacoco ]; then
+                      mkdir -p release/jacoco
+                      cp -r target/site/jacoco/* release/jacoco/
+                    fi
+
+                    if [ -f README.md ]; then
+                      cp README.md release/
+                    fi
+
+                    if [ -f docs/test.md ]; then
+                      cp docs/test.md release/
+                    fi
+
+                    if [ -f docs/devops.md ]; then
+                      cp docs/devops.md release/
+                    else
+                      echo "docs/devops.md is not available in this branch." > release/devops-notes.md
+                    fi
+
+                    if [ -f docs/roadmap.md ]; then
+                      cp docs/roadmap.md release/
+                    fi
+
+                    if [ -f docs/version.md ]; then
+                      cp docs/version.md release/
+                    fi
+
+                    if [ -f docs/industrial-bio-printer-simulation.md ]; then
+                      cp docs/industrial-bio-printer-simulation.md release/
+                    fi
+
+                    # Future release documents:
+                    # docs/quickstart.md will be restored after the 0.1.x runtime architecture stabilizes.
+                    # docs/install.md will be restored after runtime packaging is defined.
+                    # docs/developer.md will be restored after the internal architecture is stable.
+                '''
+            }
+        }
+
+        stage('Package Release Archive') {
+            when {
+                expression {
+                    return params.RELEASE_VERSION?.trim()
+                }
+            }
+            steps {
+                script {
+                    def versionName = params.RELEASE_VERSION.trim()
+                    env.RELEASE_ARCHIVE = "printer-hub-${versionName}-release.tar.gz"
+                }
+
+                sh '''
+                    set -eu
+
+                    tar -czf "${RELEASE_ARCHIVE}" release
+                    ls -lh "${RELEASE_ARCHIVE}"
+                '''
+            }
+        }
+
+        stage('Publish GitHub Release') {
+            when {
+                expression {
+                    return params.PUBLISH_GITHUB_RELEASE && params.RELEASE_VERSION?.trim()
+                }
+            }
+            steps {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                    sh '''
+                        set -eu
+
+                        TAG_NAME="v${RELEASE_VERSION}"
+                        RELEASE_NAME="PrinterHub ${RELEASE_VERSION}"
+
+                        API_JSON=$(mktemp)
+
+                        cat > "${API_JSON}" <<EOF
+{
+  "tag_name": "${TAG_NAME}",
+  "name": "${RELEASE_NAME}",
+  "draft": false,
+  "prerelease": false,
+  "generate_release_notes": true
+}
+EOF
+
+                        curl -sS -X POST \
+                          -H "Accept: application/vnd.github+json" \
+                          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                          https://api.github.com/repos/${GITHUB_REPO}/releases \
+                          -d @"${API_JSON}" \
+                          > github-release-response.json
+
+                        UPLOAD_URL=$(python3 - <<'PY'
+import json
+with open("github-release-response.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+url = data.get("upload_url", "")
+print(url.split("{")[0])
+PY
+)
+
+                        test -n "${UPLOAD_URL}"
+
+                        curl -sS -X POST \
+                          -H "Accept: application/vnd.github+json" \
+                          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                          -H "Content-Type: application/gzip" \
+                          "${UPLOAD_URL}?name=${RELEASE_ARCHIVE}" \
+                          --data-binary @"${RELEASE_ARCHIVE}"
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -148,19 +328,32 @@ pipeline {
 
             archiveArtifacts artifacts: 'target/surefire-reports/**', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/site/jacoco/**', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/operator-message-report.md', allowEmptyArchive: true
 
             archiveArtifacts artifacts: 'target/runtime-smoke.log', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/health.json', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/printers-before.json', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/printers-after.json', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'release/**', allowEmptyArchive: true
+            archiveArtifacts artifacts: '*.tar.gz', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'github-release-response.json', allowEmptyArchive: true
+
+            // Future archived smoke artifacts:
+            // target/dashboard.html
+            // target/dashboard.css
+            // target/dashboard.js
+            // target/jobs.json
+            // target/runtime-config.json
+            // target/printer-history.json
         }
 
         success {
-            echo 'PrinterHub local runtime verification completed successfully.'
+            echo 'PrinterHub verification completed successfully.'
         }
 
         failure {
-            echo 'Pipeline failed. Check Java version, Maven output, runtime smoke log, and archived API responses.'
+            echo 'Pipeline failed. Check Java version, Maven output, runtime smoke log, release bundle, and archived API responses.'
         }
     }
-}
+} 
