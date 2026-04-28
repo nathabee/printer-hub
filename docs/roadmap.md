@@ -2,9 +2,44 @@
 
 This roadmap describes the progressive hardening of the printer communication system from hardware discovery to CI/CD-ready automation.
 
+
+This roadmap separates the PrinterHub project into three architectural stages:
+
+- `0.0.x` — prototype foundation
+- `0.1.x` — local farm runtime architecture
+- `0.2.x` — local runtime administration and job management
+- `1.0.x` — central VPS multi-farm management
+
 ---
 
-## 0.0.1 — Interface Discovery
+## 0.0.x — Prototype Foundation (done)
+
+status: closed after `0.0.19`
+
+Purpose:
+
+Build and validate the first working foundation:
+
+- serial communication
+- simulated printer support
+- polling
+- REST API
+- dashboard prototype
+- job model prototype
+- printer farm simulation
+- SQLite persistence
+- local runtime configuration foundation
+
+Important note:
+
+The `0.0.x` line is a prototype line.  
+It proved the components, but it is not yet the final local farm architecture.
+ 
+---
+
+
+
+### 0.0.1 — Interface Discovery
 
 status : done  
 version : 0.0.1
@@ -22,12 +57,12 @@ Output:
 
 ---
 
-## 0.0.2–0.0.3 — Java Printer Communication
+### 0.0.2–0.0.3 — Java Printer Communication
 
 status : done  
 version : 0.0.2 and 0.0.3
 
-### 0.0.2
+#### 0.0.2
 
 Goals:
 
@@ -36,7 +71,7 @@ Goals:
 - basic operational test against real hardware
 - initial handling of port-access issues
 
-### 0.0.3
+#### 0.0.3
 
 Goals:
 
@@ -48,7 +83,7 @@ Goals:
 
 ---
 
-## 0.0.4 — Automated Testing Foundation
+### 0.0.4 — Automated Testing Foundation
 
 status : done  
 version : 0.0.4
@@ -66,7 +101,7 @@ Goals:
 
 ---
 
-## 0.0.5 — JaCoCo Coverage Baseline
+### 0.0.5 — JaCoCo Coverage Baseline
 
 status : done  
 version : 0.0.5
@@ -87,7 +122,7 @@ Result:
 
 ---
 
-## 0.0.6 — Jenkins CI and Broader Automated Verification
+### 0.0.6 — Jenkins CI and Broader Automated Verification
 
 status : done  
 version : 0.0.6
@@ -136,7 +171,7 @@ Expected result:
 
 ---
 
-## 0.0.7 — DevOps Pipeline and Release Automation
+### 0.0.7 — DevOps Pipeline and Release Automation
 
 status : done  
 version : 0.0.7
@@ -211,7 +246,7 @@ Expected result:
 ---
 
  
-## 0.0.8 — Printer State Model
+### 0.0.8 — Printer State Model
 
 status : done  
 version : 0.0.8
@@ -251,7 +286,7 @@ Expected result:
 
 ---
 
-## 0.0.9 — Remote API Layer
+### 0.0.9 — Remote API Layer
 
 status : done  
 version : 0.0.9
@@ -282,7 +317,7 @@ Expected result:
 ---
 
   
-## 0.0.10 — Continuous API Monitoring
+### 0.0.10 — Continuous API Monitoring
 
 status : done
 
@@ -301,7 +336,7 @@ Expected result:
 
 ---
 
-## 0.0.11 — API Runtime and Smoke Verification
+### 0.0.11 — API Runtime and Smoke Verification
 
 status : done
 
@@ -345,7 +380,7 @@ Expected result:
 
 ---
 
-## 0.0.12 — Failure Scenario Simulation
+### 0.0.12 — Failure Scenario Simulation
 
 status : done
 
@@ -364,7 +399,7 @@ Expected result:
 
 ---
 
-## 0.0.13 — Job Model Foundation
+### 0.0.13 — Job Model Foundation
 
 status : done
 
@@ -394,7 +429,7 @@ Expected result:
 
 ---
 
-## 0.0.14 — Job Upload Simulation
+### 0.0.14 — Job Upload Simulation
 
 status : done
 
@@ -421,7 +456,7 @@ Expected result:
 
 ---
 
-## 0.0.15 — In-Memory Printer Farm Simulation
+### 0.0.15 — In-Memory Printer Farm Simulation
 
 status : done
 
@@ -449,7 +484,7 @@ Expected result:
 
 ---
 
-## 0.0.16 — Central Monitoring Dashboard
+### 0.0.16 — Central Monitoring Dashboard
 
 status : done
 
@@ -469,7 +504,7 @@ Expected result:
 
 ---
 
-## 0.0.17 — Database Persistence
+### 0.0.17 — Database Persistence
 
 status : done
 
@@ -495,7 +530,7 @@ Expected result:
 
 ---
  
-## 0.0.18 — Job Execution Simulation and Dashboard Cleanup
+### 0.0.18 — Job Execution Simulation and Dashboard Cleanup
 
 status : done
 
@@ -518,7 +553,7 @@ Expected result:
 
 ---
  
-## 0.0.19 — Local Runtime Configuration and Dashboard Administration
+### 0.0.19 — Local Runtime Configuration and Dashboard Administration
 
 status : done
 
@@ -548,214 +583,539 @@ snapshot.minIntervalSeconds = 30
 snapshot.temperatureThreshold = 1.0
 snapshot.storeOnStateChange = true
 ```
+
+---
+ 
+## 0.1.x — Local Farm Runtime Architecture
+
+Goal:
+
+Restructure PrinterHub into the correct local farm runtime architecture.
+
+The `0.1.x` line must first create the runtime backbone, then migrate existing features into it.
+
+Target architecture:
+
+```text
+PrinterHub Java Runtime
+├── Web server thread pool
+│   └── handles REST API / dashboard HTTP requests
+│
+├── Monitoring scheduler
+│   ├── printer-1 polling task
+│   ├── printer-2 polling task
+│   ├── printer-3 polling task
+│   └── ...
+│
+├── Runtime state cache
+│   └── latest known printer state per configured printer
+│
+├── Database access layer
+│   └── persists snapshots, events, jobs, config
+│
+└── Serial communication layer
+    ├── /dev/ttyUSB0
+    ├── /dev/ttyUSB1
+    └── SIM_PORT
+````
+
+Important rule:
+
+```text
+The API must not poll printers directly during normal dashboard/status reads.
+The monitoring scheduler polls printers in the background.
+The API reads the latest known state from the runtime state cache.
+```
+
 ---
 
-## 0.0.20 — Local Runtime Administration API and Dashboard UX
+### 0.1.0 — Local Runtime Backbone
 
-status : planned
+status: planned
 
 Goals:
 
-* split `RemoteApiServer` into smaller API handler classes
-* add clear administration endpoints for printer registration, update, enable, disable, and removal
-* separate “add new printer” and “edit existing printer” workflows in the dashboard
-* prevent accidental printer duplication when editing
-* persist printer configuration in SQLite
-* expose monitoring configuration through dedicated API endpoints
-* add help text for monitoring settings:
-  * dashboard refresh interval
-  * printer polling interval
-  * snapshot minimum storage interval
-  * temperature threshold for snapshot storage
-* prepare runtime configuration for later multi-printer production use
+* create a new branch in github develop where we remove the old src code in order to start from scratch
+* introduce the final local PrinterHub runtime structure
+* create the multi-threaded runtime backbone immediately
+* run one Java process containing:
 
-Example endpoints:
+  * HTTP server thread pool
+  * monitoring scheduler
+  * runtime printer registry
+  * runtime state cache
+  * database access layer
+  * serial communication layer
+* support placeholders where implementation is not complete yet
+* prepare migration of existing `0.0.x` code into the new structure
+
+Expected components:
 
 ```text
-GET    /config/printers
-POST   /config/printers
-PUT    /config/printers/{id}
-DELETE /config/printers/{id}
-POST   /config/printers/{id}/enable
-POST   /config/printers/{id}/disable
-GET    /config/monitoring-rules
-PUT    /config/monitoring-rules
+PrinterHubRuntime
+PrinterRuntimeNode
+PrinterRegistry
+PrinterRuntimeStateCache
+PrinterMonitoringScheduler
+PrinterMonitoringTask
+RemoteApiServer
+DatabaseInitializer
 ```
 
-Dashboard administration improvements:
+Expected runtime lifecycle:
 
-* “Add printer” creates a new configured printer
-* “Edit printer” updates an existing configured printer
-* printer ID is locked during edit
-* cancel edit returns to add mode
-* enabled and disabled status is visible
-* help text explains what each setting changes
-* monitoring storage rules are clearly separated from dashboard refresh behavior
+```text
+start database
+load or register printers
+create runtime registry
+create state cache
+start monitoring scheduler
+start API server
+```
+
+Shutdown lifecycle:
+
+```text
+stop API server
+stop monitoring scheduler
+disconnect printers
+close database resources
+```
+
+Expected result:
+
+* PrinterHub becomes a structured local farm runtime
+* API, monitoring, database, and serial communication are separated internally
+* multiple printers can be monitored independently
+* one failing printer does not block the whole runtime
+* old `0.0.x` code can be reused selectively, but no longer controls the architecture
+
+---
+
+### 0.1.1 — Migrate Existing Monitoring into Runtime Tasks
+
+status: planned
+
+Goals:
+
+* move existing polling logic into `PrinterMonitoringTask`
+* replace single-printer monitoring with per-printer monitoring tasks
+* run independent polling cycles per configured printer
+* isolate timeout, disconnect, and error handling per printer
+
+Expected result:
+
+* each printer has its own monitoring cycle
+* background monitoring updates the runtime state cache
+* monitoring failures are stored per printer
+* the API remains responsive while monitoring runs
+
+---
+
+### 0.1.2 — Migrate Existing API onto Runtime Services
+
+status: planned
+
+Goals:
+
+* make REST API handlers call runtime services only
+* remove printer orchestration from HTTP handlers
+* expose local farm state from the runtime registry and state cache
+* keep dashboard reads separate from hardware polling
+
+Expected endpoints:
+
+```text
+GET /health
+GET /printers
+GET /printers/{id}
+GET /printers/{id}/status
+GET /dashboard
+```
+
+Expected result:
+
+* API becomes a clean facade over the local runtime
+* dashboard reads current known state through the API
+* normal API reads do not trigger serial communication directly
+
+---
+
+### 0.1.3 — Migrate Persistence into Runtime Stores
+
+status: planned
+
+Goals:
+
+* isolate SQLite access behind store/repository classes
+* avoid database logic inside API or monitoring code
+* persist snapshots, events, jobs, and printer configuration through dedicated stores
+* prepare later replacement or extension of persistence
+
+Expected stores:
+
+```text
+PrinterConfigurationStore
+PrinterSnapshotStore
+PrinterEventStore
+PrintJobStore
+```
+
+Expected result:
+
+* database access becomes clean and replaceable
+* runtime services no longer depend directly on SQL details
+* persistence is part of the local runtime, not part of the API layer
+
+---
+
+### 0.1.4 — Runtime Verification
+
+status: planned
+
+Goals:
+
+* add tests for the local runtime backbone
+* verify multi-printer monitoring
+* verify API responsiveness during background monitoring
+* verify failure isolation between printers
+* verify simulated and real-style printer nodes can coexist
+
+Expected result:
+
+* the local farm runtime architecture is validated
+* `0.1.x` is ready as the foundation for `0.2.x` administration and job management
+
+ 
+
+---
+## 0.2.x — Local Runtime Administration and Job Management
+
+Goal:
+
+Add the operational features originally planned for `0.0.20+`, but now on top of the correct `0.1.x` local runtime architecture.
+
+---
+
+### 0.2.0 — Local Runtime Administration API
+
+status: planned
+
+Goals:
+
+* add API endpoints for printer registration and removal
+* enable and disable printer nodes at runtime
+* update printer mode, port, and display name
+* persist printer configuration
+
+Endpoints:
+
+```text
+GET    /printers
+POST   /printers
+PUT    /printers/{id}
+DELETE /printers/{id}
+POST   /printers/{id}/enable
+POST   /printers/{id}/disable
+```
 
 Expected result:
 
 * printers can be managed without changing source code
-* editing a printer no longer creates accidental duplicates
-* local printer farm configuration remains persistent
-* monitoring rules can be changed through API calls
-* dashboard administration becomes understandable and safe to use
-* `RemoteApiServer` is reduced to routing and lifecycle coordination
+* local printer farm configuration becomes persistent
 
 ---
 
-## 0.0.21 — Local Dashboard Administration
+### 0.2.1 — Monitoring Configuration API
 
-status : planned
+status: planned
 
 Goals:
 
-* add dashboard screens for local runtime administration
-* create, edit, enable, and disable printer nodes from the dashboard
-* configure snapshot storage rules from the dashboard
-* display current local runtime configuration
-* keep dashboard behavior aligned with configured printers only
+* expose monitoring rules through the API
+* persist monitoring intervals and thresholds
+* allow local tuning without code changes
 
-Expected result:
+Endpoints:
 
-* local users can manage printer configuration visually
-* no fake printer cards are shown unless configured
-* monitoring behavior can be tuned without restarting or editing code
-* PrinterHub becomes a usable local printer-farm administration prototype
+```text
+GET /settings/monitoring
+PUT /settings/monitoring
+```
+
+Expected settings:
+
+```text
+poll interval
+snapshot minimum interval
+temperature delta threshold
+error persistence behavior
+```
 
 ---
 
-## 0.0.22 — Local Dashboard Job Control
+### 0.2.2 — Local Dashboard Administration
 
-status : planned
+status: planned
 
 Goals:
 
-* create jobs from the local dashboard
-* assign jobs to selected printers
-* start jobs from the dashboard
-* show active, completed, failed, and waiting jobs
-* display job history per printer
+* add dashboard controls for printer configuration
+* add enable/disable buttons
+* show configured printers only
+* distinguish real and simulated printers clearly
 
 Expected result:
 
-* local users can manage printer jobs from the dashboard
-* job lifecycle becomes visible and controllable
-* PrinterHub becomes a usable local printer-farm control prototype
+* the dashboard becomes a local administration UI
+* no source-code change is needed to manage printers
 
 ---
 
-## 0.0.23 — Cloud Synchronization Foundation
+### 0.2.3 — Job Management over Runtime Architecture
 
-status : planned
+status: planned
 
 Goals:
 
-* prepare synchronization between local PrinterHub runtime and VPS/cloud backend
-* send printer state, job state, and events to a central server
-* keep local operation possible when cloud connection is unavailable
-* define local-versus-remote ownership of actions
-* prepare site identity for each local PrinterHub installation
+* connect print jobs to the runtime printer registry
+* assign jobs to configured printers
+* track job lifecycle through persisted state
+* avoid job logic being coupled directly to HTTP handlers
 
-Expected result:
+Expected lifecycle:
 
-* local PrinterHub instances can report to a central monitoring backend
-* local operation remains independent from cloud availability
-* the project starts moving from local dashboard to distributed monitoring
+```text
+CREATED
+QUEUED
+ASSIGNED
+RUNNING
+COMPLETED
+FAILED
+CANCELLED
+```
 
 ---
 
-## 0.0.24 — Central Monitoring Backend
+### 0.2.4 — Manual Command Execution API
 
-status : planned
+status: planned
 
 Goals:
 
-* build central backend for multiple PrinterHub sites
-* collect states from several local installations
-* expose site, printer, job, and event data centrally
-* prepare authentication and site identity
-* store synchronized monitoring data centrally
+* allow controlled manual printer commands
+* execute commands through `PrinterCommandService`
+* persist command events
+* keep command execution separate from monitoring
 
-Expected result:
+Example endpoints:
 
-* one central system can monitor several local printer farms
-* PrinterHub matches the industrial multi-site monitoring goal
-* local and central responsibilities become clearly separated
+```text
+POST /printers/{id}/commands
+GET  /printers/{id}/events
+```
 
 ---
 
-## 0.0.25 — Remote Dashboard for Multi-Site Monitoring
+### 0.2.5 — Local Audit and History Views
 
-status : planned
+status: planned
 
 Goals:
 
-* create central dashboard for VPS/cloud deployment
-* show multiple sites and printer farms
-* inspect local printer history remotely
-* display job and event history across sites
-* distinguish local dashboard from central dashboard
+* expose printer event history
+* expose job history
+* expose error history
+* make local diagnostics easier
 
 Expected result:
 
-* remote supervisors can monitor several printer locations
-* local dashboard and cloud dashboard have clearly separated roles
-* PrinterHub demonstrates centralized industrial monitoring
+* local runtime can be inspected after failures
+* dashboard becomes useful for troubleshooting
 
 ---
 
-## 0.0.26 — Remote Job Dispatch
+### 0.2.6 — Packaging Local Runtime
 
-status : planned
+status: planned
 
 Goals:
 
-* create jobs from the cloud dashboard
-* dispatch jobs to selected local PrinterHub instances
-* synchronize job state back to the cloud
-* keep local confirmation and safety checks
-* prevent unsafe remote execution without local readiness
+* package PrinterHub as a local runtime service
+* document systemd usage
+* document runtime config location
+* document database location
+* prepare deployment on a local machine connected to printers
 
 Expected result:
 
-* jobs can be created centrally and executed locally
-* PrinterHub demonstrates distributed job orchestration
-* remote control remains compatible with local safety constraints
+```text
+PrinterHub runs as a local service near the printers.
+```
 
 ---
 
-## 0.0.xxx — Hardware Simulation with Arduino
+## 1.0.x — Central VPS Multi-Farm Management
 
-status : planned
+Goal:
 
-Goals:
+Introduce the central platform that manages and observes multiple local PrinterHub runtimes.
 
-* simulate printer responses with external hardware support
-* reproduce selected printer scenarios without a full printer setup
-* validate robustness under controlled hardware-like behavior
+Important architectural rule:
 
-Expected result:
-
-* realistic hardware-independent testing scenarios
-* controlled reproduction of failure and timeout cases
-* improved development and demonstration workflows
+The VPS does not communicate directly with USB printers.
+It communicates with local PrinterHub runtimes.
 
 ---
 
-## 0.0.xxx — Optional Dockerized CI Runner
+### 1.0.0 — Central Multi-Farm Architecture
 
-status : optional
+status: future
+
+Target architecture:
+
+```text
+Central VPS Dashboard
+        |
+        v
+Central Backend API
+        |
+        v
+Central Database
+        |
+        v
+Farm Runtime Connectors
+        |
+        v
+Local PrinterHub Runtime A
+Local PrinterHub Runtime B
+Local PrinterHub Runtime C
+```
 
 Goals:
 
-* add Dockerfile for Maven and Java build execution
-* optionally run Jenkins pipeline using a container agent
-* keep CI independent from local machine setup
+* define central system boundaries
+* distinguish local runtime from central platform
+* define farm identity and registration
+
+---
+
+### 1.0.1 — Farm Registration
+
+status: future
+
+Goals:
+
+* register local PrinterHub runtimes in the central platform
+* assign farm IDs
+* store farm metadata
+* track farm online/offline status
+
+---
+
+### 1.0.2 — Central Farm Status Aggregation
+
+status: future
+
+Goals:
+
+* collect printer summaries from multiple farms
+* show central overview of all farms
+* separate local printer state from central aggregated state
 
 Expected result:
 
-* reproducible CI environment
-* easier Jenkins portability
-* stronger container-based DevOps workflow
+```text
+Farm A: 3 printers
+Farm B: 8 printers
+Farm C: offline
+```
+
+---
+
+### 1.0.3 — Central Dashboard
+
+status: future
+
+Goals:
+
+* build VPS dashboard for all registered farms
+* show farm-level and printer-level summaries
+* link to local runtime details where appropriate
+
+---
+
+### 1.0.4 — Farm Synchronization Protocol
+
+status: future
+
+Goals:
+
+* decide whether farms push data to VPS or VPS pulls from farms
+* define snapshot payloads
+* define event payloads
+* define retry and offline behavior
+
+Possible models:
+
+```text
+push model: local runtime -> central VPS
+pull model: central VPS -> local runtime
+hybrid model
+```
+
+---
+
+### 1.0.5 — Central Job Dispatch Concept
+
+status: future
+
+Goals:
+
+* define whether jobs can be submitted centrally
+* route central jobs to a selected farm
+* keep local runtime responsible for actual printer execution
+
+Important rule:
+
+```text
+central platform requests work
+local PrinterHub runtime executes work
+```
+
+---
+
+### 1.0.6 — Security and Authentication
+
+status: future
+
+Goals:
+
+* secure farm-to-VPS communication
+* authenticate local runtimes
+* protect central dashboard
+* define access model
+
+---
+
+### 1.0.7 — Multi-Farm Operational History
+
+status: future
+
+Goals:
+
+* store central history
+* aggregate farm events
+* expose fleet-wide diagnostics
+* support future reporting
+
+---
+ 
+
+
+
+
+
+
 
  

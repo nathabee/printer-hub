@@ -1,3 +1,13 @@
+> **Project restructuring notice**
+>
+> PrinterHub is currently being refactored from the `0.0.x` prototype line into the `0.1.x` local runtime architecture.
+>
+> Some details in this document still describe the previous prototype state. The documentation will be cleaned up after the runtime architecture stabilizes.
+>
+> Current source of truth: [`docs/roadmap.md`](roadmap.md)
+
+
+
 # DevOps Overview
 
 This document summarizes the current CI pipeline, its DevOps phase coverage, and the planned next steps.

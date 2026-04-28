@@ -4,171 +4,151 @@
 
 # PrinterHub
 
-**PrinterHub** is a Java-based system-integration prototype that simulates how industrial printer farms are monitored, controlled, and automated.
+**PrinterHub** is a Java-based system-integration project that models how industrial printer farms are monitored and controlled.
 
-The project starts with direct serial communication to a real **Creality Ender-3 V2 Neo** printer and incrementally evolves toward an industrial-style architecture including centralized monitoring, job management, REST APIs, database persistence, and multi-printer orchestration.
-
-The Ender-3 printer serves as a physical reference device representing the lower hardware layer of a larger industrial workflow.
+The project began with direct serial communication to a real **Creality Ender-3 V2 Neo** printer and is now entering a **major architectural refactoring phase**.
 
 ---
 
-## Industrial Motivation
+# ⚠️ Work in Progress — Runtime Refactoring
 
-Modern laboratory and industrial printers — including bio-printers — are rarely isolated devices.
+PrinterHub is currently being refactored to establish the final **local farm runtime architecture**.
 
-They operate as part of a **centralized software environment** where users:
+This phase introduces:
 
-- monitor multiple printers remotely
-- upload printable jobs
-- track printer state
-- respond to failures
-- maintain operational logs
-- manage printer fleets
+* multi-threaded printer monitoring
+* runtime-based printer orchestration
+* background polling scheduler
+* runtime state cache
+* clean separation between API and hardware polling
 
-PrinterHub simulates this environment step by step, starting from hardware-level communication and progressing toward distributed system integration.
-
-For the full industrial context:
-
-- see [`docs/industrial-bio-printer-simulation.md`](docs/industrial-bio-printer-simulation.md)
-
----
-
-## Target Architecture
-
-PrinterHub evolves toward a centralized printer-farm structure.
-
-
-```mermaid
-flowchart TB
-    localOperator["Local Operator<br/>loads material<br/>checks physical printer<br/><b>partly implemented</b>"]
-    remoteSupervisor["Remote Supervisor<br/>starts jobs<br/>monitors progress<br/><b>planned</b>"]
-    serviceAdmin["Service Administrator<br/>fleet maintenance<br/>error analysis<br/><b>planned</b>"]
-
-    ui["Embedded Monitoring Dashboard<br/>printer overview<br/>live status<br/>assigned jobs<br/><b>implemented in 0.0.16</b>"]
-
-    api["Backend REST API<br/>health/status endpoints<br/>printer farm API<br/>job API<br/><b>implemented</b>"]
-
-    db[("Database<br/>jobs<br/>printer states<br/>logs<br/>errors<br/>history<br/><b>planned</b>")]
-
-    control["Java Control Service<br/>background polling<br/>state tracking<br/>simulated printer farm<br/><b>implemented</b>"]
-
-    jobs["Job Model<br/>job identity<br/>lifecycle states<br/>assignment to printer<br/><b>partly implemented</b>"]
-
-    comm["Device Communication Layer<br/>USB / serial<br/>G-code commands<br/>printer responses<br/><b>implemented</b>"]
-
-    firmware["Printer Firmware<br/>Marlin-compatible responses<br/><b>real + simulated</b>"]
-
-    hardware["Printer Hardware<br/>motors<br/>heaters<br/>sensors<br/>print head<br/><b>real hardware supported</b>"]
-
-    localOperator --> hardware
-    localOperator --> ui
-    remoteSupervisor -. planned .-> ui
-    serviceAdmin -. planned .-> ui
-
-    ui <--> api
-    api <--> control
-    api <--> jobs
-    api -. planned persistence .-> db
-    control <--> comm
-    comm <--> firmware
-    firmware <--> hardware
-
-    jobs -. planned execution lifecycle .-> control
-    hardware -. status / alarms .-> comm
-    control -. live updates .-> api
-    api -. dashboard data .-> ui
-
-```
-
-Current development focuses on the **Java control service and serial communication layer**, which form the foundation of the system.
-
----
-
-## Current Capabilities
-
-PrinterHub provides a simulated industrial-style printer control service.
-
-Implemented:
-
-- serial communication with printer firmware
-- continuous background polling
-- REST API for printer monitoring
-- failure simulation (disconnect, timeout, error)
-- in-memory printer farm simulation
-- job creation and assignment to printers
-- embedded monitoring dashboard
-- SQLite-based persistence for jobs, events, and printer snapshots
-- snapshot history API
-- automated tests with CI verification 
-- job execution lifecycle simulation (ASSIGNED → RUNNING → COMPLETED)
-- database migration strategy preparation (SQLite → PostgreSQL)
-
-Planned:
-
-- connection of job execution to real printer runtime
-- advanced snapshot filtering (temperature threshold)
-
-See full roadmap:
-
-- [`docs/roadmap.md`](docs/roadmap.md) 
-
----
-
-## Monitoring Dashboard
-
-The embedded dashboard provides a live overview of the simulated printer farm.
-
-![PrinterHub Dashboard](docs/assets/media-src/printerhub-screenshot-dashboard.png)
-
----
-
-## Hardware Reference Setup
-
-Primary test hardware:
-
-Printer:
-
-* Creality Ender-3 V2 Neo
-* Firmware: Marlin (factory default)
-
-Connection:
-
-* USB-C to USB-A cable
-* Linux device path: `/dev/ttyUSB0`
-
-Detected interface:
+During this phase:
 
 ```text
-ch341-uart converter detected
-attached to ttyUSB0
+Features from 0.0.x are being reorganized
+into a new runtime backbone (0.1.x).
 ```
 
----
+Some previously implemented features may be temporarily unavailable while the architecture stabilizes.
 
-## Quickstart
+For the full design plan:
 
-To build and run the project:
-
-* see [`docs/quickstart.md`](docs/quickstart.md)
+→ See [`docs/roadmap.md`](docs/roadmap.md)
 
 ---
 
-## DevOps and Testing
+# Current Development Focus (0.1.x)
 
-Continuous Integration is implemented using Jenkins.
+The current work targets the **local PrinterHub runtime backbone**.
 
-Current CI workflow:
+Target runtime structure:
 
 ```text
-Checkout → Build → Test → Verify → Archive Reports
+PrinterHub Java Runtime
+├── Web server thread pool
+│   └── REST API endpoints
+│
+├── Monitoring scheduler
+│   ├── printer-1 polling task
+│   ├── printer-2 polling task
+│   ├── printer-3 polling task
+│   └── ...
+│
+├── Runtime state cache
+│   └── latest known printer state
+│
+├── Database access layer
+│   └── persistence abstraction
+│
+└── Serial communication layer
+    └── hardware communication
 ```
 
-Includes:
+This runtime is the foundation for:
 
-* Maven build verification
-* automated test execution
-* JaCoCo coverage reporting
-* hardware-independent simulation execution
+```text
+0.2.x — local administration and job management
+1.0.x — multi-farm centralized control
+```
+
+---
+
+# Runtime Status
+
+Current prototype capabilities:
+
+* multi-threaded background monitoring
+* simulated multi-printer runtime
+* REST API:
+
+```text
+GET /health
+GET /printers
+```
+
+* independent printer polling tasks
+* runtime state cache updated continuously
+* configurable API port via runtime property
+
+Example:
+
+```bash
+mvn exec:java \
+  -Dexec.mainClass="printerhub.Main" \
+  -Dprinterhub.api.port=18081
+```
+
+---
+
+# Industrial Context
+
+Modern laboratory and industrial printers are rarely standalone devices.
+
+They operate inside structured environments where:
+
+* multiple printers run simultaneously
+* failures must be isolated
+* monitoring runs continuously
+* operations must remain responsive
+* hardware communication must be abstracted
+
+PrinterHub models this transition from:
+
+```text
+single USB printer
+```
+
+to:
+
+```text
+multi-printer runtime environment
+```
+
+and eventually:
+
+```text
+multi-site centralized printer orchestration
+```
+
+See:
+
+* [`docs/industrial-bio-printer-simulation.md`](docs/industrial-bio-printer-simulation.md)
+
+---
+
+# DevOps and Continuous Integration
+
+PrinterHub uses Jenkins-based CI.
+
+Current CI pipeline validates:
+
+```text
+Branch checkout
+Build verification
+Runtime startup
+API health check
+Multi-printer monitoring activity
+```
 
 Details:
 
@@ -176,53 +156,48 @@ Details:
 
 ---
 
-## Repository Structure
+# Repository Structure (0.1.x)
 
 ```text
 printer-hub/
 ├── README.md
 ├── Jenkinsfile
 ├── docs/
-│   ├── quickstart.md
-│   ├── industrial-bio-printer-simulation.md
 │   ├── roadmap.md
 │   ├── devops.md
-│   ├── interface-discovery.md
+│   ├── industrial-bio-printer-simulation.md
 │   └── version.md
 ├── src/
-│   ├── main/java/
+│   ├── main/java/printerhub/
+│   │   ├── runtime/
+│   │   ├── monitoring/
+│   │   ├── api/
+│   │   ├── persistence/
+│   │   └── serial/
 │   └── test/java/
 └── pom.xml
 ```
 
 ---
 
-## Why This Project Matters
+# Roadmap
 
-Industrial printers — especially in laboratory and medical environments — depend on reliable software systems that manage communication, monitoring, automation, and traceability.
-
-PrinterHub explores the transition from:
+PrinterHub evolves in staged architecture steps:
 
 ```text
-single USB-connected printer
+0.0.x — Prototype validation (completed)
+0.1.x — Runtime architecture (in progress)
+0.2.x — Local administration features
+1.0.x — Multi-farm centralized management
 ```
 
-to:
+Full details:
 
-```text
-centralized monitored printer farm
-```
-
-This makes the project useful as:
-
-* a system-integration learning platform
-* an industrial architecture simulation
-* a structured Java communication prototype
-* a foundation for distributed printer control systems
+→ [`docs/roadmap.md`](docs/roadmap.md)
 
 ---
 
-## License
+# License
 
 MIT License.
 

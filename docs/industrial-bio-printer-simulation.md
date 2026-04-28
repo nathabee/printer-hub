@@ -1,3 +1,11 @@
+> **Project restructuring notice**
+>
+> PrinterHub is currently being refactored from the `0.0.x` prototype line into the `0.1.x` local runtime architecture.
+>
+> Some details in this document still describe the previous prototype state. The documentation will be cleaned up after the runtime architecture stabilizes.
+>
+> Current source of truth: [`docs/roadmap.md`](roadmap.md)
+
 # Industrial Bio-Printer Environment Simulation
 
 ## Using an Ender-3 Printer as System Integration Prototype
@@ -301,72 +309,35 @@ Purpose:
 
 ## 9. Development Steps
 
+> **Status note**
+>
+> This section still reflects the previous `0.0.x` prototype. It will be rewritten after the `0.1.x` runtime backbone is complete.
+
+
+
 | Step | Goal | Status |
 |---|---|---|
-| Basic serial communication | Connect to printer and send commands | Implemented |
-| Continuous polling | Read printer status repeatedly | Implemented |
-| Simulated serial adapter | Run without real printer | Implemented |
-| Printer state model | Represent printer lifecycle states | Implemented |
-| REST API | Expose health, printer status, polling, jobs, and fleet endpoints | Implemented |
-| Failure simulation | Simulate disconnect, timeout, and printer error scenarios | Implemented |
-| Job model | Represent print jobs and lifecycle states | Implemented |
-| Job API | Create, list, inspect, and assign jobs | Implemented |
-| Multi-printer simulation | Simulate a small printer farm | Implemented |
-| Monitoring dashboard | Embedded UI for printer farm monitoring | Implemented |
-| Database persistence | Store jobs, printer events, and printer snapshots in SQLite | Implemented |
-| Printer history API | Expose recent printer snapshot history | Implemented |
-| Job execution simulation | Move jobs through ASSIGNED, RUNNING, COMPLETED lifecycle | Implemented |
+
+
 
 ---
   
 ## 10. Current Project Status
 
-Current capabilities:
 
-- serial communication with real and simulated printers
-- repeated polling workflow
-- printer state tracking and snapshot parsing
-- REST API mode with background monitoring
-- failure scenario simulation
-- print job domain model and lifecycle states
-- persistent SQLite storage for jobs
-- persistent printer event audit trail
-- persistent printer snapshot history
-- printer history API:
-  - `GET /printers/{id}/history`
-- job API endpoints:
-  - `POST /jobs`
-  - `GET /jobs`
-  - `GET /jobs/{id}`
-- printer fleet API endpoints:
-  - `GET /printers`
-  - `GET /printers/{id}/status`
-  - `POST /printers/{id}/poll`
-  - `POST /printers/{id}/jobs`
-- embedded monitoring dashboard:
-  - `GET /dashboard`
-  - `GET /dashboard/dashboard.css`
-  - `GET /dashboard/dashboard.js`
-- automated tests and Jenkins CI verification
-- automatic job execution simulation:
-  - assigned jobs advance automatically
-  - lifecycle transitions handled in background polling
-- snapshot storage optimization:
-  - duplicate snapshots suppressed
-  - minimum storage interval enforced
+> **Status note**
+>
+> This section still reflects the previous `0.0.x` prototype. It will be rewritten after the `0.1.x` runtime backbone is complete.
+
+
 ---
 
 ## 11. Next Steps
 
-Next development goals:
 
-- connect job execution to real printer runtime
-- expose active job execution progress
-- extend snapshot filtering with temperature thresholds
-- connect assigned jobs to printer runtime state
-- expose active job per printer
-- prepare later database evolution from SQLite to PostgreSQL
- 
+> **Status note**
+>
+> This section still reflects the previous `0.0.x` prototype. It will be rewritten after the `0.1.x` runtime backbone is complete.
 
 ---
 

@@ -3,12 +3,19 @@
 
 ## Roadmap  
 
+planned :
 see ROADMAP.md
 
-planned :
 
 
 ## Version (done)
+
+
+### 0.1.x — Local Farm Runtime Architecture
+
+- 0.1.0 — Local Runtime Backbone
+
+
 
 ### Version 0.0.x : first sprint to create a deployment ready prototype
 

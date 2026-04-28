@@ -1,54 +1,55 @@
 package printerhub;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public final class PrinterSnapshot {
 
     private final PrinterState state;
-    private final Double hotendTemperature;
-    private final Double bedTemperature;
     private final String lastResponse;
-    private final LocalDateTime updatedAt;
+    private final String errorMessage;
+    private final Instant updatedAt;
 
-    public PrinterSnapshot(PrinterState state,
-                           Double hotendTemperature,
-                           Double bedTemperature,
-                           String lastResponse,
-                           LocalDateTime updatedAt) {
-        this.state = state == null ? PrinterState.UNKNOWN : state;
-        this.hotendTemperature = hotendTemperature;
-        this.bedTemperature = bedTemperature;
+    private PrinterSnapshot(
+            PrinterState state,
+            String lastResponse,
+            String errorMessage,
+            Instant updatedAt
+    ) {
+        this.state = state;
         this.lastResponse = lastResponse;
-        this.updatedAt = updatedAt == null ? LocalDateTime.now() : updatedAt;
+        this.errorMessage = errorMessage;
+        this.updatedAt = updatedAt;
     }
 
-    public PrinterState getState() {
+    public static PrinterSnapshot fromResponse(
+            PrinterState state,
+            String lastResponse,
+            Instant updatedAt
+    ) {
+        return new PrinterSnapshot(state, lastResponse, null, updatedAt);
+    }
+
+    public static PrinterSnapshot error(
+            PrinterState state,
+            String errorMessage,
+            Instant updatedAt
+    ) {
+        return new PrinterSnapshot(state, null, errorMessage, updatedAt);
+    }
+
+    public PrinterState state() {
         return state;
     }
 
-    public Double getHotendTemperature() {
-        return hotendTemperature;
-    }
-
-    public Double getBedTemperature() {
-        return bedTemperature;
-    }
-
-    public String getLastResponse() {
+    public String lastResponse() {
         return lastResponse;
     }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
+    public String errorMessage() {
+        return errorMessage;
     }
 
-    @Override
-    public String toString() {
-        return "PrinterSnapshot{"
-                + "state=" + state
-                + ", hotendTemperature=" + hotendTemperature
-                + ", bedTemperature=" + bedTemperature
-                + ", updatedAt=" + updatedAt
-                + '}';
+    public Instant updatedAt() {
+        return updatedAt;
     }
 }

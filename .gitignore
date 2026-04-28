@@ -17,4 +17,6 @@ jacoco-pretty.xml
 printerhub.db
 *.db
 
+# development files
 chat.txt
+old_src
