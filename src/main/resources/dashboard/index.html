@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PrinterHub Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/dashboard/dashboard.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">PrinterHub</p>
+        <h1>Printer Farm Monitoring</h1>
+        <p class="lead">Live status overview for the configured local printer runtime.</p>
+      </div>
+      <button id="refreshButton" type="button">Refresh now</button>
+    </header>
+
+    <section class="summary">
+      <div class="summary-card">
+        <span class="summary-label">Enabled printers</span>
+        <strong id="printerCount">0</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Last refresh</span>
+        <strong id="lastRefresh">never</strong>
+      </div>
+    </section>
+
+    <section>
+      <h2>Live printers</h2>
+      <div id="printerGrid" class="printer-grid">
+        <p class="muted">Loading printer status...</p>
+      </div>
+    </section>
+
+    <section class="admin-panel">
+      <div class="section-heading">
+        <div>
+          <h2>Printer configuration</h2>
+          <p class="muted">Add or update local printer nodes. Disabled printers are hidden from the live dashboard.</p>
+        </div>
+      </div>
+
+      <form id="printerConfigForm" class="form-grid">
+        <label>
+          Printer ID
+          <input id="printerIdInput" name="id" type="text" placeholder="printer-1" required>
+        </label>
+
+        <label>
+          Name
+          <input id="printerNameInput" name="name" type="text" placeholder="Primary printer" required>
+        </label>
+
+        <label>
+          Port
+          <input id="printerPortInput" name="portName" type="text" placeholder="/dev/ttyUSB0 or SIM_PORT" required>
+        </label>
+
+        <label>
+          Mode
+          <select id="printerModeInput" name="mode" required>
+            <option value="real">real</option>
+            <option value="sim">sim</option>
+            <option value="simulated">simulated</option>
+            <option value="sim-disconnected">sim-disconnected</option>
+            <option value="sim-timeout">sim-timeout</option>
+            <option value="sim-error">sim-error</option>
+          </select>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit">Save printer</button>
+          <button id="clearPrinterFormButton" type="button" class="secondary-button">Clear form</button>
+        </div>
+      </form>
+
+      <div id="configuredPrinterList" class="config-list">
+        <p class="muted">Loading configured printers...</p>
+      </div>
+    </section>
+
+    <section class="admin-panel">
+      <div class="section-heading">
+        <div>
+          <h2>Monitoring rules</h2>
+          <p class="muted">Control when printer snapshots are persisted to SQLite.</p>
+        </div>
+      </div>
+
+      <form id="monitoringRulesForm" class="form-grid">
+        <label class="checkbox-label">
+          <input id="snapshotOnStateChangeInput" name="snapshotOnStateChange" type="checkbox">
+          Store when state changes
+        </label>
+
+        <label>
+          Temperature threshold
+          <input id="temperatureThresholdInput" name="temperatureThreshold" type="number" step="0.1" min="0" required>
+        </label>
+
+        <label>
+          Minimum interval seconds
+          <input id="minIntervalSecondsInput" name="minIntervalSeconds" type="number" step="1" min="0" required>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit">Save monitoring rules</button>
+        </div>
+      </form>
+
+      <p id="adminMessage" class="muted"></p>
+    </section>
+  </main>
+
+  <script src="/dashboard/dashboard.js"></script>
+</body>
+</html>

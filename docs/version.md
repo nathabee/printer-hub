@@ -14,7 +14,7 @@ pending :
 
 ### 0.1.x — Local Farm Runtime Architecture
 
-- 0.1.2 Migrate Existing API and Dashboard onto Runtime Services step A
+- 0.1.2 Migrate Existing API and Dashboard onto Runtime Services step A and B
 - 0.1.1 Migrate Existing Monitoring into Runtime Tasks
 - 0.1.0 Local Runtime Backbone
 

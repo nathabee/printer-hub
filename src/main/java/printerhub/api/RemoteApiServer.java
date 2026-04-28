@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.io.InputStream;
 
 public final class RemoteApiServer {
 
@@ -48,6 +49,7 @@ public final class RemoteApiServer {
 
             server.createContext("/health", this::handleHealth);
             server.createContext("/printers", this::handlePrinters);
+            server.createContext("/dashboard", this::handleDashboard);
 
             server.start();
 
@@ -437,5 +439,53 @@ public final class RemoteApiServer {
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
                 .replace("\r", "\\r");
+    }
+
+    private void handleDashboard(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            return;
+        }
+
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/dashboard".equals(path) || "/dashboard/".equals(path)) {
+            sendResource(exchange, "/dashboard/index.html", "text/html; charset=utf-8");
+            return;
+        }
+
+        if ("/dashboard/dashboard.css".equals(path)) {
+            sendResource(exchange, "/dashboard/dashboard.css", "text/css; charset=utf-8");
+            return;
+        }
+
+        if ("/dashboard/dashboard.js".equals(path)) {
+            sendResource(exchange, "/dashboard/dashboard.js", "application/javascript; charset=utf-8");
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson("dashboard_resource_not_found"));
+    }
+
+    private void sendResource(
+            HttpExchange exchange,
+            String resourcePath,
+            String contentType
+    ) throws IOException {
+        try (InputStream inputStream = RemoteApiServer.class.getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                sendJson(exchange, 404, errorJson("resource_not_found: " + resourcePath));
+                return;
+            }
+
+            byte[] bytes = inputStream.readAllBytes();
+
+            exchange.getResponseHeaders().set("Content-Type", contentType);
+            exchange.sendResponseHeaders(200, bytes.length);
+
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write(bytes);
+            }
+        }
     }
 }
