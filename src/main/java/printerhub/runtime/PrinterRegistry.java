@@ -54,6 +54,10 @@ public final class PrinterRegistry implements AutoCloseable {
         }
     }
 
+    public boolean isEmpty() {
+        return printers.isEmpty();
+    }
+
     @Override
     public void close() {
         for (PrinterRuntimeNode node : printers.values()) {

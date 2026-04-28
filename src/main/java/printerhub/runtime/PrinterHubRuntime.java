@@ -3,6 +3,7 @@ package printerhub.runtime;
 import printerhub.api.RemoteApiServer;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
+import printerhub.persistence.PrinterConfigurationStore;
 
 public final class PrinterHubRuntime implements AutoCloseable {
 
@@ -11,15 +12,18 @@ public final class PrinterHubRuntime implements AutoCloseable {
     private final PrinterRuntimeStateCache stateCache;
     private final PrinterMonitoringScheduler monitoringScheduler;
     private final RemoteApiServer apiServer;
+    private final PrinterConfigurationStore printerConfigurationStore;
 
     public PrinterHubRuntime(
             DatabaseInitializer databaseInitializer,
+            PrinterConfigurationStore printerConfigurationStore,
             PrinterRegistry printerRegistry,
             PrinterRuntimeStateCache stateCache,
             PrinterMonitoringScheduler monitoringScheduler,
             RemoteApiServer apiServer
     ) {
         this.databaseInitializer = databaseInitializer;
+        this.printerConfigurationStore = printerConfigurationStore;
         this.printerRegistry = printerRegistry;
         this.stateCache = stateCache;
         this.monitoringScheduler = monitoringScheduler;
@@ -28,9 +32,16 @@ public final class PrinterHubRuntime implements AutoCloseable {
 
     public void start() {
         databaseInitializer.initialize();
+        loadConfiguredPrintersIfAvailable();
         printerRegistry.initialize();
         monitoringScheduler.start();
         apiServer.start();
+    }
+
+    private void loadConfiguredPrintersIfAvailable() {
+        for (var node : printerConfigurationStore.findAll()) {
+            printerRegistry.register(node);
+        }
     }
 
     @Override

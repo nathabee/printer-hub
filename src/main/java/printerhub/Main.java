@@ -4,20 +4,13 @@ import printerhub.api.RemoteApiServer;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.runtime.PrinterHubRuntime;
-import printerhub.runtime.PrinterRegistry;
-import printerhub.runtime.PrinterRuntimeNode;
-import printerhub.runtime.PrinterRuntimeStateCache;
-import printerhub.serial.SimulatedPrinterPort;
+import printerhub.runtime.PrinterRegistry; 
+import printerhub.runtime.PrinterRuntimeStateCache; 
 import java.util.concurrent.CountDownLatch;
+import printerhub.persistence.PrinterConfigurationStore;
 
-
-// 0.1.x migration bootstrap:
-// Until printer configuration persistence is migrated, Main registers
-// temporary startup printers from system properties.
-// Later, this will be replaced by loading configured printers from SQLite
-// and by dashboard/API administration.
-// Startup must not overwrite persisted printer configuration.
-
+ 
+ 
 
 
 public final class Main {
@@ -32,43 +25,12 @@ public final class Main {
         PrinterRegistry printerRegistry = new PrinterRegistry();
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
 
-        String printerMode = System.getProperty("printerhub.printer.mode", "simulated");
-        String printerPort = System.getProperty("printerhub.printer.port", "SIM_PORT_1");
-
-        if ("real".equalsIgnoreCase(printerMode)) {
-            printerRegistry.register(new PrinterRuntimeNode(
-                    "printer-1",
-                    "Real Printer 1",
-                    printerPort,
-                    "real",
-                    new SerialConnection(printerPort, 115200),
-                    true));
-        } else {
-            printerRegistry.register(new PrinterRuntimeNode(
-                    "printer-1",
-                    "Simulated Printer 1",
-                    "SIM_PORT_1",
-                    "simulated",
-                    new SimulatedPrinterPort("SIM_PORT_1", "simulated"),
-                    true));
-
-            printerRegistry.register(new PrinterRuntimeNode(
-                    "printer-2",
-                    "Simulated Printer 2",
-                    "SIM_PORT_2",
-                    "simulated",
-                    new SimulatedPrinterPort("SIM_PORT_2", "simulated"),
-                    true));
-
-            printerRegistry.register(new PrinterRuntimeNode(
-                    "printer-3",
-                    "Simulated Printer 3",
-                    "SIM_PORT_3",
-                    "simulated",
-                    new SimulatedPrinterPort("SIM_PORT_3", "simulated"),
-                    true));
-        }
+       
         DatabaseInitializer databaseInitializer = new DatabaseInitializer();
+ 
+        PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
+
+        
 
         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                 printerRegistry,
@@ -76,18 +38,22 @@ public final class Main {
                 monitoringIntervalSeconds);
 
         RemoteApiServer apiServer = new RemoteApiServer(
-                apiPort,
-                printerRegistry,
-                stateCache,
-                monitoringScheduler
+            apiPort,
+            printerRegistry,
+            stateCache,
+            monitoringScheduler,
+            printerConfigurationStore
         );
 
+
         PrinterHubRuntime runtime = new PrinterHubRuntime(
-                databaseInitializer,
-                printerRegistry,
-                stateCache,
-                monitoringScheduler,
-                apiServer);
+        databaseInitializer,
+        printerConfigurationStore,
+        printerRegistry,
+        stateCache,
+        monitoringScheduler,
+        apiServer
+);
 
         Runtime.getRuntime().addShutdownHook(new Thread(runtime::close));
 

@@ -801,7 +801,7 @@ Goals:
 * persist printer configuration
 * persist polling snapshots
 * persist printer events and monitoring failures
-* persist jobs and job state
+* keep the database schema ready for later job persistence
 * prepare later replacement or extension of persistence
 
 Implementation steps:

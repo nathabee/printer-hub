@@ -1,20 +1,19 @@
 # Test
 
-This document describes the verification scope for the `0.1.x` local runtime architecture.
+This document describes manual verification for the `0.1.x` local runtime architecture.
 
 > PrinterHub is currently in runtime migration.
-> The tests focus on proving that the new runtime structure starts correctly, keeps the API responsive, and updates printer state through background monitoring.
-> Feature-specific details belong in the roadmap and version notes, not in this file.
+> The focus is runtime startup, API responsiveness, background monitoring, dashboard configuration, and SQLite persistence.
 
 ---
 
-## Quick verification
+## Build verification
 
 ```bash
 mvn test
 mvn clean verify
 mvn clean package
-````
+```
 
 Expected result:
 
@@ -26,13 +25,7 @@ BUILD SUCCESS
 
 ## Start local runtime
 
-Default API port:
-
-```text
-18080
-```
-
-Recommended explicit test port:
+Recommended test port:
 
 ```bash
 mvn exec:java \
@@ -40,11 +33,20 @@ mvn exec:java \
   -Dprinterhub.api.port=18081
 ```
 
-Keep this terminal open while running the manual checks below.
+Optional custom database file:
+
+```bash
+mvn exec:java \
+  -Dexec.mainClass="printerhub.Main" \
+  -Dprinterhub.api.port=18081 \
+  -Dprinterhub.databaseFile=printerhub-test.db
+```
+
+Keep the runtime terminal open while running the checks below.
 
 ---
 
-## Health check
+## API health check
 
 ```bash
 curl -s http://localhost:18081/health
@@ -68,215 +70,18 @@ Expected result:
 
 ```text
 Configured printers are returned.
-Each printer has an id, display name, port, mode, state, and updatedAt value.
-```
-
----
-
-## Background monitoring check
-
-```bash
-watch -n 2 'curl -s http://localhost:18081/printers | jq'
-```
-
-Expected result:
-
-```text
-updatedAt changes regularly.
-Printer state is updated without calling hardware directly from the API.
-```
-
----
-
-## Temperature parsing check
-
-```bash
-curl -s http://localhost:18081/printers | jq
-```
-
-Expected result:
-
-```text
-Normal simulated printers show parsed hotend and bed temperature values.
-The latest response contains a printer status response.
-```
-
----
-
-## API responsiveness check
-
-Run while the runtime is active:
-
-```bash
-for i in {1..10}; do
-  curl -s http://localhost:18081/health
-  echo
-  sleep 1
-done
-```
-
-Expected result:
-
-```text
-The API returns {"status":"ok"} every time.
-```
-
-This verifies that the HTTP server remains responsive while background monitoring is running.
-
----
-
-## Multi-printer monitoring check
-
-```bash
-curl -s http://localhost:18081/printers | jq
-```
-
-Expected result:
-
-```text
-Multiple printer nodes are returned.
-Each printer has its own cached state.
-A failed printer must not prevent other printers from updating.
-```
-
----
-
-## State refresh comparison
-
-```bash
-curl -s http://localhost:18081/printers | jq > /tmp/printers-before.json
-sleep 5
-curl -s http://localhost:18081/printers | jq > /tmp/printers-after.json
-diff /tmp/printers-before.json /tmp/printers-after.json
-```
-
-Expected result:
-
-```text
-updatedAt values changed.
-The API remained responsive.
+Each printer has an id, display name, port, mode, enabled flag, state, and updatedAt value.
 ```
 
 Note:
 
 ```text
-A visible diff is expected because monitoring updates timestamps.
+If the database is empty, no printers are returned until one is added through the API or dashboard.
 ```
 
 ---
 
-## Threading check
-
-Find the Java process:
-
-```bash
-jps -l
-```
-
-Inspect Java threads:
-
-```bash
-jstack <PID> | grep -E "pool|HTTP|Scheduled" -n
-```
-
-Alternative:
-
-```bash
-ps -T -p <PID>
-```
-
-Expected result:
-
-```text
-Multiple Java threads are visible.
-At least one thread pool belongs to the HTTP server.
-At least one scheduled executor thread belongs to monitoring.
-```
-
-Note:
-
-```text
-<PID> must be replaced by the actual Java process ID.
-```
-
----
-
-## Stop local runtime
-
-Stop the running process with:
-
-```text
-Ctrl+C
-```
-
-Expected result:
-
-```text
-The runtime shuts down without leaving the test port occupied.
-```
-
-Optional port check:
-
-```bash
-ss -ltnp | grep 18081
-```
-
-Expected result:
-
-```text
-No process is listening on port 18081.
-```
-
----
-
-## Jenkins verification
-
-The Jenkins pipeline should validate:
-
-```text
-branch checkout
-Java and Maven environment
-mvn clean verify
-runtime startup
-GET /health
-GET /printers
-background state refresh
-archived smoke-test outputs
-```
-
-Expected archived smoke-test files:
-
-```text
-target/runtime-smoke.log
-target/health.json
-target/printers-before.json
-target/printers-after.json
-```
-
---- 
-##################################################
-
-MERGE WITH  test extract from 0.1.2 step A
-
----
-
-## Step A test commands
-
-Start:
-
-```bash
-mvn exec:java \
-  -Dexec.mainClass="printerhub.Main" \
-  -Dprinterhub.api.port=18081
-```
-
-List:
-
-```bash
-curl -s http://localhost:18081/printers | jq
-```
-
-Add sim printer:
+## Add simulated printer
 
 ```bash
 curl -s -X POST http://localhost:18081/printers \
@@ -290,11 +95,61 @@ curl -s -X POST http://localhost:18081/printers \
   }' | jq
 ```
 
-Check it appears and gets monitored:
+Expected result:
+
+```text
+printer-4 is created.
+The printer appears in GET /printers.
+Monitoring starts automatically.
+```
+
+---
+
+## Add real printer
+
+Use the real USB serial port, for example:
+
+```bash
+curl -s -X POST http://localhost:18081/printers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "real-1",
+    "displayName": "Ender-3 V2 Neo",
+    "portName": "/dev/ttyUSB0",
+    "mode": "real",
+    "enabled": true
+  }' | jq
+```
+
+Expected result:
+
+```text
+real-1 is created.
+If the printer is reachable, monitoring reads live M105 data.
+If the printer is not reachable, only this printer enters ERROR state.
+The API remains responsive.
+```
+
+---
+
+## Background monitoring check
 
 ```bash
 watch -n 2 'curl -s http://localhost:18081/printers | jq'
 ```
+
+Expected result:
+
+```text
+updatedAt changes regularly for enabled printers.
+Simulated printers show parsed hotend and bed temperature values.
+Disabled printers stop refreshing.
+One failing printer does not block other printers.
+```
+
+---
+
+## Runtime configuration actions
 
 Disable:
 
@@ -333,31 +188,204 @@ Delete:
 curl -s -X DELETE http://localhost:18081/printers/printer-4 | jq
 ```
 
+Expected result:
+
+```text
+Configuration changes are reflected immediately in the runtime.
+Updated printers are re-monitored with the new mode/port.
+Deleted printers disappear from GET /printers.
+```
+
+---
+
+## Dashboard check
+
+Open:
+
+```text
+http://localhost:18081/dashboard
+```
+
+Expected result:
+
+```text
+Printer cards are visible.
+The dashboard reads printer state from the API.
+Adding, editing, enabling, disabling, and deleting printers works through the runtime API.
+Normal dashboard reads do not poll printers directly.
+```
+
+---
+
+## Persistence check
+
+Check tables:
+
+```bash
+sqlite3 printerhub.db '.tables'
+```
+
+Expected tables include:
+
+```text
+configured_printers
+printer_snapshots
+printer_events
+print_jobs
+monitoring_rules
+```
+
+Check persisted snapshots:
+
+```bash
+sqlite3 printerhub.db \
+  'select printer_id,state,created_at from printer_snapshots order by id desc limit 10;'
+```
+
+Check persisted events:
+
+```bash
+sqlite3 printerhub.db \
+  'select printer_id,event_type,message,created_at from printer_events order by id desc limit 10;'
+```
+
+Check persisted configuration:
+
+```bash
+sqlite3 printerhub.db \
+  'select id,name,port_name,mode,enabled from configured_printers order by id;'
+```
+
+Expected result:
+
+```text
+Polling snapshots are stored.
+Printer events are stored.
+Configured printers are stored.
+```
+
+---
+
+## Restart persistence check
+
+Stop runtime:
+
+```text
+Ctrl+C
+```
+
+Start again:
+
+```bash
+mvn exec:java \
+  -Dexec.mainClass="printerhub.Main" \
+  -Dprinterhub.api.port=18081
+```
+
 Then:
 
 ```bash
 curl -s http://localhost:18081/printers | jq
 ```
 
-Expected:
+Expected result:
 
 ```text
-printer-4 is gone
-other printers still update
-API stays responsive
+Previously configured printers are loaded from SQLite.
+No startup sim/real printer parameter is required.
+Enabled printers resume monitoring automatically.
 ```
- 
----
-#####################################
-test for persistence
-##############################
 
+---
+
+## API responsiveness check
+
+Run while monitoring is active:
 
 ```bash
-sqlite3 printerhub.db '.tables'
-sqlite3 printerhub.db 'select printer_id,state,created_at from printer_snapshots order by id desc limit 10;'
-sqlite3 printerhub.db 'select printer_id,event_type,message,created_at from printer_events order by id desc limit 10;'
+for i in {1..10}; do
+  curl -s http://localhost:18081/health
+  echo
+  sleep 1
+done
+```
 
+Expected result:
 
+```text
+The API returns {"status":"ok"} every time.
+```
 
-``` 
+---
+
+## Threading check
+
+Find the Java process:
+
+```bash
+jps -l
+```
+
+Inspect Java threads:
+
+```bash
+jstack <PID> | grep -E "pool|HTTP|Scheduled" -n
+```
+
+Alternative:
+
+```bash
+ps -T -p <PID>
+```
+
+Expected result:
+
+```text
+Multiple Java threads are visible.
+At least one thread pool belongs to the HTTP server.
+At least one scheduled executor thread belongs to monitoring.
+```
+
+---
+
+## Stop local runtime
+
+Stop with:
+
+```text
+Ctrl+C
+```
+
+Optional port check:
+
+```bash
+ss -ltnp | grep 18081
+```
+
+Expected result:
+
+```text
+No process is listening on port 18081.
+```
+
+---
+
+## Jenkins verification
+
+Jenkins verification is restored in the runtime verification phase.
+
+Expected later checks:
+
+```text
+branch checkout
+Java and Maven environment
+mvn clean verify
+runtime startup
+GET /health
+GET /printers
+dashboard resource check
+background state refresh
+SQLite persistence check
+archived smoke-test outputs
+```
+ 

@@ -20,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.io.InputStream;
+import printerhub.persistence.PrinterConfigurationStore;
 
 public final class RemoteApiServer {
 
@@ -27,6 +28,7 @@ public final class RemoteApiServer {
     private final PrinterRegistry printerRegistry;
     private final PrinterRuntimeStateCache stateCache;
     private final PrinterMonitoringScheduler monitoringScheduler;
+    private final PrinterConfigurationStore printerConfigurationStore;
 
     private HttpServer server;
 
@@ -34,12 +36,14 @@ public final class RemoteApiServer {
             int port,
             PrinterRegistry printerRegistry,
             PrinterRuntimeStateCache stateCache,
-            PrinterMonitoringScheduler monitoringScheduler
+            PrinterMonitoringScheduler monitoringScheduler,
+            PrinterConfigurationStore printerConfigurationStore
     ) {
         this.port = port;
         this.printerRegistry = printerRegistry;
         this.stateCache = stateCache;
         this.monitoringScheduler = monitoringScheduler;
+        this.printerConfigurationStore = printerConfigurationStore;
     }
 
     public void start() {
@@ -110,6 +114,7 @@ public final class RemoteApiServer {
                 );
 
                 printerRegistry.register(node);
+                printerConfigurationStore.save(node);
 
                 if (node.enabled()) {
                     monitoringScheduler.startMonitoring(node);
@@ -198,7 +203,9 @@ public final class RemoteApiServer {
 
                 monitoringScheduler.stopMonitoring(printerId);
                 printerRegistry.remove(printerId);
+                printerConfigurationStore.delete(printerId);
                 printerRegistry.register(newNode);
+                printerConfigurationStore.save(newNode);
 
                 if (newNode.enabled()) {
                     monitoringScheduler.startMonitoring(newNode);
@@ -214,19 +221,20 @@ public final class RemoteApiServer {
             return;
         }
 
-        if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
-            PrinterRuntimeNode removed = printerRegistry.remove(printerId);
-            monitoringScheduler.stopMonitoring(printerId);
-            stateCache.remove(printerId);
+    if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+        PrinterRuntimeNode removed = printerRegistry.remove(printerId);
+        monitoringScheduler.stopMonitoring(printerId);
+        stateCache.remove(printerId);
+        printerConfigurationStore.delete(printerId);
 
-            if (removed == null) {
-                sendJson(exchange, 404, errorJson("printer_not_found"));
-                return;
-            }
-
-            sendJson(exchange, 200, "{\"deleted\":\"" + escapeJson(printerId) + "\"}");
+        if (removed == null) {
+            sendJson(exchange, 404, errorJson("printer_not_found"));
             return;
         }
+
+        sendJson(exchange, 200, "{\"deleted\":\"" + escapeJson(printerId) + "\"}");
+        return;
+    }
 
         sendJson(exchange, 405, errorJson("method_not_allowed"));
     }
@@ -268,6 +276,7 @@ public final class RemoteApiServer {
         }
 
         node.enable();
+        printerConfigurationStore.enable(printerId);
         monitoringScheduler.startMonitoring(node);
 
         sendJson(exchange, 200, printerJson(node));
@@ -287,6 +296,7 @@ public final class RemoteApiServer {
         }
 
         node.disable();
+        printerConfigurationStore.disable(printerId);
         monitoringScheduler.stopMonitoring(printerId);
         node.close();
 
