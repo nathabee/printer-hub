@@ -1,5 +1,7 @@
 package printerhub.monitoring;
 
+import printerhub.persistence.PrinterEventStore;
+import printerhub.persistence.PrinterSnapshotStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
 import printerhub.runtime.PrinterRuntimeStateCache;
@@ -16,6 +18,8 @@ public final class PrinterMonitoringScheduler {
 
     private final PrinterRegistry printerRegistry;
     private final PrinterRuntimeStateCache stateCache;
+    private final PrinterSnapshotStore snapshotStore;
+    private final PrinterEventStore eventStore;
     private final long intervalSeconds;
     private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
 
@@ -26,11 +30,33 @@ public final class PrinterMonitoringScheduler {
             PrinterRuntimeStateCache stateCache,
             long intervalSeconds
     ) {
+        this(
+                printerRegistry,
+                stateCache,
+                new PrinterSnapshotStore(),
+                new PrinterEventStore(),
+                intervalSeconds
+        );
+    }
+
+    public PrinterMonitoringScheduler(
+            PrinterRegistry printerRegistry,
+            PrinterRuntimeStateCache stateCache,
+            PrinterSnapshotStore snapshotStore,
+            PrinterEventStore eventStore,
+            long intervalSeconds
+    ) {
         if (printerRegistry == null) {
             throw new IllegalArgumentException("printerRegistry must not be null");
         }
         if (stateCache == null) {
             throw new IllegalArgumentException("stateCache must not be null");
+        }
+        if (snapshotStore == null) {
+            throw new IllegalArgumentException("snapshotStore must not be null");
+        }
+        if (eventStore == null) {
+            throw new IllegalArgumentException("eventStore must not be null");
         }
         if (intervalSeconds <= 0) {
             throw new IllegalArgumentException("intervalSeconds must be greater than zero");
@@ -38,6 +64,8 @@ public final class PrinterMonitoringScheduler {
 
         this.printerRegistry = printerRegistry;
         this.stateCache = stateCache;
+        this.snapshotStore = snapshotStore;
+        this.eventStore = eventStore;
         this.intervalSeconds = intervalSeconds;
     }
 
@@ -68,7 +96,14 @@ public final class PrinterMonitoringScheduler {
         stateCache.initializePrinter(node.id());
 
         ScheduledFuture<?> future = executorService.scheduleWithFixedDelay(
-                new PrinterMonitoringTask(node, stateCache),
+                new PrinterMonitoringTask(
+                        node,
+                        stateCache,
+                        snapshotStore,
+                        eventStore,
+                        java.time.Clock.systemUTC(),
+                        "M105"
+                ),
                 0,
                 intervalSeconds,
                 TimeUnit.SECONDS

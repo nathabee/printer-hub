@@ -347,3 +347,17 @@ other printers still update
 API stays responsive
 ```
  
+---
+#####################################
+test for persistence
+##############################
+
+
+```bash
+sqlite3 printerhub.db '.tables'
+sqlite3 printerhub.db 'select printer_id,state,created_at from printer_snapshots order by id desc limit 10;'
+sqlite3 printerhub.db 'select printer_id,event_type,message,created_at from printer_events order by id desc limit 10;'
+
+
+
+``` 

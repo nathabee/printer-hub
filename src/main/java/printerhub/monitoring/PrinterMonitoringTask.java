@@ -2,6 +2,8 @@ package printerhub.monitoring;
 
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
+import printerhub.persistence.PrinterEventStore;
+import printerhub.persistence.PrinterSnapshotStore;
 import printerhub.runtime.PrinterRuntimeNode;
 import printerhub.runtime.PrinterRuntimeStateCache;
 
@@ -19,16 +21,27 @@ public final class PrinterMonitoringTask implements Runnable {
 
     private final PrinterRuntimeNode node;
     private final PrinterRuntimeStateCache stateCache;
+    private final PrinterSnapshotStore snapshotStore;
+    private final PrinterEventStore eventStore;
     private final Clock clock;
     private final String statusCommand;
 
     public PrinterMonitoringTask(PrinterRuntimeNode node, PrinterRuntimeStateCache stateCache) {
-        this(node, stateCache, Clock.systemUTC(), DEFAULT_STATUS_COMMAND);
+        this(
+                node,
+                stateCache,
+                new PrinterSnapshotStore(),
+                new PrinterEventStore(),
+                Clock.systemUTC(),
+                DEFAULT_STATUS_COMMAND
+        );
     }
 
     public PrinterMonitoringTask(
             PrinterRuntimeNode node,
             PrinterRuntimeStateCache stateCache,
+            PrinterSnapshotStore snapshotStore,
+            PrinterEventStore eventStore,
             Clock clock,
             String statusCommand
     ) {
@@ -37,6 +50,12 @@ public final class PrinterMonitoringTask implements Runnable {
         }
         if (stateCache == null) {
             throw new IllegalArgumentException("stateCache must not be null");
+        }
+        if (snapshotStore == null) {
+            throw new IllegalArgumentException("snapshotStore must not be null");
+        }
+        if (eventStore == null) {
+            throw new IllegalArgumentException("eventStore must not be null");
         }
         if (clock == null) {
             throw new IllegalArgumentException("clock must not be null");
@@ -47,6 +66,8 @@ public final class PrinterMonitoringTask implements Runnable {
 
         this.node = node;
         this.stateCache = stateCache;
+        this.snapshotStore = snapshotStore;
+        this.eventStore = eventStore;
         this.clock = clock;
         this.statusCommand = statusCommand;
     }
@@ -56,17 +77,16 @@ public final class PrinterMonitoringTask implements Runnable {
         PrinterSnapshot previousSnapshot = stateCache.currentOrDisconnected(node.id());
 
         if (!node.enabled()) {
-            stateCache.update(
-                    node.id(),
-                    PrinterSnapshot.error(
-                            PrinterState.DISCONNECTED,
-                            previousSnapshot.hotendTemperature(),
-                            previousSnapshot.bedTemperature(),
-                            previousSnapshot.lastResponse(),
-                            "Printer node is disabled.",
-                            Instant.now(clock)
-                    )
+            PrinterSnapshot snapshot = PrinterSnapshot.error(
+                    PrinterState.DISCONNECTED,
+                    previousSnapshot.hotendTemperature(),
+                    previousSnapshot.bedTemperature(),
+                    previousSnapshot.lastResponse(),
+                    "Printer node is disabled.",
+                    Instant.now(clock)
             );
+
+            storeAndCache(snapshot, "PRINTER_DISABLED", "Printer node is disabled.");
             return;
         }
 
@@ -86,17 +106,16 @@ public final class PrinterMonitoringTask implements Runnable {
             String response = node.printerPort().sendCommand(statusCommand);
 
             if (response == null || response.isBlank()) {
-                stateCache.update(
-                        node.id(),
-                        PrinterSnapshot.error(
-                                PrinterState.ERROR,
-                                previousSnapshot.hotendTemperature(),
-                                previousSnapshot.bedTemperature(),
-                                response,
-                                "No response for command " + statusCommand,
-                                Instant.now(clock)
-                        )
+                PrinterSnapshot snapshot = PrinterSnapshot.error(
+                        PrinterState.ERROR,
+                        previousSnapshot.hotendTemperature(),
+                        previousSnapshot.bedTemperature(),
+                        response,
+                        "No response for command " + statusCommand,
+                        Instant.now(clock)
                 );
+
+                storeAndCache(snapshot, "PRINTER_ERROR", "No response for command " + statusCommand);
                 return;
             }
 
@@ -105,28 +124,53 @@ public final class PrinterMonitoringTask implements Runnable {
 
             PrinterState state = resolveState(response, hotendTemperature);
 
-            stateCache.update(
-                    node.id(),
-                    PrinterSnapshot.fromResponse(
-                            state,
-                            hotendTemperature != null ? hotendTemperature : previousSnapshot.hotendTemperature(),
-                            bedTemperature != null ? bedTemperature : previousSnapshot.bedTemperature(),
-                            response,
-                            Instant.now(clock)
-                    )
+            PrinterSnapshot snapshot = PrinterSnapshot.fromResponse(
+                    state,
+                    hotendTemperature != null ? hotendTemperature : previousSnapshot.hotendTemperature(),
+                    bedTemperature != null ? bedTemperature : previousSnapshot.bedTemperature(),
+                    response,
+                    Instant.now(clock)
             );
+
+            if (state == PrinterState.ERROR) {
+                storeAndCache(snapshot, "PRINTER_ERROR", "Printer returned error response");
+                return;
+            }
+
+            storeAndCache(snapshot, "PRINTER_POLLED", "Printer poll completed successfully");
         } catch (Exception exception) {
-            stateCache.update(
-                    node.id(),
-                    PrinterSnapshot.error(
-                            PrinterState.ERROR,
-                            previousSnapshot.hotendTemperature(),
-                            previousSnapshot.bedTemperature(),
-                            previousSnapshot.lastResponse(),
-                            exception.getMessage(),
-                            Instant.now(clock)
-                    )
+            PrinterSnapshot snapshot = PrinterSnapshot.error(
+                    PrinterState.ERROR,
+                    previousSnapshot.hotendTemperature(),
+                    previousSnapshot.bedTemperature(),
+                    previousSnapshot.lastResponse(),
+                    exception.getMessage(),
+                    Instant.now(clock)
             );
+
+            storeAndCache(snapshot, "PRINTER_ERROR", exception.getMessage());
+        }
+    }
+
+    private void storeAndCache(
+            PrinterSnapshot snapshot,
+            String eventType,
+            String eventMessage
+    ) {
+        stateCache.update(node.id(), snapshot);
+
+        try {
+            snapshotStore.save(node.id(), snapshot);
+        } catch (Exception exception) {
+            System.err.println("[PrinterHub] Failed to persist snapshot for "
+                    + node.id() + ": " + exception.getMessage());
+        }
+
+        try {
+            eventStore.record(node.id(), null, eventType, eventMessage);
+        } catch (Exception exception) {
+            System.err.println("[PrinterHub] Failed to persist event for "
+                    + node.id() + ": " + exception.getMessage());
         }
     }
 

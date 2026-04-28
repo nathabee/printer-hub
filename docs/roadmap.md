@@ -792,7 +792,7 @@ Dashboard must call the API/read cached state. It must not trigger polling.
 
 ### 0.1.3 — Migrate Persistence into Runtime Stores
 
-status: planned
+status: pending
 
 Goals:
 
