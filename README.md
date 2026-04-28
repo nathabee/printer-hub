@@ -37,69 +37,64 @@ For the full design plan:
 
 ---
 
-# Current Development Focus (0.1.x)
+# Local Runtime Architecture
 
-The current work targets the **local PrinterHub runtime backbone**.
+```mermaid
+flowchart TB
+    runtime["PrinterHub Java Runtime"]
 
-Target runtime structure:
+    runtime --> web["Web server thread pool"]
+    web --> api["REST API requests"]
+    web --> dashboard["Dashboard HTTP requests"]
 
-```text
-PrinterHub Java Runtime
-├── Web server thread pool
-│   └── REST API endpoints
-│
-├── Monitoring scheduler
-│   ├── printer-1 polling task
-│   ├── printer-2 polling task
-│   ├── printer-3 polling task
-│   └── ...
-│
-├── Runtime state cache
-│   └── latest known printer state
-│
-├── Database access layer
-│   └── persistence abstraction
-│
-└── Serial communication layer
-    └── hardware communication
-```
+    runtime --> scheduler["Monitoring scheduler"]
+    scheduler --> task1["printer-1 polling task"]
+    scheduler --> task2["printer-2 polling task"]
+    scheduler --> task3["printer-3 polling task"]
+    scheduler --> taskN["..."]
 
-This runtime is the foundation for:
+    runtime --> cache["Runtime state cache"]
+    cache --> latest["Latest known state per configured printer"]
 
-```text
-0.2.x — local administration and job management
-1.0.x — multi-farm centralized control
+    runtime --> database["Database access layer"]
+    database --> persisted["Snapshots, events, jobs, configuration"]
+
+    runtime --> serial["Serial communication layer"]
+    serial --> usb0["/dev/ttyUSB0"]
+    serial --> usb1["/dev/ttyUSB1"]
+    serial --> sim["SIM_PORT"]
+
 ```
 
 ---
 
-# Runtime Status
+# Target Project Architecture
 
-Current prototype capabilities:
+```mermaid
+flowchart TB
+    ui["Centralized Web UI<br/>printer overview, job upload, live monitoring"]
 
-* multi-threaded background monitoring
-* simulated multi-printer runtime
-* REST API:
+    api["Backend REST API<br/>job management, printer state API, user requests"]
 
-```text
-GET /health
-GET /printers
-```
+    db["Database<br/>jobs, printer states, logs, errors, history"]
 
-* independent printer polling tasks
-* runtime state cache updated continuously
-* configurable API port via runtime property
+    runtime["Farm Backend / Java Control Service<br/>printer orchestration, polling, command execution"]
 
-Example:
+    deviceLayer["Device Communication Layer<br/>USB / serial communication"]
 
-```bash
-mvn exec:java \
-  -Dexec.mainClass="printerhub.Main" \
-  -Dprinterhub.api.port=18081
+    printer["Printer Device<br/>Ender-3 / simulated industrial printer"]
+
+    ui <--> api
+    api <--> db
+    api <--> runtime
+    runtime <--> db
+    runtime --> deviceLayer
+    deviceLayer --> printer
+
 ```
 
 ---
-
+ 
 # Industrial Context
 
 Modern laboratory and industrial printers are rarely standalone devices.

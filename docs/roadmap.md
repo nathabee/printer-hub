@@ -719,7 +719,7 @@ Expected result:
 
 ### 0.1.2 — Migrate Existing API and Dashboard onto Runtime Services
 
-status: pending
+status: done
 
 Goals:
 
@@ -788,6 +788,7 @@ and dashboard printer cards.
 
 Dashboard must call the API/read cached state. It must not trigger polling.
 
+---
 
 ### 0.1.3 — Migrate Persistence into Runtime Stores
 
@@ -803,13 +804,34 @@ Goals:
 * persist jobs and job state
 * prepare later replacement or extension of persistence
 
+Implementation steps:
+
+#### Step A — Persist Monitoring Snapshots and Events
+
+* migrate SQLite database setup into the new runtime persistence layer
+* persist polling snapshots from background monitoring
+* persist printer events for successful polls, timeouts, disconnects, and errors
+* keep monitoring code independent from SQL details by using stores
+
+Expected stores:
+
+```text
+PrinterSnapshotStore
+PrinterEventStore
+```
+
+#### Step B — Persist Runtime Printer Configuration
+
+* persist configured printer nodes
+* load configured printers at runtime startup
+* keep bootstrap printers only as fallback/default seed data
+* support dashboard/API-created printers surviving restart
+* prepare global/default runtime configuration for later monitoring rules
+
 Expected stores:
 
 ```text
 PrinterConfigurationStore
-PrinterSnapshotStore
-PrinterEventStore
-PrintJobStore
 ```
 
 Expected result:
@@ -819,33 +841,6 @@ Expected result:
 * configured printers survive restart
 * monitoring history survives restart
 * persistence is part of the local runtime, not part of the API layer
- 
- 
----
-
-### 0.1.4 — Runtime Verification and Non-Regression
-
-status: planned
-
-Goals:
-
-* add unit tests for the local runtime backbone
-* verify multi-printer monitoring
-* verify API responsiveness during background monitoring
-* verify failure isolation between printers
-* verify simulated and real-style printer nodes can coexist
-* verify dashboard/API behavior
-* verify persistence stores
-* restore Jenkins smoke tests
-* restore coverage reporting
-* add non-regression tests for migrated `0.0.x` behavior
-
-Expected result:
-
-* the local farm runtime architecture is validated
-* migrated functionality is covered by tests
-* Jenkins verifies runtime startup, API, monitoring, persistence, and non-regression checks
-* `0.1.x` is ready as the foundation for later job management and administration hardening
 
 
 ---
