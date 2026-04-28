@@ -1,33 +1,44 @@
 package printerhub.api;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import printerhub.PrinterSnapshot;
+import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
+import printerhub.runtime.PrinterRuntimeNodeFactory;
 import printerhub.runtime.PrinterRuntimeStateCache;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class RemoteApiServer {
 
     private final int port;
     private final PrinterRegistry printerRegistry;
     private final PrinterRuntimeStateCache stateCache;
+    private final PrinterMonitoringScheduler monitoringScheduler;
+
     private HttpServer server;
 
     public RemoteApiServer(
             int port,
             PrinterRegistry printerRegistry,
-            PrinterRuntimeStateCache stateCache
+            PrinterRuntimeStateCache stateCache,
+            PrinterMonitoringScheduler monitoringScheduler
     ) {
         this.port = port;
         this.printerRegistry = printerRegistry;
         this.stateCache = stateCache;
+        this.monitoringScheduler = monitoringScheduler;
     }
 
     public void start() {
@@ -54,22 +65,235 @@ public final class RemoteApiServer {
     }
 
     private void handleHealth(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
-            send(exchange, 405, "{\"error\":\"method_not_allowed\"}");
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson("method_not_allowed"));
             return;
         }
 
-        send(exchange, 200, "{\"status\":\"ok\"}");
+        sendJson(exchange, 200, "{\"status\":\"ok\"}");
     }
 
     private void handlePrinters(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
-            send(exchange, 405, "{\"error\":\"method_not_allowed\"}");
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/printers".equals(path)) {
+            handlePrintersRoot(exchange);
             return;
         }
 
+        if (path.startsWith("/printers/")) {
+            handlePrinterById(exchange, path);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson("printer_endpoint_not_found"));
+    }
+
+    private void handlePrintersRoot(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 200, printersJson());
+            return;
+        }
+
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            try {
+                String body = readBody(exchange);
+
+                PrinterRuntimeNode node = PrinterRuntimeNodeFactory.create(
+                        requiredJsonString(body, "id"),
+                        requiredJsonString(body, "displayName"),
+                        requiredJsonString(body, "portName"),
+                        requiredJsonString(body, "mode"),
+                        optionalJsonBoolean(body, "enabled", true)
+                );
+
+                printerRegistry.register(node);
+
+                if (node.enabled()) {
+                    monitoringScheduler.startMonitoring(node);
+                } else {
+                    stateCache.initializePrinter(node.id());
+                }
+
+                sendJson(exchange, 201, printerJson(node));
+            } catch (IllegalArgumentException exception) {
+                sendJson(exchange, 400, errorJson(exception.getMessage()));
+            }
+
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson("method_not_allowed"));
+    }
+
+    private void handlePrinterById(HttpExchange exchange, String path) throws IOException {
+        String remaining = path.substring("/printers/".length());
+
+        if (remaining.isBlank()) {
+            sendJson(exchange, 404, errorJson("printer_not_found"));
+            return;
+        }
+
+        String[] parts = remaining.split("/");
+        String printerId = parts[0];
+
+        if (parts.length == 1) {
+            handlePrinterResource(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 2 && "status".equals(parts[1])) {
+            handlePrinterStatus(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 2 && "enable".equals(parts[1])) {
+            handlePrinterEnable(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 2 && "disable".equals(parts[1])) {
+            handlePrinterDisable(exchange, printerId);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson("printer_endpoint_not_found"));
+    }
+
+    private void handlePrinterResource(HttpExchange exchange, String printerId) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            Optional<PrinterRuntimeNode> node = printerRegistry.findById(printerId);
+
+            if (node.isEmpty()) {
+                sendJson(exchange, 404, errorJson("printer_not_found"));
+                return;
+            }
+
+            sendJson(exchange, 200, printerJson(node.get()));
+            return;
+        }
+
+        if ("PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+            try {
+                String body = readBody(exchange);
+
+                PrinterRuntimeNode oldNode = printerRegistry.findById(printerId).orElse(null);
+
+                if (oldNode == null) {
+                    sendJson(exchange, 404, errorJson("printer_not_found"));
+                    return;
+                }
+
+                boolean enabled = optionalJsonBoolean(body, "enabled", oldNode.enabled());
+
+                PrinterRuntimeNode newNode = PrinterRuntimeNodeFactory.create(
+                        printerId,
+                        requiredJsonString(body, "displayName"),
+                        requiredJsonString(body, "portName"),
+                        requiredJsonString(body, "mode"),
+                        enabled
+                );
+
+                monitoringScheduler.stopMonitoring(printerId);
+                printerRegistry.remove(printerId);
+                printerRegistry.register(newNode);
+
+                if (newNode.enabled()) {
+                    monitoringScheduler.startMonitoring(newNode);
+                } else {
+                    stateCache.initializePrinter(newNode.id());
+                }
+
+                sendJson(exchange, 200, printerJson(newNode));
+            } catch (IllegalArgumentException exception) {
+                sendJson(exchange, 400, errorJson(exception.getMessage()));
+            }
+
+            return;
+        }
+
+        if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrinterRuntimeNode removed = printerRegistry.remove(printerId);
+            monitoringScheduler.stopMonitoring(printerId);
+            stateCache.remove(printerId);
+
+            if (removed == null) {
+                sendJson(exchange, 404, errorJson("printer_not_found"));
+                return;
+            }
+
+            sendJson(exchange, 200, "{\"deleted\":\"" + escapeJson(printerId) + "\"}");
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson("method_not_allowed"));
+    }
+
+    private void handlePrinterStatus(HttpExchange exchange, String printerId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson("printer_not_found"));
+            return;
+        }
+
+        PrinterSnapshot snapshot = stateCache.findByPrinterId(printerId).orElse(null);
+
+        if (snapshot == null) {
+            sendJson(exchange, 200, snapshotJson(null));
+            return;
+        }
+
+        sendJson(exchange, 200, snapshotJson(snapshot));
+    }
+
+    private void handlePrinterEnable(HttpExchange exchange, String printerId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson("printer_not_found"));
+            return;
+        }
+
+        node.enable();
+        monitoringScheduler.startMonitoring(node);
+
+        sendJson(exchange, 200, printerJson(node));
+    }
+
+    private void handlePrinterDisable(HttpExchange exchange, String printerId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson("printer_not_found"));
+            return;
+        }
+
+        node.disable();
+        monitoringScheduler.stopMonitoring(printerId);
+        node.close();
+
+        sendJson(exchange, 200, printerJson(node));
+    }
+
+    private String printersJson() {
         StringBuilder json = new StringBuilder();
-        json.append("[");
+        json.append("{\"printers\":[");
 
         boolean first = true;
 
@@ -78,41 +302,62 @@ public final class RemoteApiServer {
                 json.append(",");
             }
 
-            PrinterSnapshot snapshot = stateCache.findByPrinterId(node.id()).orElse(null);
-
-            json.append("{")
-                    .append("\"id\":\"").append(escapeJson(node.id())).append("\",")
-                    .append("\"displayName\":\"").append(escapeJson(node.displayName())).append("\",")
-                    .append("\"portName\":\"").append(escapeJson(node.portName())).append("\",")
-                    .append("\"mode\":\"").append(escapeJson(node.mode())).append("\",")
-                    .append("\"enabled\":").append(node.enabled()).append(",");
-
-            if (snapshot == null) {
-                json.append("\"state\":\"UNKNOWN\",")
-                        .append("\"lastResponse\":null,")
-                        .append("\"errorMessage\":null,")
-                        .append("\"updatedAt\":null");
-            } else {
-                json.append("\"state\":\"").append(snapshot.state()).append("\",")
-                        .append("\"lastResponse\":").append(toJsonNullable(snapshot.lastResponse())).append(",")
-                        .append("\"errorMessage\":").append(toJsonNullable(snapshot.errorMessage())).append(",")
-                        .append("\"updatedAt\":\"").append(snapshot.updatedAt()).append("\"");
-            }
-
-            json.append("}");
-
+            json.append(printerJson(node));
             first = false;
         }
 
-        json.append("]");
+        json.append("]}");
 
-        send(exchange, 200, json.toString());
+        return json.toString();
     }
 
-    private void send(HttpExchange exchange, int statusCode, String body) throws IOException {
+    private String printerJson(PrinterRuntimeNode node) {
+        PrinterSnapshot snapshot = stateCache.findByPrinterId(node.id()).orElse(null);
+
+        return "{"
+                + "\"id\":\"" + escapeJson(node.id()) + "\","
+                + "\"displayName\":\"" + escapeJson(node.displayName()) + "\","
+                + "\"name\":\"" + escapeJson(node.displayName()) + "\","
+                + "\"portName\":\"" + escapeJson(node.portName()) + "\","
+                + "\"mode\":\"" + escapeJson(node.mode()) + "\","
+                + "\"enabled\":" + node.enabled() + ","
+                + "\"state\":\"" + (snapshot == null ? "UNKNOWN" : snapshot.state()) + "\","
+                + "\"hotendTemperature\":" + nullableNumber(snapshot == null ? null : snapshot.hotendTemperature()) + ","
+                + "\"bedTemperature\":" + nullableNumber(snapshot == null ? null : snapshot.bedTemperature()) + ","
+                + "\"lastResponse\":" + nullableString(snapshot == null ? null : snapshot.lastResponse()) + ","
+                + "\"errorMessage\":" + nullableString(snapshot == null ? null : snapshot.errorMessage()) + ","
+                + "\"updatedAt\":" + nullableString(snapshot == null ? null : String.valueOf(snapshot.updatedAt()))
+                + "}";
+    }
+
+    private String snapshotJson(PrinterSnapshot snapshot) {
+        if (snapshot == null) {
+            return "{"
+                    + "\"state\":\"UNKNOWN\","
+                    + "\"hotendTemperature\":null,"
+                    + "\"bedTemperature\":null,"
+                    + "\"lastResponse\":null,"
+                    + "\"errorMessage\":null,"
+                    + "\"updatedAt\":null"
+                    + "}";
+        }
+
+        return "{"
+                + "\"state\":\"" + snapshot.state() + "\","
+                + "\"hotendTemperature\":" + nullableNumber(snapshot.hotendTemperature()) + ","
+                + "\"bedTemperature\":" + nullableNumber(snapshot.bedTemperature()) + ","
+                + "\"lastResponse\":" + nullableString(snapshot.lastResponse()) + ","
+                + "\"errorMessage\":" + nullableString(snapshot.errorMessage()) + ","
+                + "\"updatedAt\":" + nullableString(String.valueOf(snapshot.updatedAt()))
+                + "}";
+    }
+
+    private void sendJson(HttpExchange exchange, int statusCode, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
 
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        Headers headers = exchange.getResponseHeaders();
+        headers.set("Content-Type", "application/json; charset=utf-8");
+
         exchange.sendResponseHeaders(statusCode, bytes.length);
 
         try (OutputStream outputStream = exchange.getResponseBody()) {
@@ -120,7 +365,23 @@ public final class RemoteApiServer {
         }
     }
 
-    private String toJsonNullable(String value) {
+    private String readBody(HttpExchange exchange) throws IOException {
+        return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+    }
+
+    private String errorJson(String message) {
+        return "{\"error\":" + nullableString(message) + "}";
+    }
+
+    private String nullableNumber(Double value) {
+        if (value == null) {
+            return "null";
+        }
+
+        return String.format(Locale.ROOT, "%.2f", value);
+    }
+
+    private String nullableString(String value) {
         if (value == null) {
             return "null";
         }
@@ -128,7 +389,49 @@ public final class RemoteApiServer {
         return "\"" + escapeJson(value) + "\"";
     }
 
+    private String requiredJsonString(String body, String fieldName) {
+        String value = optionalJsonString(body, fieldName, null);
+
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+
+        return value.trim();
+    }
+
+    private String optionalJsonString(String body, String fieldName, String fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*\"([^\"]*)\""
+        );
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return matcher.group(1);
+    }
+
+    private boolean optionalJsonBoolean(String body, String fieldName, boolean fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(true|false)"
+        );
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return Boolean.parseBoolean(matcher.group(1));
+    }
+
     private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+
         return value
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"")

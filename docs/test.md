@@ -254,3 +254,96 @@ target/printers-after.json
 ```
 
 --- 
+##################################################
+
+MERGE WITH  test extract from 0.1.2 step A
+
+---
+
+## Step A test commands
+
+Start:
+
+```bash
+mvn exec:java \
+  -Dexec.mainClass="printerhub.Main" \
+  -Dprinterhub.api.port=18081
+```
+
+List:
+
+```bash
+curl -s http://localhost:18081/printers | jq
+```
+
+Add sim printer:
+
+```bash
+curl -s -X POST http://localhost:18081/printers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "printer-4",
+    "displayName": "Simulated Printer 4",
+    "portName": "SIM_PORT_4",
+    "mode": "simulated",
+    "enabled": true
+  }' | jq
+```
+
+Check it appears and gets monitored:
+
+```bash
+watch -n 2 'curl -s http://localhost:18081/printers | jq'
+```
+
+Disable:
+
+```bash
+curl -s -X POST http://localhost:18081/printers/printer-4/disable | jq
+```
+
+Enable:
+
+```bash
+curl -s -X POST http://localhost:18081/printers/printer-4/enable | jq
+```
+
+Update:
+
+```bash
+curl -s -X PUT http://localhost:18081/printers/printer-4 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "displayName": "Updated Simulated Printer 4",
+    "portName": "SIM_PORT_4",
+    "mode": "sim-error",
+    "enabled": true
+  }' | jq
+```
+
+Status:
+
+```bash
+curl -s http://localhost:18081/printers/printer-4/status | jq
+```
+
+Delete:
+
+```bash
+curl -s -X DELETE http://localhost:18081/printers/printer-4 | jq
+```
+
+Then:
+
+```bash
+curl -s http://localhost:18081/printers | jq
+```
+
+Expected:
+
+```text
+printer-4 is gone
+other printers still update
+API stays responsive
+```
+ 

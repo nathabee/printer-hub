@@ -78,7 +78,9 @@ public final class Main {
         RemoteApiServer apiServer = new RemoteApiServer(
                 apiPort,
                 printerRegistry,
-                stateCache);
+                stateCache,
+                monitoringScheduler
+        );
 
         PrinterHubRuntime runtime = new PrinterHubRuntime(
                 databaseInitializer,

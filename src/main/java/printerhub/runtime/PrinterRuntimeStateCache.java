@@ -47,4 +47,12 @@ public final class PrinterRuntimeStateCache {
     public void clear() {
         snapshotsByPrinterId.clear();
     }
+
+    public void remove(String printerId) {
+        if (printerId == null || printerId.isBlank()) {
+            return;
+        }
+
+        snapshotsByPrinterId.remove(printerId);
+    }
 }
