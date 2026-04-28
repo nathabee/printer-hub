@@ -84,11 +84,14 @@ pipeline {
                     API_PORT="${API_SMOKE_PORT:-18090}"
 
                     echo "Starting PrinterHub local runtime on port ${API_PORT}"
+ 
 
                     mvn -B -ntp exec:java \
-                      -Dexec.mainClass="printerhub.Main" \
-                      -Dprinterhub.api.port="${API_PORT}" \
-                      > target/runtime-smoke.log 2>&1 &
+                        -Dexec.mainClass="printerhub.Main" \
+                        -Dprinterhub.api.port="${API_PORT}" \
+                        -Dprinterhub.monitoring.intervalSeconds=1 \
+                        > target/runtime-smoke.log 2>&1 &
+
 
                     APP_PID=$!
 
