@@ -145,6 +145,10 @@ pipeline {
                     curl -fsS "http://localhost:${API_PORT}/dashboard/dashboard.css" > target/dashboard.css
                     curl -fsS "http://localhost:${API_PORT}/dashboard/dashboard.js" > target/dashboard.js
 
+                    kill "${APP_PID}" >/dev/null 2>&1 || true
+                    wait "${APP_PID}" >/dev/null 2>&1 || true
+                    trap - EXIT
+
                     sqlite3 "${DB_FILE}" '.tables' > target/db-tables.txt
                     sqlite3 "${DB_FILE}" 'select id,name,port_name,mode,enabled from configured_printers order by id;' > target/configured-printers.txt
                     sqlite3 "${DB_FILE}" 'select printer_id,state,created_at from printer_snapshots order by id desc limit 10;' > target/printer-snapshots.txt
