@@ -5,40 +5,100 @@ import java.time.Instant;
 public final class PrinterSnapshot {
 
     private final PrinterState state;
+    private final Double hotendTemperature;
+    private final Double bedTemperature;
     private final String lastResponse;
     private final String errorMessage;
     private final Instant updatedAt;
 
     private PrinterSnapshot(
             PrinterState state,
+            Double hotendTemperature,
+            Double bedTemperature,
             String lastResponse,
             String errorMessage,
             Instant updatedAt
     ) {
-        this.state = state;
+        this.state = state == null ? PrinterState.UNKNOWN : state;
+        this.hotendTemperature = hotendTemperature;
+        this.bedTemperature = bedTemperature;
         this.lastResponse = lastResponse;
         this.errorMessage = errorMessage;
-        this.updatedAt = updatedAt;
+        this.updatedAt = updatedAt == null ? Instant.now() : updatedAt;
+    }
+
+    public static PrinterSnapshot disconnected(Instant updatedAt) {
+        return new PrinterSnapshot(
+                PrinterState.DISCONNECTED,
+                null,
+                null,
+                null,
+                null,
+                updatedAt
+        );
+    }
+
+    public static PrinterSnapshot connecting(
+            Double previousHotendTemperature,
+            Double previousBedTemperature,
+            String previousResponse,
+            Instant updatedAt
+    ) {
+        return new PrinterSnapshot(
+                PrinterState.CONNECTING,
+                previousHotendTemperature,
+                previousBedTemperature,
+                previousResponse,
+                null,
+                updatedAt
+        );
     }
 
     public static PrinterSnapshot fromResponse(
             PrinterState state,
+            Double hotendTemperature,
+            Double bedTemperature,
             String lastResponse,
             Instant updatedAt
     ) {
-        return new PrinterSnapshot(state, lastResponse, null, updatedAt);
+        return new PrinterSnapshot(
+                state,
+                hotendTemperature,
+                bedTemperature,
+                lastResponse,
+                null,
+                updatedAt
+        );
     }
 
     public static PrinterSnapshot error(
             PrinterState state,
+            Double previousHotendTemperature,
+            Double previousBedTemperature,
+            String lastResponse,
             String errorMessage,
             Instant updatedAt
     ) {
-        return new PrinterSnapshot(state, null, errorMessage, updatedAt);
+        return new PrinterSnapshot(
+                state == null ? PrinterState.ERROR : state,
+                previousHotendTemperature,
+                previousBedTemperature,
+                lastResponse,
+                errorMessage,
+                updatedAt
+        );
     }
 
     public PrinterState state() {
         return state;
+    }
+
+    public Double hotendTemperature() {
+        return hotendTemperature;
+    }
+
+    public Double bedTemperature() {
+        return bedTemperature;
     }
 
     public String lastResponse() {
@@ -51,5 +111,17 @@ public final class PrinterSnapshot {
 
     public Instant updatedAt() {
         return updatedAt;
+    }
+
+    @Override
+    public String toString() {
+        return "PrinterSnapshot{"
+                + "state=" + state
+                + ", hotendTemperature=" + hotendTemperature
+                + ", bedTemperature=" + bedTemperature
+                + ", lastResponse='" + lastResponse + '\''
+                + ", errorMessage='" + errorMessage + '\''
+                + ", updatedAt=" + updatedAt
+                + '}';
     }
 }

@@ -6,14 +6,16 @@
 planned :
 see ROADMAP.md
 
-
+pending :
+0.1.2 — Migrate Existing API and Dashboard onto Runtime Services
 
 ## Version (done)
 
 
 ### 0.1.x — Local Farm Runtime Architecture
 
-- 0.1.0 — Local Runtime Backbone
+- 0.1.1 Migrate Existing Monitoring into Runtime Tasks
+- 0.1.0 Local Runtime Backbone
 
 
 

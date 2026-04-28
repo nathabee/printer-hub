@@ -1,8 +1,10 @@
 # Test
 
-This document describes the current verification scope for the `0.1.x` local runtime architecture.
+This document describes the verification scope for the `0.1.x` local runtime architecture.
 
-PrinterHub is currently in runtime refactoring. The test scope is intentionally limited to the new `0.1.0` backbone.
+> PrinterHub is currently in runtime migration.
+> The tests focus on proving that the new runtime structure starts correctly, keeps the API responsive, and updates printer state through background monitoring.
+> Feature-specific details belong in the roadmap and version notes, not in this file.
 
 ---
 
@@ -14,62 +16,11 @@ mvn clean verify
 mvn clean package
 ````
 
-Current expectation:
+Expected result:
 
 ```text
-The project compiles.
-The runtime starts.
-The API remains responsive.
-The monitoring scheduler updates printer state in the background.
+BUILD SUCCESS
 ```
-
----
-
-## Current runtime test scope
-
-`0.1.0` verifies the local runtime backbone:
-
-```text
-PrinterHub Java Runtime
-├── HTTP server thread pool
-├── monitoring scheduler
-├── one monitoring task per simulated printer
-├── runtime printer registry
-├── runtime state cache
-├── database initializer placeholder
-└── simulated serial communication layer
-```
-
-Implemented runtime checks:
-
-* API health endpoint responds
-* printer list endpoint responds
-* three simulated printers are registered
-* background monitoring updates `updatedAt`
-* API reads from the runtime state cache
-* API remains responsive while monitoring is running
-
----
-
-## Supported endpoints in 0.1.0
-
-```text
-GET /health
-GET /printers
-```
-
-Not yet part of the 0.1.0 runtime:
-
-```text
-/dashboard
-/jobs
-/printer/status
-/printers/{id}/history
-/config/printers
-/config/monitoring-rules
-```
-
-These features belonged to the `0.0.x` prototype and will be reintroduced later on top of the new runtime architecture.
 
 ---
 
@@ -89,14 +40,14 @@ mvn exec:java \
   -Dprinterhub.api.port=18081
 ```
 
+Keep this terminal open while running the manual checks below.
+
 ---
 
-## Manual API checks
-
-Health check:
+## Health check
 
 ```bash
-curl http://localhost:18081/health
+curl -s http://localhost:18081/health
 ```
 
 Expected result:
@@ -105,17 +56,49 @@ Expected result:
 {"status":"ok"}
 ```
 
-Printer state check:
+---
+
+## Printer list check
 
 ```bash
-curl http://localhost:18081/printers
+curl -s http://localhost:18081/printers | jq
 ```
 
 Expected result:
 
 ```text
-Three simulated printers are returned.
+Configured printers are returned.
 Each printer has an id, display name, port, mode, state, and updatedAt value.
+```
+
+---
+
+## Background monitoring check
+
+```bash
+watch -n 2 'curl -s http://localhost:18081/printers | jq'
+```
+
+Expected result:
+
+```text
+updatedAt changes regularly.
+Printer state is updated without calling hardware directly from the API.
+```
+
+---
+
+## Temperature parsing check
+
+```bash
+curl -s http://localhost:18081/printers | jq
+```
+
+Expected result:
+
+```text
+Normal simulated printers show parsed hotend and bed temperature values.
+The latest response contains a printer status response.
 ```
 
 ---
@@ -142,53 +125,43 @@ This verifies that the HTTP server remains responsive while background monitorin
 
 ---
 
-## Background monitoring check
-
-Run while the runtime is active:
-
-```bash
-watch -n 2 'curl -s http://localhost:18081/printers | jq'
-```
-
-Expected result:
-
-```text
-The updatedAt values change regularly.
-```
-
-This verifies that the monitoring scheduler updates the runtime state cache independently of API requests.
-
----
-
-## Multi-printer check
-
-Run:
+## Multi-printer monitoring check
 
 ```bash
 curl -s http://localhost:18081/printers | jq
 ```
 
-Expected printer IDs:
+Expected result:
 
 ```text
-printer-1
-printer-2
-printer-3
+Multiple printer nodes are returned.
+Each printer has its own cached state.
+A failed printer must not prevent other printers from updating.
 ```
 
-Expected state:
+---
+
+## State refresh comparison
+
+```bash
+curl -s http://localhost:18081/printers | jq > /tmp/printers-before.json
+sleep 5
+curl -s http://localhost:18081/printers | jq > /tmp/printers-after.json
+diff /tmp/printers-before.json /tmp/printers-after.json
+```
+
+Expected result:
 
 ```text
-IDLE
+updatedAt values changed.
+The API remained responsive.
 ```
 
-Expected response:
+Note:
 
 ```text
-ok T:20.0 /0.0 B:20.0 /0.0
+A visible diff is expected because monitoring updates timestamps.
 ```
-
-This verifies that the runtime has multiple simulated printer nodes and not only a single-printer loop.
 
 ---
 
@@ -200,7 +173,7 @@ Find the Java process:
 jps -l
 ```
 
-Then inspect Java threads:
+Inspect Java threads:
 
 ```bash
 jstack <PID> | grep -E "pool|HTTP|Scheduled" -n
@@ -228,9 +201,37 @@ Note:
 
 ---
 
+## Stop local runtime
+
+Stop the running process with:
+
+```text
+Ctrl+C
+```
+
+Expected result:
+
+```text
+The runtime shuts down without leaving the test port occupied.
+```
+
+Optional port check:
+
+```bash
+ss -ltnp | grep 18081
+```
+
+Expected result:
+
+```text
+No process is listening on port 18081.
+```
+
+---
+
 ## Jenkins verification
 
-The Jenkins pipeline for `0.1.0` validates:
+The Jenkins pipeline should validate:
 
 ```text
 branch checkout
@@ -239,11 +240,11 @@ mvn clean verify
 runtime startup
 GET /health
 GET /printers
-background updatedAt change
+background state refresh
 archived smoke-test outputs
 ```
 
-Archived smoke-test files:
+Expected archived smoke-test files:
 
 ```text
 target/runtime-smoke.log
@@ -252,38 +253,4 @@ target/printers-before.json
 target/printers-after.json
 ```
 
----
-
-## Current package test target
-
-Current production structure:
-
-```text
-src/main/java/printerhub/
-├── Main.java
-├── PrinterPort.java
-├── PrinterSnapshot.java
-├── PrinterState.java
-├── api/
-├── monitoring/
-├── persistence/
-├── runtime/
-└── serial/
-```
-
-Current architectural components:
-
-```text
-PrinterHubRuntime
-PrinterRuntimeNode
-PrinterRegistry
-PrinterRuntimeStateCache
-PrinterMonitoringScheduler
-PrinterMonitoringTask
-RemoteApiServer
-DatabaseInitializer
-SimulatedPrinterPort
-```
-
----
- 
+--- 

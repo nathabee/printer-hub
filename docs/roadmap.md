@@ -617,7 +617,7 @@ PrinterHub Java Runtime
     ├── /dev/ttyUSB0
     ├── /dev/ttyUSB1
     └── SIM_PORT
-````
+```
 
 Important rule:
 
@@ -631,7 +631,7 @@ The API reads the latest known state from the runtime state cache.
 
 ### 0.1.0 — Local Runtime Backbone
 
-status: planned
+status: done
 
 Goals:
 
@@ -692,9 +692,11 @@ Expected result:
 
 ---
 
+
+
 ### 0.1.1 — Migrate Existing Monitoring into Runtime Tasks
 
-status: planned
+status: done
 
 Goals:
 
@@ -702,19 +704,22 @@ Goals:
 * replace single-printer monitoring with per-printer monitoring tasks
 * run independent polling cycles per configured printer
 * isolate timeout, disconnect, and error handling per printer
+* migrate simulated printer communication into the new runtime
+* migrate real serial printer communication into the new runtime
+* support polling commands such as `M105`, response parsing, timeout handling, and error state handling
 
 Expected result:
 
 * each printer has its own monitoring cycle
 * background monitoring updates the runtime state cache
 * monitoring failures are stored per printer
+* simulated and real printer nodes can both be monitored
 * the API remains responsive while monitoring runs
+ 
 
----
+### 0.1.2 — Migrate Existing API and Dashboard onto Runtime Services
 
-### 0.1.2 — Migrate Existing API onto Runtime Services
-
-status: planned
+status: pending
 
 Goals:
 
@@ -722,24 +727,67 @@ Goals:
 * remove printer orchestration from HTTP handlers
 * expose local farm state from the runtime registry and state cache
 * keep dashboard reads separate from hardware polling
+* migrate dashboard printer cards
+* migrate printer configuration API
+* support adding, removing, enabling, disabling, and updating configured printers
 
 Expected endpoints:
 
 ```text
-GET /health
-GET /printers
-GET /printers/{id}
-GET /printers/{id}/status
-GET /dashboard
+GET    /health
+GET    /printers
+GET    /printers/{id}
+GET    /printers/{id}/status
+POST   /printers
+PUT    /printers/{id}
+DELETE /printers/{id}
+POST   /printers/{id}/enable
+POST   /printers/{id}/disable
+GET    /dashboard
 ```
 
 Expected result:
 
 * API becomes a clean facade over the local runtime
 * dashboard reads current known state through the API
+* printer cards are visible again
+* printers can be configured through the runtime API/dashboard
 * normal API reads do not trigger serial communication directly
 
----
+Suggested execution order inside 0.1.2 :
+
+#### Step A — Runtime REST API
+
+Implement first:
+
+GET    /health
+GET    /printers
+GET    /printers/{id}
+GET    /printers/{id}/status
+POST   /printers
+PUT    /printers/{id}
+DELETE /printers/{id}
+POST   /printers/{id}/enable
+POST   /printers/{id}/disable
+
+This must use:
+
+PrinterRegistry
+PrinterRuntimeStateCache
+PrinterMonitoringScheduler
+
+No direct polling in handlers.
+
+#### Step B — Dashboard
+
+Then migrate:
+
+GET /dashboard
+
+and dashboard printer cards.
+
+Dashboard must call the API/read cached state. It must not trigger polling.
+
 
 ### 0.1.3 — Migrate Persistence into Runtime Stores
 
@@ -749,7 +797,10 @@ Goals:
 
 * isolate SQLite access behind store/repository classes
 * avoid database logic inside API or monitoring code
-* persist snapshots, events, jobs, and printer configuration through dedicated stores
+* persist printer configuration
+* persist polling snapshots
+* persist printer events and monitoring failures
+* persist jobs and job state
 * prepare later replacement or extension of persistence
 
 Expected stores:
@@ -765,28 +816,37 @@ Expected result:
 
 * database access becomes clean and replaceable
 * runtime services no longer depend directly on SQL details
+* configured printers survive restart
+* monitoring history survives restart
 * persistence is part of the local runtime, not part of the API layer
-
+ 
+ 
 ---
 
-### 0.1.4 — Runtime Verification
+### 0.1.4 — Runtime Verification and Non-Regression
 
 status: planned
 
 Goals:
 
-* add tests for the local runtime backbone
+* add unit tests for the local runtime backbone
 * verify multi-printer monitoring
 * verify API responsiveness during background monitoring
 * verify failure isolation between printers
 * verify simulated and real-style printer nodes can coexist
+* verify dashboard/API behavior
+* verify persistence stores
+* restore Jenkins smoke tests
+* restore coverage reporting
+* add non-regression tests for migrated `0.0.x` behavior
 
 Expected result:
 
 * the local farm runtime architecture is validated
-* `0.1.x` is ready as the foundation for `0.2.x` administration and job management
+* migrated functionality is covered by tests
+* Jenkins verifies runtime startup, API, monitoring, persistence, and non-regression checks
+* `0.1.x` is ready as the foundation for later job management and administration hardening
 
- 
 
 ---
 ## 0.2.x — Local Runtime Administration and Job Management

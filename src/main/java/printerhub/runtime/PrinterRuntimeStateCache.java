@@ -2,25 +2,49 @@ package printerhub.runtime;
 
 import printerhub.PrinterSnapshot;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public final class PrinterRuntimeStateCache {
 
-    private final ConcurrentMap<String, PrinterSnapshot> snapshots = new ConcurrentHashMap<>();
+    private final Map<String, PrinterSnapshot> snapshotsByPrinterId = new ConcurrentHashMap<>();
+
+    public void initializePrinter(String printerId) {
+        update(printerId, PrinterSnapshot.disconnected(Instant.now()));
+    }
 
     public void update(String printerId, PrinterSnapshot snapshot) {
-        snapshots.put(printerId, snapshot);
+        if (printerId == null || printerId.isBlank()) {
+            throw new IllegalArgumentException("printerId must not be blank");
+        }
+        if (snapshot == null) {
+            throw new IllegalArgumentException("snapshot must not be null");
+        }
+
+        snapshotsByPrinterId.put(printerId, snapshot);
     }
 
     public Optional<PrinterSnapshot> findByPrinterId(String printerId) {
-        return Optional.ofNullable(snapshots.get(printerId));
+        if (printerId == null || printerId.isBlank()) {
+            return Optional.empty();
+        }
+
+        return Optional.ofNullable(snapshotsByPrinterId.get(printerId));
     }
 
-    public Collection<Map.Entry<String, PrinterSnapshot>> all() {
-        return snapshots.entrySet();
+    public PrinterSnapshot currentOrDisconnected(String printerId) {
+        return findByPrinterId(printerId)
+                .orElseGet(() -> PrinterSnapshot.disconnected(Instant.now()));
+    }
+
+    public Collection<PrinterSnapshot> findAll() {
+        return snapshotsByPrinterId.values();
+    }
+
+    public void clear() {
+        snapshotsByPrinterId.clear();
     }
 }
