@@ -11,6 +11,7 @@ see ROADMAP.md
 
 ### 0.1.x — Local Farm Runtime Architecture
 
+- 0.1.4 Step C — Persistence Unit Tests
 - 0.1.4 Step B — Runtime and Monitoring Unit Tests
 - 0.1.4 Step A — Production Code Review and Error-Management Hardening
 - 0.1.3 Migrate Persistence into Runtime Stores step A and B
