@@ -31,3 +31,182 @@
 | `old_src/main/java/printerhub`             | `OperationMessages.java`                      | Central operator-facing messages                                                                       | keep/adapt globally                                                    | as needed                                 |
 | `old_src/main/java/printerhub`             | `Main.java`                                   | Old CLI/API startup wiring                                                                             | new `Main.java` / `PrinterHubRuntime` wiring                           | partly `0.1.0`, refine later              |
  
+
+
+
+ ---
+
+
+ ## 0.1.4
+
+
+ Yes. For `0.1.4`, do it in this order:
+
+```text
+Step A — production code review / hardening
+Step B — JUnit unit tests
+Step C — Jenkins integration + robustness smoke tests
+```
+
+## Java files to review first
+
+```text
+src/main/java/printerhub/Main.java
+src/main/java/printerhub/PrinterPort.java
+src/main/java/printerhub/PrinterSnapshot.java
+src/main/java/printerhub/PrinterState.java
+src/main/java/printerhub/SerialConnection.java
+
+src/main/java/printerhub/api/RemoteApiServer.java
+
+src/main/java/printerhub/monitoring/PrinterMonitoringScheduler.java
+src/main/java/printerhub/monitoring/PrinterMonitoringTask.java
+
+src/main/java/printerhub/persistence/Database.java
+src/main/java/printerhub/persistence/DatabaseConfig.java
+src/main/java/printerhub/persistence/DatabaseInitializer.java
+src/main/java/printerhub/persistence/MonitoringRules.java
+src/main/java/printerhub/persistence/PrinterConfigurationStore.java
+src/main/java/printerhub/persistence/PrinterEvent.java
+src/main/java/printerhub/persistence/PrinterEventStore.java
+src/main/java/printerhub/persistence/PrinterSnapshotStore.java
+
+src/main/java/printerhub/runtime/PrinterHubRuntime.java
+src/main/java/printerhub/runtime/PrinterRegistry.java
+src/main/java/printerhub/runtime/PrinterRuntimeNode.java
+src/main/java/printerhub/runtime/PrinterRuntimeNodeFactory.java
+src/main/java/printerhub/runtime/PrinterRuntimeStateCache.java
+
+src/main/java/printerhub/serial/JSerialCommPortAdapter.java
+src/main/java/printerhub/serial/SerialPortAdapter.java
+src/main/java/printerhub/serial/SimulatedPrinterPort.java
+```
+
+## Priority review points
+
+Most important:
+
+```text
+RemoteApiServer
+PrinterMonitoringTask
+PrinterMonitoringScheduler
+PrinterConfigurationStore
+PrinterSnapshotStore
+SerialConnection
+PrinterHubRuntime
+```
+
+These decide whether the runtime is reliable.
+
+## What to check before writing tests
+
+### Error management
+
+Check that errors are:
+
+```text
+caught per printer
+stored in state cache
+persisted as events
+visible through API
+not crashing scheduler
+not blocking other printers
+not hidden silently except during shutdown cleanup
+```
+
+### Monitoring priority
+
+Expected behavior:
+
+```text
+disabled printer -> no polling
+bad printer -> ERROR only for that printer
+good printers -> keep updating
+API reads cache only
+database failure -> logged, but API/runtime still usable
+```
+
+### Persistence priority
+
+Expected behavior:
+
+```text
+printer config survives restart
+snapshot history is stored
+events show cause of failure
+database path can be overridden with -Dprinterhub.databaseFile
+```
+
+## JUnit tests to create
+
+Suggested test files:
+
+```text
+src/test/java/printerhub/runtime/PrinterRegistryTest.java
+src/test/java/printerhub/runtime/PrinterRuntimeStateCacheTest.java
+src/test/java/printerhub/runtime/PrinterRuntimeNodeFactoryTest.java
+
+src/test/java/printerhub/monitoring/PrinterMonitoringTaskTest.java
+src/test/java/printerhub/monitoring/PrinterMonitoringSchedulerTest.java
+
+src/test/java/printerhub/persistence/DatabaseInitializerTest.java
+src/test/java/printerhub/persistence/PrinterConfigurationStoreTest.java
+src/test/java/printerhub/persistence/PrinterSnapshotStoreTest.java
+src/test/java/printerhub/persistence/PrinterEventStoreTest.java
+
+src/test/java/printerhub/api/RemoteApiServerTest.java
+
+src/test/java/printerhub/serial/SimulatedPrinterPortTest.java
+src/test/java/printerhub/SerialConnectionTest.java
+```
+
+## Jenkins integration smoke tests
+
+Keep one normal lifecycle:
+
+```text
+remove DB
+start runtime
+verify no printers
+add simulated printer
+verify monitoring
+disable printer
+verify updatedAt stops
+enable printer
+verify updatedAt resumes
+update printer to sim-error
+verify ERROR is visible
+delete printer
+verify removed
+stop runtime
+inspect SQLite
+restart runtime
+verify persisted printers reload
+```
+
+## Jenkins robustness smoke tests
+
+Add focused failure scenarios:
+
+```text
+sim-error -> API still responds, event is persisted
+sim-timeout -> API still responds, printer state is ERROR
+sim-disconnected -> API still responds, other printers continue
+invalid POST body -> HTTP 400
+unknown printer -> HTTP 404
+wrong method -> HTTP 405
+```
+
+## First files to paste for code review
+
+Start with these:
+
+```text
+PrinterMonitoringTask.java
+PrinterMonitoringScheduler.java
+RemoteApiServer.java
+PrinterSnapshotStore.java
+PrinterConfigurationStore.java
+```
+
+Those are the highest-risk files before test writing.

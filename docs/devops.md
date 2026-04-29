@@ -16,6 +16,9 @@ Environment setup and Jenkins installation are described in:
 
 * `install.md`
 
+add  in it :
+sudo apt update
+sudo apt install sqlite3
 ---
 
 ## Current Pipeline
