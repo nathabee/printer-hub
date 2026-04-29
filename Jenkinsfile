@@ -194,7 +194,7 @@ pipeline {
                     grep -q '"updatedAt"' target/printers-after.json
 
                     grep -q 'PrinterHub Dashboard' target/dashboard.html
-                    grep -q 'PrinterHub' target/dashboard.css
+                    grep -q 'printer-grid'  target/dashboard.css
                     grep -q 'loadDashboard' target/dashboard.js
 
                     grep -q 'configured_printers' target/db-tables.txt
