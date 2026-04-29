@@ -1,12 +1,14 @@
 package printerhub.runtime;
 
+import printerhub.OperationMessages;
 import printerhub.PrinterPort;
 import printerhub.SerialConnection;
+import printerhub.config.SerialDefaults;
 import printerhub.serial.SimulatedPrinterPort;
 
-public final class PrinterRuntimeNodeFactory {
+import java.util.Locale;
 
-    private static final int DEFAULT_BAUD_RATE = 115200;
+public final class PrinterRuntimeNodeFactory {
 
     private PrinterRuntimeNodeFactory() {
     }
@@ -36,10 +38,11 @@ public final class PrinterRuntimeNodeFactory {
     }
 
     private static PrinterPort createPort(String portName, String mode) {
-        String normalizedMode = mode.trim().toLowerCase();
+        String normalizedPortName = portName.trim();
+        String normalizedMode = mode.trim().toLowerCase(Locale.ROOT);
 
         if ("real".equals(normalizedMode)) {
-            return new SerialConnection(portName.trim(), DEFAULT_BAUD_RATE);
+            return new SerialConnection(normalizedPortName, SerialDefaults.DEFAULT_BAUD_RATE);
         }
 
         if ("sim".equals(normalizedMode)
@@ -47,17 +50,15 @@ public final class PrinterRuntimeNodeFactory {
                 || "sim-disconnected".equals(normalizedMode)
                 || "sim-timeout".equals(normalizedMode)
                 || "sim-error".equals(normalizedMode)) {
-            return new SimulatedPrinterPort(portName.trim(), normalizedMode);
+            return new SimulatedPrinterPort(normalizedPortName, normalizedMode);
         }
 
-        throw new IllegalArgumentException(
-                "mode must be one of: real, sim, simulated, sim-disconnected, sim-timeout, sim-error"
-        );
+        throw new IllegalArgumentException(OperationMessages.INVALID_PRINTER_MODE);
     }
 
     private static void validateRequired(String fieldName, String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank(fieldName));
         }
     }
 }

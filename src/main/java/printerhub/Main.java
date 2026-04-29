@@ -1,17 +1,15 @@
 package printerhub;
 
 import printerhub.api.RemoteApiServer;
+import printerhub.config.RuntimeDefaults;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
-import printerhub.runtime.PrinterHubRuntime;
-import printerhub.runtime.PrinterRegistry; 
-import printerhub.runtime.PrinterRuntimeStateCache; 
-import java.util.concurrent.CountDownLatch;
 import printerhub.persistence.PrinterConfigurationStore;
+import printerhub.runtime.PrinterHubRuntime;
+import printerhub.runtime.PrinterRegistry;
+import printerhub.runtime.PrinterRuntimeStateCache;
 
- 
- 
-
+import java.util.concurrent.CountDownLatch;
 
 public final class Main {
 
@@ -19,51 +17,81 @@ public final class Main {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        int apiPort = readIntProperty("printerhub.api.port", 8080);
-        long monitoringIntervalSeconds = readLongProperty("printerhub.monitoring.intervalSeconds", 5);
+        try {
+            int apiPort = readIntProperty(
+                    RuntimeDefaults.API_PORT_PROPERTY,
+                    RuntimeDefaults.DEFAULT_API_PORT
+            );
 
-        PrinterRegistry printerRegistry = new PrinterRegistry();
-        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+            long monitoringIntervalSeconds = readLongProperty(
+                    RuntimeDefaults.MONITORING_INTERVAL_SECONDS_PROPERTY,
+                    RuntimeDefaults.DEFAULT_MONITORING_INTERVAL_SECONDS
+            );
 
-       
-        DatabaseInitializer databaseInitializer = new DatabaseInitializer();
- 
-        PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
+            PrinterRegistry printerRegistry = new PrinterRegistry();
+            PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+            DatabaseInitializer databaseInitializer = new DatabaseInitializer();
+            PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
 
-        
+            PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
+                    printerRegistry,
+                    stateCache,
+                    monitoringIntervalSeconds
+            );
 
-        PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
-                printerRegistry,
-                stateCache,
-                monitoringIntervalSeconds);
+            RemoteApiServer apiServer = new RemoteApiServer(
+                    apiPort,
+                    printerRegistry,
+                    stateCache,
+                    monitoringScheduler,
+                    printerConfigurationStore
+            );
 
-        RemoteApiServer apiServer = new RemoteApiServer(
-            apiPort,
-            printerRegistry,
-            stateCache,
-            monitoringScheduler,
-            printerConfigurationStore
-        );
+            PrinterHubRuntime runtime = new PrinterHubRuntime(
+                    databaseInitializer,
+                    printerConfigurationStore,
+                    printerRegistry,
+                    stateCache,
+                    monitoringScheduler,
+                    apiServer
+            );
 
+            Runtime.getRuntime().addShutdownHook(new Thread(runtime::close));
 
-        PrinterHubRuntime runtime = new PrinterHubRuntime(
-        databaseInitializer,
-        printerConfigurationStore,
-        printerRegistry,
-        stateCache,
-        monitoringScheduler,
-        apiServer
-);
+            runtime.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(runtime::close));
+            System.out.println(OperationMessages.localRuntimeStarted());
+            System.out.println(OperationMessages.healthEndpoint(apiPort));
+            System.out.println(OperationMessages.printersEndpoint(apiPort));
 
-        runtime.start();
-
-        System.out.println("[PrinterHub] Local runtime started");
-        System.out.println("[PrinterHub] Health:   http://localhost:" + apiPort + "/health");
-        System.out.println("[PrinterHub] Printers: http://localhost:" + apiPort + "/printers");
-
-        new CountDownLatch(1).await();
+            new CountDownLatch(1).await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            System.err.println(OperationMessages.runtimeStartupFailed(
+                    OperationMessages.safeDetail(
+                            exception.getMessage(),
+                            OperationMessages.UNKNOWN_STARTUP_ERROR
+                    )
+            ));
+            throw exception;
+        } catch (IllegalArgumentException exception) {
+            System.err.println(OperationMessages.runtimeStartupFailed(
+                    OperationMessages.safeDetail(
+                            exception.getMessage(),
+                            OperationMessages.UNKNOWN_STARTUP_ERROR
+                    )
+            ));
+            System.exit(RuntimeDefaults.ERROR_EXIT_CODE);
+        } catch (Exception exception) {
+            System.err.println(OperationMessages.runtimeStartupFailed(
+                    OperationMessages.safeDetail(
+                            exception.getMessage(),
+                            OperationMessages.UNKNOWN_STARTUP_ERROR
+                    )
+            ));
+            exception.printStackTrace(System.err);
+            System.exit(RuntimeDefaults.ERROR_EXIT_CODE);
+        }
     }
 
     private static int readIntProperty(String key, int defaultValue) {
@@ -73,7 +101,14 @@ public final class Main {
             return defaultValue;
         }
 
-        return Integer.parseInt(value);
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    OperationMessages.invalidIntegerSystemProperty(key, value),
+                    exception
+            );
+        }
     }
 
     private static long readLongProperty(String key, long defaultValue) {
@@ -83,6 +118,13 @@ public final class Main {
             return defaultValue;
         }
 
-        return Long.parseLong(value);
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    OperationMessages.invalidLongSystemProperty(key, value),
+                    exception
+            );
+        }
     }
 }

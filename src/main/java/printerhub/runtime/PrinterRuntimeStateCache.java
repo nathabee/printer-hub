@@ -1,7 +1,9 @@
 package printerhub.runtime;
 
+import printerhub.OperationMessages;
 import printerhub.PrinterSnapshot;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Map;
@@ -11,20 +13,33 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class PrinterRuntimeStateCache {
 
     private final Map<String, PrinterSnapshot> snapshotsByPrinterId = new ConcurrentHashMap<>();
+    private final Clock clock;
+
+    public PrinterRuntimeStateCache() {
+        this(Clock.systemUTC());
+    }
+
+    public PrinterRuntimeStateCache(Clock clock) {
+        if (clock == null) {
+            throw new IllegalArgumentException(OperationMessages.CLOCK_MUST_NOT_BE_NULL);
+        }
+
+        this.clock = clock;
+    }
 
     public void initializePrinter(String printerId) {
-        update(printerId, PrinterSnapshot.disconnected(Instant.now()));
+        update(printerId, PrinterSnapshot.disconnected(Instant.now(clock)));
     }
 
     public void update(String printerId, PrinterSnapshot snapshot) {
         if (printerId == null || printerId.isBlank()) {
-            throw new IllegalArgumentException("printerId must not be blank");
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
         }
         if (snapshot == null) {
-            throw new IllegalArgumentException("snapshot must not be null");
+            throw new IllegalArgumentException(OperationMessages.SNAPSHOT_MUST_NOT_BE_NULL);
         }
 
-        snapshotsByPrinterId.put(printerId, snapshot);
+        snapshotsByPrinterId.put(printerId.trim(), snapshot);
     }
 
     public Optional<PrinterSnapshot> findByPrinterId(String printerId) {
@@ -32,12 +47,12 @@ public final class PrinterRuntimeStateCache {
             return Optional.empty();
         }
 
-        return Optional.ofNullable(snapshotsByPrinterId.get(printerId));
+        return Optional.ofNullable(snapshotsByPrinterId.get(printerId.trim()));
     }
 
     public PrinterSnapshot currentOrDisconnected(String printerId) {
         return findByPrinterId(printerId)
-                .orElseGet(() -> PrinterSnapshot.disconnected(Instant.now()));
+                .orElseGet(() -> PrinterSnapshot.disconnected(Instant.now(clock)));
     }
 
     public Collection<PrinterSnapshot> findAll() {
@@ -53,6 +68,6 @@ public final class PrinterRuntimeStateCache {
             return;
         }
 
-        snapshotsByPrinterId.remove(printerId);
+        snapshotsByPrinterId.remove(printerId.trim());
     }
 }

@@ -1,5 +1,7 @@
 package printerhub.runtime;
 
+import printerhub.OperationMessages;
+
 import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -10,8 +12,7 @@ public final class PrinterRegistry implements AutoCloseable {
     private final ConcurrentMap<String, PrinterRuntimeNode> printers = new ConcurrentHashMap<>();
 
     public void initialize() {
-        // 0.1.x migration bootstrap.
-        // Later this will load persisted printer configuration.
+        // 0.1.x runtime bootstrap.
     }
 
     public void register(PrinterRuntimeNode node) {
@@ -24,7 +25,7 @@ public final class PrinterRegistry implements AutoCloseable {
             return Optional.empty();
         }
 
-        return Optional.ofNullable(printers.get(printerId));
+        return Optional.ofNullable(printers.get(printerId.trim()));
     }
 
     public Collection<PrinterRuntimeNode> all() {
@@ -33,10 +34,10 @@ public final class PrinterRegistry implements AutoCloseable {
 
     public PrinterRuntimeNode remove(String printerId) {
         if (printerId == null || printerId.isBlank()) {
-            throw new IllegalArgumentException("printerId must not be blank");
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
         }
 
-        PrinterRuntimeNode removed = printers.remove(printerId);
+        PrinterRuntimeNode removed = printers.remove(printerId.trim());
 
         if (removed != null) {
             removed.close();
@@ -47,10 +48,10 @@ public final class PrinterRegistry implements AutoCloseable {
 
     private void validateNode(PrinterRuntimeNode node) {
         if (node == null) {
-            throw new IllegalArgumentException("node must not be null");
+            throw new IllegalArgumentException(OperationMessages.NODE_MUST_NOT_BE_NULL);
         }
         if (node.id() == null || node.id().isBlank()) {
-            throw new IllegalArgumentException("printer id must not be blank");
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
         }
     }
 

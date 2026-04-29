@@ -1,7 +1,9 @@
 package printerhub.persistence;
 
+import printerhub.OperationMessages;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
+import printerhub.config.RuntimeDefaults;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -22,7 +24,7 @@ public final class PrinterSnapshotStore {
 
     public PrinterSnapshotStore(MonitoringRules monitoringRules) {
         if (monitoringRules == null) {
-            throw new IllegalArgumentException("monitoringRules must not be null");
+            throw new IllegalArgumentException(OperationMessages.MONITORING_RULES_MUST_NOT_BE_NULL);
         }
 
         this.monitoringRules = monitoringRules;
@@ -30,11 +32,10 @@ public final class PrinterSnapshotStore {
 
     public void save(String printerId, PrinterSnapshot snapshot) {
         if (printerId == null || printerId.isBlank()) {
-            throw new IllegalArgumentException("printerId must not be blank");
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
         }
-
         if (snapshot == null) {
-            throw new IllegalArgumentException("snapshot must not be null");
+            throw new IllegalArgumentException(OperationMessages.SNAPSHOT_MUST_NOT_BE_NULL);
         }
 
         String normalizedPrinterId = printerId.trim();
@@ -70,16 +71,18 @@ public final class PrinterSnapshotStore {
 
             statement.executeUpdate();
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to save printer snapshot", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_SAVE_PRINTER_SNAPSHOT, exception);
         }
     }
 
     public List<PrinterSnapshot> findRecentByPrinterId(String printerId, int limit) {
         if (printerId == null || printerId.isBlank()) {
-            throw new IllegalArgumentException("printerId must not be blank");
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
         }
 
-        int safeLimit = limit <= 0 ? 20 : limit;
+        int safeLimit = limit <= 0
+                ? RuntimeDefaults.DEFAULT_RECENT_SNAPSHOT_LIMIT
+                : limit;
 
         String sql = """
                 SELECT
@@ -112,7 +115,7 @@ public final class PrinterSnapshotStore {
 
             return snapshots;
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to load printer snapshots", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_LOAD_PRINTER_SNAPSHOTS, exception);
         }
     }
 
@@ -140,11 +143,10 @@ public final class PrinterSnapshotStore {
                     return true;
                 }
 
-                PrinterState lastState = PrinterState.valueOf(resultSet.getString("state"));
-                Instant lastCreatedAt = Instant.parse(resultSet.getString("created_at"));
+                PrinterState lastState = parseStoredState(resultSet.getString("state"));
+                Instant lastCreatedAt = parseStoredInstant(resultSet.getString("created_at"));
 
-                if (monitoringRules.snapshotOnStateChange()
-                        && lastState != snapshot.state()) {
+                if (monitoringRules.snapshotOnStateChange() && lastState != snapshot.state()) {
                     return true;
                 }
 
@@ -164,7 +166,7 @@ public final class PrinterSnapshotStore {
                 return secondsSinceLastSnapshot >= monitoringRules.minIntervalSeconds();
             }
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to check latest printer snapshot", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_CHECK_LATEST_PRINTER_SNAPSHOT, exception);
         }
     }
 
@@ -203,12 +205,12 @@ public final class PrinterSnapshotStore {
     }
 
     private PrinterSnapshot toSnapshot(ResultSet resultSet) throws SQLException {
-        PrinterState state = PrinterState.valueOf(resultSet.getString("state"));
+        PrinterState state = parseStoredState(resultSet.getString("state"));
         Double hotendTemperature = readNullableDouble(resultSet, "hotend_temperature");
         Double bedTemperature = readNullableDouble(resultSet, "bed_temperature");
         String lastResponse = resultSet.getString("last_response");
         String errorMessage = resultSet.getString("error_message");
-        Instant createdAt = Instant.parse(resultSet.getString("created_at"));
+        Instant createdAt = parseStoredInstant(resultSet.getString("created_at"));
 
         if (state == PrinterState.ERROR || errorMessage != null) {
             return PrinterSnapshot.error(
@@ -228,5 +230,35 @@ public final class PrinterSnapshotStore {
                 lastResponse,
                 createdAt
         );
+    }
+
+    private PrinterState parseStoredState(String storedState) {
+        if (storedState == null || storedState.isBlank()) {
+            throw new IllegalStateException(OperationMessages.INVALID_STORED_PRINTER_SNAPSHOT_STATE);
+        }
+
+        try {
+            return PrinterState.valueOf(storedState);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException(
+                    OperationMessages.invalidStoredPrinterSnapshotState(storedState),
+                    exception
+            );
+        }
+    }
+
+    private Instant parseStoredInstant(String storedTimestamp) {
+        if (storedTimestamp == null || storedTimestamp.isBlank()) {
+            throw new IllegalStateException(OperationMessages.INVALID_STORED_PRINTER_SNAPSHOT_TIMESTAMP);
+        }
+
+        try {
+            return Instant.parse(storedTimestamp);
+        } catch (Exception exception) {
+            throw new IllegalStateException(
+                    OperationMessages.invalidStoredPrinterSnapshotTimestamp(storedTimestamp),
+                    exception
+            );
+        }
     }
 }

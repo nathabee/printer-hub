@@ -1,25 +1,30 @@
 package printerhub.persistence;
 
+import printerhub.OperationMessages;
+import printerhub.config.RuntimeDefaults;
+
 public final class DatabaseConfig {
-
-    public static final String DEFAULT_DATABASE_FILE = "printerhub.db";
-
-    private static final String DATABASE_FILE_PROPERTY = "printerhub.databaseFile";
 
     private DatabaseConfig() {
     }
 
     public static String databaseFile() {
-        String configuredFile = System.getProperty(DATABASE_FILE_PROPERTY);
+        String configuredFile = System.getProperty(RuntimeDefaults.DATABASE_FILE_PROPERTY);
 
         if (configuredFile == null || configuredFile.isBlank()) {
-            return DEFAULT_DATABASE_FILE;
+            return RuntimeDefaults.DEFAULT_DATABASE_FILE;
         }
 
-        return configuredFile.trim();
+        String normalized = configuredFile.trim();
+
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.DATABASE_FILE_MUST_NOT_BE_BLANK);
+        }
+
+        return normalized;
     }
 
     public static String jdbcUrl() {
-        return "jdbc:sqlite:" + databaseFile();
+        return RuntimeDefaults.SQLITE_JDBC_PREFIX + databaseFile();
     }
 }

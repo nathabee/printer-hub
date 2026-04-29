@@ -1,6 +1,8 @@
 package printerhub.serial;
 
+import printerhub.OperationMessages;
 import printerhub.PrinterPort;
+import printerhub.config.PrinterProtocolDefaults;
 
 import java.util.Locale;
 
@@ -11,23 +13,25 @@ public final class SimulatedPrinterPort implements PrinterPort {
     private boolean connected;
 
     public SimulatedPrinterPort(String portName) {
-        this(portName, "sim");
+        this(portName, PrinterProtocolDefaults.SIM_MODE);
     }
 
     public SimulatedPrinterPort(String portName, String mode) {
         if (portName == null || portName.isBlank()) {
-            throw new IllegalArgumentException("portName must not be blank");
+            throw new IllegalArgumentException(OperationMessages.PORT_NAME_MUST_NOT_BE_BLANK);
         }
 
-        this.portName = portName;
-        this.mode = mode == null || mode.isBlank() ? "sim" : mode;
+        this.portName = portName.trim();
+        this.mode = (mode == null || mode.isBlank())
+                ? PrinterProtocolDefaults.SIM_MODE
+                : mode.trim();
     }
 
     @Override
     public void connect() {
         if (isDisconnectedMode()) {
             connected = false;
-            throw new IllegalStateException("Simulated printer is disconnected: " + portName);
+            throw new IllegalStateException(OperationMessages.simulatedPrinterDisconnected(portName));
         }
 
         connected = true;
@@ -36,11 +40,11 @@ public final class SimulatedPrinterPort implements PrinterPort {
     @Override
     public String sendCommand(String command) {
         if (!connected) {
-            throw new IllegalStateException("Simulated printer is not connected: " + portName);
+            throw new IllegalStateException(OperationMessages.simulatedPrinterNotConnected(portName));
         }
 
         if (command == null || command.isBlank()) {
-            throw new IllegalArgumentException("command must not be blank");
+            throw new IllegalArgumentException(OperationMessages.COMMAND_MUST_NOT_BE_BLANK);
         }
 
         if (isTimeoutMode()) {
@@ -48,7 +52,7 @@ public final class SimulatedPrinterPort implements PrinterPort {
         }
 
         if (isErrorMode()) {
-            return "Error: Simulated printer failure";
+            return OperationMessages.SIMULATED_PRINTER_FAILURE_RESPONSE;
         }
 
         return defaultResponseFor(command);
@@ -63,23 +67,23 @@ public final class SimulatedPrinterPort implements PrinterPort {
         String normalized = command.trim().toUpperCase(Locale.ROOT);
 
         return switch (normalized) {
-            case "M105" -> "ok T:21.80 /0.00 B:21.52 /0.00 @:0 B@:0";
-            case "M114" -> "X:0.00 Y:0.00 Z:0.00 E:0.00 Count X:0 Y:0 Z:0";
-            case "M115" -> "FIRMWARE_NAME:Marlin SIMULATED PROTOCOL_VERSION:1.0 MACHINE_TYPE:Ender-3 V2 Neo EXTRUDER_COUNT:1";
-            default -> "ok";
+            case "M105" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M105;
+            case "M114" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M114;
+            case "M115" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M115;
+            default -> PrinterProtocolDefaults.SIMULATED_RESPONSE_DEFAULT_OK;
         };
     }
 
     private boolean isDisconnectedMode() {
-        return normalizedMode().equals("sim-disconnected");
+        return normalizedMode().equals(PrinterProtocolDefaults.SIM_DISCONNECTED_MODE);
     }
 
     private boolean isTimeoutMode() {
-        return normalizedMode().equals("sim-timeout");
+        return normalizedMode().equals(PrinterProtocolDefaults.SIM_TIMEOUT_MODE);
     }
 
     private boolean isErrorMode() {
-        return normalizedMode().equals("sim-error");
+        return normalizedMode().equals(PrinterProtocolDefaults.SIM_ERROR_MODE);
     }
 
     private String normalizedMode() {

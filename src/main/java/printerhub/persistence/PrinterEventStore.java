@@ -1,5 +1,7 @@
 package printerhub.persistence;
 
+import printerhub.OperationMessages;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -8,7 +10,7 @@ public final class PrinterEventStore {
 
     public PrinterEvent save(PrinterEvent event) {
         if (event == null) {
-            throw new IllegalArgumentException("printer event must not be null");
+            throw new IllegalArgumentException(OperationMessages.PRINTER_EVENT_MUST_NOT_BE_NULL);
         }
 
         String sql = """
@@ -33,10 +35,9 @@ public final class PrinterEventStore {
             statement.setString(5, event.createdAt().toString());
 
             statement.executeUpdate();
-
             return event;
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to save printer event", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_SAVE_PRINTER_EVENT, exception);
         }
     }
 

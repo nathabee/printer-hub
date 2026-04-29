@@ -1,5 +1,7 @@
 package printerhub.persistence;
 
+import printerhub.OperationMessages;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -10,6 +12,12 @@ public final class Database {
     }
 
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(DatabaseConfig.jdbcUrl());
+        try {
+            return DriverManager.getConnection(DatabaseConfig.jdbcUrl());
+        } catch (SQLException exception) {
+            throw new SQLException(OperationMessages.failedToOpenDatabaseConnection(
+                    DatabaseConfig.databaseFile()
+            ), exception);
+        }
     }
 }

@@ -1,5 +1,6 @@
 package printerhub.persistence;
 
+import printerhub.OperationMessages;
 import printerhub.runtime.PrinterRuntimeNode;
 import printerhub.runtime.PrinterRuntimeNodeFactory;
 
@@ -15,7 +16,7 @@ public final class PrinterConfigurationStore {
 
     public void save(PrinterRuntimeNode node) {
         if (node == null) {
-            throw new IllegalArgumentException("node must not be null");
+            throw new IllegalArgumentException(OperationMessages.NODE_MUST_NOT_BE_NULL);
         }
 
         String sql = """
@@ -53,7 +54,7 @@ public final class PrinterConfigurationStore {
 
             statement.executeUpdate();
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to save printer configuration", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_SAVE_PRINTER_CONFIGURATION, exception);
         }
     }
 
@@ -88,7 +89,7 @@ public final class PrinterConfigurationStore {
 
             return printers;
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to load printer configuration", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_LOAD_PRINTER_CONFIGURATION, exception);
         }
     }
 
@@ -105,13 +106,13 @@ public final class PrinterConfigurationStore {
         ) {
             return resultSet.next() && resultSet.getInt("printer_count") > 0;
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to check printer configuration", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_CHECK_PRINTER_CONFIGURATION, exception);
         }
     }
 
     public void delete(String printerId) {
         if (printerId == null || printerId.isBlank()) {
-            throw new IllegalArgumentException("printerId must not be blank");
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
         }
 
         String sql = """
@@ -126,7 +127,7 @@ public final class PrinterConfigurationStore {
             statement.setString(1, printerId.trim());
             statement.executeUpdate();
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to delete printer configuration", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_DELETE_PRINTER_CONFIGURATION, exception);
         }
     }
 
@@ -140,7 +141,7 @@ public final class PrinterConfigurationStore {
 
     private void updateEnabled(String printerId, boolean enabled) {
         if (printerId == null || printerId.isBlank()) {
-            throw new IllegalArgumentException("printerId must not be blank");
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
         }
 
         String sql = """
@@ -161,7 +162,7 @@ public final class PrinterConfigurationStore {
 
             statement.executeUpdate();
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to update printer enabled flag", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_UPDATE_PRINTER_ENABLED_FLAG, exception);
         }
     }
 }

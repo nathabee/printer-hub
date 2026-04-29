@@ -11,6 +11,7 @@ see ROADMAP.md
 
 ### 0.1.x — Local Farm Runtime Architecture
 
+- 0.1.4 Step A — Production Code Review and Error-Management Hardening
 - 0.1.3 Migrate Persistence into Runtime Stores step A and B
 - 0.1.2 Migrate Existing API and Dashboard onto Runtime Services step A and B
 - 0.1.1 Migrate Existing Monitoring into Runtime Tasks
@@ -19,6 +20,7 @@ see ROADMAP.md
 
 
 ### Version 0.0.x : first sprint to create a deployment ready prototype
+
 
 - 0.0.19 Local Runtime Configuration and Monitoring Rules
 - 0.0.18 Job Execution Simulation and Dashboard Cleanup

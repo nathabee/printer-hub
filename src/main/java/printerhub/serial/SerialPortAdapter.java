@@ -7,6 +7,7 @@ public interface SerialPortAdapter {
     int ONE_STOP_BIT = 1;
     int NO_PARITY = 0;
     int TIMEOUT_NONBLOCKING = 0;
+    int EIGHT_DATA_BITS = 8; 
 
     void setBaudRate(int baudRate);
 

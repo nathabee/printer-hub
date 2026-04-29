@@ -1,6 +1,7 @@
 package printerhub.serial;
 
 import com.fazecast.jSerialComm.SerialPort;
+import printerhub.OperationMessages;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -10,7 +11,11 @@ public final class JSerialCommPortAdapter implements SerialPortAdapter {
     private final SerialPort delegate;
 
     public JSerialCommPortAdapter(String portName) {
-        this.delegate = SerialPort.getCommPort(portName);
+        if (portName == null || portName.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PORT_NAME_MUST_NOT_BE_BLANK);
+        }
+
+        this.delegate = SerialPort.getCommPort(portName.trim());
     }
 
     @Override

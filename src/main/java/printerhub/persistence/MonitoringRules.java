@@ -1,5 +1,8 @@
 package printerhub.persistence;
 
+import printerhub.OperationMessages;
+import printerhub.config.RuntimeDefaults;
+
 public final class MonitoringRules {
 
     private final boolean snapshotOnStateChange;
@@ -12,11 +15,15 @@ public final class MonitoringRules {
             long minIntervalSeconds
     ) {
         if (temperatureThreshold < 0) {
-            throw new IllegalArgumentException("temperatureThreshold must not be negative");
+            throw new IllegalArgumentException(
+                    OperationMessages.TEMPERATURE_THRESHOLD_MUST_NOT_BE_NEGATIVE
+            );
         }
 
         if (minIntervalSeconds < 0) {
-            throw new IllegalArgumentException("minIntervalSeconds must not be negative");
+            throw new IllegalArgumentException(
+                    OperationMessages.MIN_INTERVAL_SECONDS_MUST_NOT_BE_NEGATIVE
+            );
         }
 
         this.snapshotOnStateChange = snapshotOnStateChange;
@@ -25,7 +32,11 @@ public final class MonitoringRules {
     }
 
     public static MonitoringRules defaults() {
-        return new MonitoringRules(true, 1.0, 30);
+        return new MonitoringRules(
+                RuntimeDefaults.DEFAULT_SNAPSHOT_ON_STATE_CHANGE,
+                RuntimeDefaults.DEFAULT_TEMPERATURE_THRESHOLD,
+                RuntimeDefaults.DEFAULT_MIN_SNAPSHOT_INTERVAL_SECONDS
+        );
     }
 
     public boolean snapshotOnStateChange() {

@@ -1,5 +1,7 @@
 package printerhub.persistence;
 
+import printerhub.OperationMessages;
+
 import java.time.Instant;
 
 public final class PrinterEvent {
@@ -19,12 +21,19 @@ public final class PrinterEvent {
             String message,
             Instant createdAt
     ) {
+        if (eventType == null || eventType.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.EVENT_TYPE_MUST_NOT_BE_BLANK);
+        }
+        if (createdAt == null) {
+            throw new IllegalArgumentException(OperationMessages.CREATED_AT_MUST_NOT_BE_NULL);
+        }
+
         this.id = id;
         this.printerId = normalizeOptional(printerId);
         this.jobId = normalizeOptional(jobId);
-        this.eventType = normalizeRequired(eventType, "UNKNOWN_EVENT");
+        this.eventType = eventType.trim();
         this.message = normalizeOptional(message);
-        this.createdAt = createdAt == null ? Instant.now() : createdAt;
+        this.createdAt = createdAt;
     }
 
     public static PrinterEvent create(
@@ -70,14 +79,6 @@ public final class PrinterEvent {
     private String normalizeOptional(String value) {
         if (value == null || value.isBlank()) {
             return null;
-        }
-
-        return value.trim();
-    }
-
-    private String normalizeRequired(String value, String fallback) {
-        if (value == null || value.isBlank()) {
-            return fallback;
         }
 
         return value.trim();

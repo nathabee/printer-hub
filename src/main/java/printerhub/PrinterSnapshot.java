@@ -19,12 +19,16 @@ public final class PrinterSnapshot {
             String errorMessage,
             Instant updatedAt
     ) {
+        if (updatedAt == null) {
+            throw new IllegalArgumentException(OperationMessages.UPDATED_AT_MUST_NOT_BE_NULL);
+        }
+
         this.state = state == null ? PrinterState.UNKNOWN : state;
         this.hotendTemperature = hotendTemperature;
         this.bedTemperature = bedTemperature;
         this.lastResponse = lastResponse;
         this.errorMessage = errorMessage;
-        this.updatedAt = updatedAt == null ? Instant.now() : updatedAt;
+        this.updatedAt = updatedAt;
     }
 
     public static PrinterSnapshot disconnected(Instant updatedAt) {
@@ -61,8 +65,10 @@ public final class PrinterSnapshot {
             String lastResponse,
             Instant updatedAt
     ) {
+        PrinterState resolvedState = state == null ? PrinterState.UNKNOWN : state;
+
         return new PrinterSnapshot(
-                state,
+                resolvedState,
                 hotendTemperature,
                 bedTemperature,
                 lastResponse,
@@ -79,8 +85,12 @@ public final class PrinterSnapshot {
             String errorMessage,
             Instant updatedAt
     ) {
+        PrinterState resolvedState = state == null
+                ? PrinterState.ERROR
+                : state;
+
         return new PrinterSnapshot(
-                state == null ? PrinterState.ERROR : state,
+                resolvedState,
                 previousHotendTemperature,
                 previousBedTemperature,
                 lastResponse,

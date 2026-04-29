@@ -1,5 +1,7 @@
 package printerhub.persistence;
 
+import printerhub.OperationMessages;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -17,9 +19,9 @@ public final class DatabaseInitializer {
             createConfiguredPrintersTable(statement);
             createMonitoringRulesTable(statement);
 
-            System.out.println("[PrinterHub] Database initialized: " + DatabaseConfig.databaseFile());
+            System.out.println(OperationMessages.databaseInitialized(DatabaseConfig.databaseFile()));
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to initialize database schema", exception);
+            throw new IllegalStateException(OperationMessages.FAILED_TO_INITIALIZE_DATABASE_SCHEMA, exception);
         }
     }
 

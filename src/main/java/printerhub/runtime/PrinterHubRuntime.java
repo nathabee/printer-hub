@@ -1,5 +1,6 @@
 package printerhub.runtime;
 
+import printerhub.OperationMessages;
 import printerhub.api.RemoteApiServer;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
@@ -22,6 +23,25 @@ public final class PrinterHubRuntime implements AutoCloseable {
             PrinterMonitoringScheduler monitoringScheduler,
             RemoteApiServer apiServer
     ) {
+        if (databaseInitializer == null) {
+            throw new IllegalArgumentException(OperationMessages.DATABASE_INITIALIZER_MUST_NOT_BE_NULL);
+        }
+        if (printerConfigurationStore == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_CONFIGURATION_STORE_MUST_NOT_BE_NULL);
+        }
+        if (printerRegistry == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_REGISTRY_MUST_NOT_BE_NULL);
+        }
+        if (stateCache == null) {
+            throw new IllegalArgumentException(OperationMessages.STATE_CACHE_MUST_NOT_BE_NULL);
+        }
+        if (monitoringScheduler == null) {
+            throw new IllegalArgumentException(OperationMessages.MONITORING_SCHEDULER_MUST_NOT_BE_NULL);
+        }
+        if (apiServer == null) {
+            throw new IllegalArgumentException(OperationMessages.API_SERVER_MUST_NOT_BE_NULL);
+        }
+
         this.databaseInitializer = databaseInitializer;
         this.printerConfigurationStore = printerConfigurationStore;
         this.printerRegistry = printerRegistry;
@@ -32,14 +52,14 @@ public final class PrinterHubRuntime implements AutoCloseable {
 
     public void start() {
         databaseInitializer.initialize();
-        loadConfiguredPrintersIfAvailable();
+        loadConfiguredPrinters();
         printerRegistry.initialize();
         monitoringScheduler.start();
         apiServer.start();
     }
 
-    private void loadConfiguredPrintersIfAvailable() {
-        for (var node : printerConfigurationStore.findAll()) {
+    private void loadConfiguredPrinters() {
+        for (PrinterRuntimeNode node : printerConfigurationStore.findAll()) {
             printerRegistry.register(node);
         }
     }

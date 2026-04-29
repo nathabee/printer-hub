@@ -3,24 +3,28 @@ package printerhub.api;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import printerhub.OperationMessages;
 import printerhub.PrinterSnapshot;
+import printerhub.PrinterState;
+import printerhub.config.RuntimeDefaults;
 import printerhub.monitoring.PrinterMonitoringScheduler;
+import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
 import printerhub.runtime.PrinterRuntimeNodeFactory;
 import printerhub.runtime.PrinterRuntimeStateCache;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.io.InputStream;
-import printerhub.persistence.PrinterConfigurationStore;
 
 public final class RemoteApiServer {
 
@@ -39,6 +43,22 @@ public final class RemoteApiServer {
             PrinterMonitoringScheduler monitoringScheduler,
             PrinterConfigurationStore printerConfigurationStore
     ) {
+        if (port < RuntimeDefaults.MIN_PORT || port > RuntimeDefaults.MAX_PORT) {
+            throw new IllegalArgumentException(OperationMessages.PORT_MUST_BE_IN_VALID_RANGE);
+        }
+        if (printerRegistry == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_REGISTRY_MUST_NOT_BE_NULL);
+        }
+        if (stateCache == null) {
+            throw new IllegalArgumentException(OperationMessages.STATE_CACHE_MUST_NOT_BE_NULL);
+        }
+        if (monitoringScheduler == null) {
+            throw new IllegalArgumentException(OperationMessages.MONITORING_SCHEDULER_MUST_NOT_BE_NULL);
+        }
+        if (printerConfigurationStore == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_CONFIGURATION_STORE_MUST_NOT_BE_NULL);
+        }
+
         this.port = port;
         this.printerRegistry = printerRegistry;
         this.stateCache = stateCache;
@@ -47,32 +67,51 @@ public final class RemoteApiServer {
     }
 
     public void start() {
+        if (server != null) {
+            return;
+        }
+
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.setExecutor(Executors.newFixedThreadPool(8));
+            server.setExecutor(Executors.newFixedThreadPool(RuntimeDefaults.DEFAULT_API_THREAD_POOL_SIZE));
 
-            server.createContext("/health", this::handleHealth);
-            server.createContext("/printers", this::handlePrinters);
-            server.createContext("/dashboard", this::handleDashboard);
+            server.createContext("/health", exchange -> safeHandle(exchange, this::handleHealth));
+            server.createContext("/printers", exchange -> safeHandle(exchange, this::handlePrinters));
+            server.createContext("/dashboard", exchange -> safeHandle(exchange, this::handleDashboard));
 
             server.start();
 
-            System.out.println("[PrinterHub] API server started on port " + port);
-        } catch (IOException ex) {
-            throw new IllegalStateException("Failed to start API server on port " + port, ex);
+            System.out.println(OperationMessages.apiServerStarted(port));
+        } catch (IOException exception) {
+            throw new IllegalStateException(OperationMessages.failedToStartApiServer(port), exception);
         }
     }
 
     public void stop() {
         if (server != null) {
             server.stop(0);
-            System.out.println("[PrinterHub] API server stopped");
+            server = null;
+            System.out.println(OperationMessages.apiServerStopped());
+        }
+    }
+
+    private void safeHandle(HttpExchange exchange, ExchangeHandler handler) throws IOException {
+        try {
+            handler.handle(exchange);
+        } catch (IllegalArgumentException exception) {
+            sendJson(exchange, 400, errorJson(safeMessage(exception)));
+        } catch (IllegalStateException exception) {
+            System.err.println(OperationMessages.apiOperationFailed(safeMessage(exception)));
+            sendJson(exchange, 500, errorJson(safeMessage(exception)));
+        } catch (Exception exception) {
+            System.err.println(OperationMessages.unexpectedApiError(safeMessage(exception)));
+            sendJson(exchange, 500, errorJson(OperationMessages.INTERNAL_SERVER_ERROR));
         }
     }
 
     private void handleHealth(HttpExchange exchange) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
             return;
         }
 
@@ -92,7 +131,7 @@ public final class RemoteApiServer {
             return;
         }
 
-        sendJson(exchange, 404, errorJson("printer_endpoint_not_found"));
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_ENDPOINT_NOT_FOUND));
     }
 
     private void handlePrintersRoot(HttpExchange exchange) throws IOException {
@@ -102,42 +141,44 @@ public final class RemoteApiServer {
         }
 
         if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+
+            PrinterRuntimeNode node = PrinterRuntimeNodeFactory.create(
+                    requiredJsonString(body, "id"),
+                    requiredJsonString(body, "displayName"),
+                    requiredJsonString(body, "portName"),
+                    requiredJsonString(body, "mode"),
+                    optionalJsonBoolean(body, "enabled", true)
+            );
+
+            boolean registered = false;
+
             try {
-                String body = readBody(exchange);
-
-                PrinterRuntimeNode node = PrinterRuntimeNodeFactory.create(
-                        requiredJsonString(body, "id"),
-                        requiredJsonString(body, "displayName"),
-                        requiredJsonString(body, "portName"),
-                        requiredJsonString(body, "mode"),
-                        optionalJsonBoolean(body, "enabled", true)
-                );
-
                 printerRegistry.register(node);
-                printerConfigurationStore.save(node);
+                registered = true;
 
-                if (node.enabled()) {
-                    monitoringScheduler.startMonitoring(node);
-                } else {
-                    stateCache.initializePrinter(node.id());
-                }
+                printerConfigurationStore.save(node);
+                monitoringScheduler.startMonitoring(node);
 
                 sendJson(exchange, 201, printerJson(node));
-            } catch (IllegalArgumentException exception) {
-                sendJson(exchange, 400, errorJson(exception.getMessage()));
+            } catch (Exception exception) {
+                if (registered) {
+                    rollbackRegister(node.id());
+                }
+                throw exception;
             }
 
             return;
         }
 
-        sendJson(exchange, 405, errorJson("method_not_allowed"));
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
     }
 
     private void handlePrinterById(HttpExchange exchange, String path) throws IOException {
         String remaining = path.substring("/printers/".length());
 
         if (remaining.isBlank()) {
-            sendJson(exchange, 404, errorJson("printer_not_found"));
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
             return;
         }
 
@@ -164,7 +205,7 @@ public final class RemoteApiServer {
             return;
         }
 
-        sendJson(exchange, 404, errorJson("printer_endpoint_not_found"));
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_ENDPOINT_NOT_FOUND));
     }
 
     private void handlePrinterResource(HttpExchange exchange, String printerId) throws IOException {
@@ -172,7 +213,7 @@ public final class RemoteApiServer {
             Optional<PrinterRuntimeNode> node = printerRegistry.findById(printerId);
 
             if (node.isEmpty()) {
-                sendJson(exchange, 404, errorJson("printer_not_found"));
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
                 return;
             }
 
@@ -181,126 +222,181 @@ public final class RemoteApiServer {
         }
 
         if ("PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+
+            PrinterRuntimeNode oldNode = printerRegistry.findById(printerId).orElse(null);
+
+            if (oldNode == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+                return;
+            }
+
+            boolean enabled = optionalJsonBoolean(body, "enabled", oldNode.enabled());
+
+            PrinterRuntimeNode newNode = PrinterRuntimeNodeFactory.create(
+                    printerId,
+                    requiredJsonString(body, "displayName"),
+                    requiredJsonString(body, "portName"),
+                    requiredJsonString(body, "mode"),
+                    enabled
+            );
+
+            monitoringScheduler.stopMonitoring(printerId);
+            printerRegistry.remove(printerId);
+
+            boolean restored = false;
+
             try {
-                String body = readBody(exchange);
-
-                PrinterRuntimeNode oldNode = printerRegistry.findById(printerId).orElse(null);
-
-                if (oldNode == null) {
-                    sendJson(exchange, 404, errorJson("printer_not_found"));
-                    return;
-                }
-
-                boolean enabled = optionalJsonBoolean(body, "enabled", oldNode.enabled());
-
-                PrinterRuntimeNode newNode = PrinterRuntimeNodeFactory.create(
-                        printerId,
-                        requiredJsonString(body, "displayName"),
-                        requiredJsonString(body, "portName"),
-                        requiredJsonString(body, "mode"),
-                        enabled
-                );
-
-                monitoringScheduler.stopMonitoring(printerId);
-                printerRegistry.remove(printerId);
-                printerConfigurationStore.delete(printerId);
-                printerRegistry.register(newNode);
                 printerConfigurationStore.save(newNode);
-
-                if (newNode.enabled()) {
-                    monitoringScheduler.startMonitoring(newNode);
-                } else {
-                    stateCache.initializePrinter(newNode.id());
-                }
+                printerRegistry.register(newNode);
+                monitoringScheduler.startMonitoring(newNode);
 
                 sendJson(exchange, 200, printerJson(newNode));
-            } catch (IllegalArgumentException exception) {
-                sendJson(exchange, 400, errorJson(exception.getMessage()));
+            } catch (Exception exception) {
+                try {
+                    printerRegistry.register(oldNode);
+                    monitoringScheduler.startMonitoring(oldNode);
+                    restored = true;
+                } catch (Exception rollbackException) {
+                    System.err.println(OperationMessages.failedToRestorePrinterAfterPut(
+                            printerId,
+                            safeMessage(rollbackException)
+                    ));
+                }
+
+                if (!restored) {
+                    stateCache.update(
+                            printerId,
+                            PrinterSnapshot.error(
+                                    PrinterState.ERROR,
+                                    null,
+                                    null,
+                                    null,
+                                    OperationMessages.printerUpdateRestoreFailed(printerId),
+                                    Instant.now()
+                            )
+                    );
+                }
+
+                throw exception;
             }
 
             return;
         }
 
-    if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
-        PrinterRuntimeNode removed = printerRegistry.remove(printerId);
-        monitoringScheduler.stopMonitoring(printerId);
-        stateCache.remove(printerId);
-        printerConfigurationStore.delete(printerId);
+        if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrinterRuntimeNode existingNode = printerRegistry.findById(printerId).orElse(null);
 
-        if (removed == null) {
-            sendJson(exchange, 404, errorJson("printer_not_found"));
+            if (existingNode == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+                return;
+            }
+
+            monitoringScheduler.stopMonitoring(printerId);
+            printerRegistry.remove(printerId);
+            stateCache.remove(printerId);
+
+            try {
+                printerConfigurationStore.delete(printerId);
+                existingNode.close();
+
+                sendJson(exchange, 200, "{\"deleted\":\"" + escapeJson(printerId) + "\"}");
+            } catch (Exception exception) {
+                try {
+                    printerRegistry.register(existingNode);
+                    monitoringScheduler.startMonitoring(existingNode);
+                } catch (Exception rollbackException) {
+                    System.err.println(OperationMessages.failedToRestorePrinterAfterDelete(
+                            printerId,
+                            safeMessage(rollbackException)
+                    ));
+                }
+                throw exception;
+            }
+
             return;
         }
 
-        sendJson(exchange, 200, "{\"deleted\":\"" + escapeJson(printerId) + "\"}");
-        return;
-    }
-
-        sendJson(exchange, 405, errorJson("method_not_allowed"));
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
     }
 
     private void handlePrinterStatus(HttpExchange exchange, String printerId) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
             return;
         }
 
         PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
 
         if (node == null) {
-            sendJson(exchange, 404, errorJson("printer_not_found"));
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
             return;
         }
 
         PrinterSnapshot snapshot = stateCache.findByPrinterId(printerId).orElse(null);
-
-        if (snapshot == null) {
-            sendJson(exchange, 200, snapshotJson(null));
-            return;
-        }
-
         sendJson(exchange, 200, snapshotJson(snapshot));
     }
 
     private void handlePrinterEnable(HttpExchange exchange, String printerId) throws IOException {
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
             return;
         }
 
         PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
 
         if (node == null) {
-            sendJson(exchange, 404, errorJson("printer_not_found"));
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
             return;
         }
 
-        node.enable();
-        printerConfigurationStore.enable(printerId);
-        monitoringScheduler.startMonitoring(node);
+        boolean previousEnabled = node.enabled();
 
-        sendJson(exchange, 200, printerJson(node));
+        try {
+            printerConfigurationStore.enable(printerId);
+            node.enable();
+            monitoringScheduler.startMonitoring(node);
+
+            sendJson(exchange, 200, printerJson(node));
+        } catch (Exception exception) {
+            if (!previousEnabled) {
+                node.disable();
+                monitoringScheduler.startMonitoring(node);
+            }
+            throw exception;
+        }
     }
 
     private void handlePrinterDisable(HttpExchange exchange, String printerId) throws IOException {
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
             return;
         }
 
         PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
 
         if (node == null) {
-            sendJson(exchange, 404, errorJson("printer_not_found"));
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
             return;
         }
 
-        node.disable();
-        printerConfigurationStore.disable(printerId);
-        monitoringScheduler.stopMonitoring(printerId);
-        node.close();
+        boolean previousEnabled = node.enabled();
 
-        sendJson(exchange, 200, printerJson(node));
+        try {
+            printerConfigurationStore.disable(printerId);
+            node.disable();
+            monitoringScheduler.stopMonitoring(printerId);
+            node.close();
+            monitoringScheduler.startMonitoring(node);
+
+            sendJson(exchange, 200, printerJson(node));
+        } catch (Exception exception) {
+            if (previousEnabled) {
+                node.enable();
+                monitoringScheduler.startMonitoring(node);
+            }
+            throw exception;
+        }
     }
 
     private String printersJson() {
@@ -405,7 +501,7 @@ public final class RemoteApiServer {
         String value = optionalJsonString(body, fieldName, null);
 
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank(fieldName));
         }
 
         return value.trim();
@@ -453,7 +549,7 @@ public final class RemoteApiServer {
 
     private void handleDashboard(HttpExchange exchange) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-            sendJson(exchange, 405, errorJson("method_not_allowed"));
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
             return;
         }
 
@@ -474,7 +570,7 @@ public final class RemoteApiServer {
             return;
         }
 
-        sendJson(exchange, 404, errorJson("dashboard_resource_not_found"));
+        sendJson(exchange, 404, errorJson(OperationMessages.DASHBOARD_RESOURCE_NOT_FOUND));
     }
 
     private void sendResource(
@@ -484,7 +580,7 @@ public final class RemoteApiServer {
     ) throws IOException {
         try (InputStream inputStream = RemoteApiServer.class.getResourceAsStream(resourcePath)) {
             if (inputStream == null) {
-                sendJson(exchange, 404, errorJson("resource_not_found: " + resourcePath));
+                sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(resourcePath)));
                 return;
             }
 
@@ -497,5 +593,34 @@ public final class RemoteApiServer {
                 outputStream.write(bytes);
             }
         }
+    }
+
+    private void rollbackRegister(String printerId) {
+        try {
+            monitoringScheduler.stopMonitoring(printerId);
+            printerRegistry.remove(printerId);
+            stateCache.remove(printerId);
+        } catch (Exception exception) {
+            System.err.println(OperationMessages.failedToRollbackPrinterRegistration(
+                    printerId,
+                    safeMessage(exception)
+            ));
+        }
+    }
+
+    private String safeMessage(Exception exception) {
+        if (exception == null) {
+            return OperationMessages.UNKNOWN_API_ERROR;
+        }
+
+        return OperationMessages.safeDetail(
+                exception.getMessage(),
+                OperationMessages.UNKNOWN_API_ERROR
+        );
+    }
+
+    @FunctionalInterface
+    private interface ExchangeHandler {
+        void handle(HttpExchange exchange) throws IOException;
     }
 }
