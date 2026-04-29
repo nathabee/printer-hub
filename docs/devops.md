@@ -1,236 +1,284 @@
-> **Project restructuring notice**
->
-> PrinterHub is currently being refactored from the `0.0.x` prototype line into the `0.1.x` local runtime architecture.
->
-> Some details in this document still describe the previous prototype state. The documentation will be cleaned up after the runtime architecture stabilizes.
->
-> Current source of truth: [`docs/roadmap.md`](roadmap.md)
-
-
-
 # DevOps Overview
 
-This document summarizes the current CI pipeline, its DevOps phase coverage, and the planned next steps.
+This document summarizes the current CI pipeline, the verification scope, and the remaining delivery work for PrinterHub `0.1.x`.
 
 Environment setup and Jenkins installation are described in:
 
-* `install.md`
+- `install.md`
 
-add  in it :
-sudo apt update
-sudo apt install sqlite3
 ---
 
-## Current Pipeline
+## Jenkins machine prerequisites
+
+The Jenkins host must provide the tools used by the pipeline:
+
+```bash
+sudo apt update
+sudo apt install openjdk-21-jdk
+sudo apt install maven
+sudo apt install sqlite3
+sudo apt install curl
+sudo apt install python3
+````
+
+Check:
+
+```bash id="2yx0qy"
+java -version
+javac -version
+mvn -version
+sqlite3 --version
+curl --version
+python3 --version
+```
+
+---
+
+## Current pipeline
 
 The Jenkins pipeline currently performs:
 
-```text
+```text id="svkouf"
 Checkout
-→ Build
-→ Test
-→ Integration verification
-→ Archive test reports
+-> Environment check
+-> Maven verify
+-> Local runtime smoke test
+-> Robustness smoke test
+-> Prepare release bundle
+-> Package release archive
+-> Optional GitHub release publication
+-> Archive reports and smoke artifacts
 ```
 
-Core command:
+Core verification command:
 
-```bash
+```bash id="44euow"
 mvn clean verify
 ```
 
-This performs:
+This covers:
 
 * compilation
-* unit tests
-* component tests
-* integration tests
+* unit and component verification
+* API verification
+* persistence verification
+* monitoring verification
+* serial and simulation non-regression tests
 * JaCoCo coverage generation
-* operator message report generation
 
 ---
 
-## DevOps Phase Coverage
+## Current DevOps phase coverage
 
-Current pipeline phase mapping:
-
-| DevOps Phase       | Status  | Notes                                  |
-| ------------------ | ------- | -------------------------------------- |
-| **Checkout**       | Done    | Source pulled from Git                 |
-| **Build**          | Done    | Java compilation via Maven             |
-| **Test**           | Done    | Unit + component tests                 |
-| **Integrate**      | Done    | Integration tests executed             |
-| **Package**        | Partial | JAR created but not handled explicitly |
-| **Release**        | Not yet | No release bundle                      |
-| **Deploy**         | Not yet | No runtime deployment                  |
-| **Verify runtime** | Not yet | No smoke execution                     |
+| DevOps Phase   | Status  | Notes                                                                              |
+| -------------- | ------- | ---------------------------------------------------------------------------------- |
+| Checkout       | Done    | Source pulled from GitHub                                                          |
+| Build          | Done    | Maven compile/package                                                              |
+| Test           | Done    | JUnit verification across runtime, monitoring, persistence, API, and serial layers |
+| Integrate      | Done    | Runtime components verified together                                               |
+| Package        | Done    | shaded jar and release archive produced                                            |
+| Runtime verify | Done    | Jenkins smoke lifecycle and robustness checks                                      |
+| Release        | Partial | optional GitHub release publishing exists                                          |
+| Deploy         | Not yet | no persistent staging or production deployment from Jenkins                        |
 
 Current classification:
 
-```text
-Continuous Integration (CI)
+```text id="emk9o5"
+Continuous Integration with release preparation
 ```
 
-Not yet:
+Not yet fully implemented:
 
-```text
-Continuous Delivery (CD)
+```text id="aqjf8x"
+continuous deployment
 ```
 
 ---
 
-## Generated Artifacts
+## What the pipeline verifies
 
-After a successful build:
+### Maven verification
 
-```text
-target/site/jacoco/index.html
+The `Verify` stage runs:
+
+```bash id="q1n91t"
+mvn -B -ntp clean verify
+```
+
+This produces:
+
+* compiled application
+* JUnit reports
+* JaCoCo coverage report
+* shaded runtime jar
+
+### Local runtime smoke test
+
+The normal lifecycle smoke stage verifies the public runtime/API surface:
+
+```text id="lmu21e"
+remove test database
+start runtime
+verify /health
+verify initial printer list
+add simulated printer
+verify monitoring updates status
+disable printer
+verify monitoring stops
+enable printer
+verify monitoring resumes
+update printer configuration
+delete printer
+inspect SQLite database
+restart runtime
+verify persisted printers reload
+```
+
+### Robustness smoke test
+
+The robustness stage verifies mixed healthy and failing printers together:
+
+```text id="lvsd03"
+good simulated printer
+sim-error printer
+sim-timeout printer
+sim-disconnected printer
+API remains responsive
+good printer continues updating
+bad printers report ERROR
+failure events are persisted with origin printer id
+database event noise stays bounded
+dashboard still loads
+```
+
+### HTTP robustness checks
+
+The pipeline also verifies controlled error responses:
+
+```text id="qgaqyj"
+invalid POST body -> 400
+unknown printer -> 404
+wrong method -> 405
+missing required field -> 400
+```
+
+---
+
+## Generated artifacts
+
+After a successful pipeline run, the archived artifacts include:
+
+```text id="v9e52c"
+target/surefire-reports/**
+target/site/jacoco/**
+target/runtime-smoke.log
+target/runtime-robustness.log
 target/operator-message-report.md
-target/surefire-reports/*.xml
+target/*.json
+target/*.txt
+release/**
+*.tar.gz
 ```
 
-These artifacts provide:
+These artifacts provide evidence for:
 
-* test validation evidence
-* coverage visibility
-* operator-facing message validation
-
----
-
-## What Is Already Covered
-
-The pipeline already includes:
-
-* automated build verification
-* multiple test levels
-* integration-level testing
+* test execution
+* runtime/API verification
+* persistence inspection
 * coverage reporting
-* operator-message validation
-* archived CI evidence
-
-This provides solid **CI validation**.
+* smoke scenario review
+* release bundle contents
 
 ---
 
-## Planned Next DevOps Steps
+## Release bundle contents
 
-### Step 1 — Explicit Packaging
+The release preparation stage collects runtime and verification outputs into a reproducible bundle.
 
-Goal:
+Typical contents:
 
-Treat the application output as a release artifact.
-
-Add:
-
-```text
-target/*.jar
-```
-
-to archived outputs.
-
----
-
-### Step 2 — Simulated Runtime Execution
-
-Goal:
-
-Verify runtime behavior in CI without hardware.
-
-Add:
-
-```bash
-mvn exec:java \
--Dexec.mainClass="printerhub.Main" \
--Dexec.args="SIM_PORT M105 3 100 sim"
-```
-
-This becomes:
-
-```text
-Smoke test stage
-```
-
----
-
-### Step 3 — Release Bundle Preparation
-
-Goal:
-
-Prepare a reproducible delivery package.
-
-Example structure:
-
-```text
+```text id="jlwmvq"
 release/
-├── printer-hub.jar
+├── printer-hub-<version>-all.jar
 ├── jacoco/
-├── operator-message-report.md
 ├── README.md
-└── test.md
+├── test.md
+├── devops.md
+├── roadmap.md
+├── version.md
+└── smoke/
 ```
 
-This supports:
+The smoke folder may include:
 
-* release validation
-* traceability
-* audit review
-
----
-
-### Step 4 — Optional Deployment Stage
-
-Future step:
-
-Run the packaged application in a controlled environment.
-
-Possible targets:
-
-* simulated runtime environment
-* container-based test environment
-* staging system
-
----
-
-## Target Pipeline Model
-
-After improvements:
-
-```text
-Checkout
-→ Build
-→ Test
-→ Integrate
-→ Package
-→ Simulated Deploy
-→ Smoke Verify
-→ Archive Release Bundle
-```
-
-Classification:
-
-```text
-Continuous Integration + Delivery Preparation
+```text id="wd2u5k"
+health.json
+printers-initial.json
+printer-created.json
+printer-after-enable.json
+printers-after-restart.json
+runtime-smoke.log
+runtime-robustness.log
+configured-printers.txt
+printer-snapshots.txt
+printer-events.txt
 ```
 
 ---
 
-## DevOps Maturity Summary
+## Operator-facing evidence
+
+The pipeline keeps an operator-facing report:
+
+```text id="hq8lgw"
+target/operator-message-report.md
+```
+
+This report is intended to summarize operationally relevant CI evidence such as:
+
+* runtime startup and shutdown
+* health and API behavior
+* monitoring failure scenarios
+* persistence-visible error evidence
+* robustness verification outcomes
+
+This continues the old `0.0.x` operator-message idea in the current `0.1.x` runtime form.
+
+---
+
+## Current maturity summary
 
 Current state:
 
-```text
-CI: Build + Test + Integration
+```text id="y1f6bj"
+CI with runtime smoke verification, robustness verification,
+coverage reporting, release bundling, and optional GitHub release publishing
 ```
 
-Next target:
+What is already solid:
 
-```text
-CI/CD: Build + Test + Package + Simulated Deploy
-```
+* centralized runtime/API verification
+* simulation-based CI without real hardware
+* persistence-backed smoke evidence
+* robustness validation under partial printer failure
+* release archive preparation
 
-Long-term direction:
+What is still future work:
 
-```text
-Full delivery-ready pipeline
-```
+* dedicated deployment stage
+* staging or production promotion flow
+* long-running runtime supervision outside CI
+* operational packaging/install flow beyond the current archive
+
+---
+
+## Practical note
+
+For normal branch verification, the pipeline is already strong enough to act as the quality gate for `0.1.x`.
+
+The remaining DevOps expansion is mainly about:
+
+* deployment automation
+* environment promotion
+* production operations
  

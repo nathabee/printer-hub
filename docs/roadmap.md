@@ -1032,7 +1032,7 @@ connection cleanup
 ```
 
 #### Step F — Jenkins Normal Lifecycle Smoke Test
-
+ 
 Restore Jenkins smoke verification using the public runtime/API surface.
 
 Lifecycle:

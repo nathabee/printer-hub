@@ -393,6 +393,332 @@ PY
             }
         }
 
+        stage('Robustness Smoke Test') {
+            steps {
+                sh '''
+                    set -eu
+
+                    API_PORT="${API_SMOKE_PORT:-18090}"
+                    ROBUST_PORT=$((API_PORT + 1))
+                    DB_FILE="printerhub-robustness-ci.db"
+
+                    mkdir -p target
+                    rm -f "${DB_FILE}"
+
+                    start_runtime() {
+                      echo "Starting PrinterHub robustness runtime on port ${ROBUST_PORT}"
+                      echo "Using database file ${DB_FILE}"
+
+                      mvn -B -ntp exec:java \
+                        -Dexec.mainClass="printerhub.Main" \
+                        -Dprinterhub.api.port="${ROBUST_PORT}" \
+                        -Dprinterhub.monitoring.intervalSeconds=1 \
+                        -Dprinterhub.databaseFile="${DB_FILE}" \
+                        > target/runtime-robustness.log 2>&1 &
+
+                      APP_PID=$!
+                      export APP_PID
+
+                      for i in $(seq 1 30); do
+                        if curl -fsS "http://localhost:${ROBUST_PORT}/health" >/dev/null; then
+                          return 0
+                        fi
+                        sleep 1
+                      done
+
+                      echo "Robustness runtime did not become healthy in time"
+                      cat target/runtime-robustness.log || true
+                      return 1
+                    }
+
+                    stop_runtime() {
+                      if [ -n "${APP_PID:-}" ]; then
+                        kill "${APP_PID}" >/dev/null 2>&1 || true
+                        wait "${APP_PID}" >/dev/null 2>&1 || true
+                        unset APP_PID
+                      fi
+                    }
+
+                    cleanup() {
+                      stop_runtime
+                    }
+                    trap cleanup EXIT
+
+                    json_field() {
+                      FILE_PATH="$1"
+                      FIELD_NAME="$2"
+                      python3 - "$FILE_PATH" "$FIELD_NAME" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+field = sys.argv[2]
+
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+value = data
+for part in field.split("."):
+    value = value[part]
+
+if value is None:
+    print("null")
+else:
+    print(value)
+PY
+                    }
+
+                    start_runtime
+
+                    curl -fsS "http://localhost:${ROBUST_PORT}/health" \
+                      > target/robust-health-initial.json
+
+                    curl -fsS -X POST "http://localhost:${ROBUST_PORT}/printers" \
+                      -H "Content-Type: application/json" \
+                      -d '{
+                        "id": "printer-good",
+                        "displayName": "CI Good Printer",
+                        "portName": "SIM_PORT_GOOD",
+                        "mode": "simulated",
+                        "enabled": true
+                      }' > target/robust-printer-good-created.json
+
+                    curl -fsS -X POST "http://localhost:${ROBUST_PORT}/printers" \
+                      -H "Content-Type: application/json" \
+                      -d '{
+                        "id": "printer-error",
+                        "displayName": "CI Error Printer",
+                        "portName": "SIM_PORT_ERROR",
+                        "mode": "sim-error",
+                        "enabled": true
+                      }' > target/robust-printer-error-created.json
+
+                    curl -fsS -X POST "http://localhost:${ROBUST_PORT}/printers" \
+                      -H "Content-Type: application/json" \
+                      -d '{
+                        "id": "printer-timeout",
+                        "displayName": "CI Timeout Printer",
+                        "portName": "SIM_PORT_TIMEOUT",
+                        "mode": "sim-timeout",
+                        "enabled": true
+                      }' > target/robust-printer-timeout-created.json
+
+                    curl -fsS -X POST "http://localhost:${ROBUST_PORT}/printers" \
+                      -H "Content-Type: application/json" \
+                      -d '{
+                        "id": "printer-disconnected",
+                        "displayName": "CI Disconnected Printer",
+                        "portName": "SIM_PORT_DISCONNECTED",
+                        "mode": "sim-disconnected",
+                        "enabled": true
+                      }' > target/robust-printer-disconnected-created.json
+
+                    curl -fsS "http://localhost:${ROBUST_PORT}/printers" \
+                      > target/robust-printers-after-create.json
+
+                    sleep 4
+
+                    curl -fsS "http://localhost:${ROBUST_PORT}/health" \
+                      > target/robust-health-after-failures.json
+
+                    curl -fsS "http://localhost:${ROBUST_PORT}/printers" \
+                      > target/robust-printers-after-monitoring.json
+
+                    curl -fsS "http://localhost:${ROBUST_PORT}/printers/printer-good" \
+                      > target/robust-printer-good.json
+                    curl -fsS "http://localhost:${ROBUST_PORT}/printers/printer-error" \
+                      > target/robust-printer-error.json
+                    curl -fsS "http://localhost:${ROBUST_PORT}/printers/printer-timeout" \
+                      > target/robust-printer-timeout.json
+                    curl -fsS "http://localhost:${ROBUST_PORT}/printers/printer-disconnected" \
+                      > target/robust-printer-disconnected.json
+
+                    grep -q '"status":"ok"' target/robust-health-initial.json
+                    grep -q '"status":"ok"' target/robust-health-after-failures.json
+
+                    grep -q '"printer-good"' target/robust-printers-after-monitoring.json
+                    grep -q '"printer-error"' target/robust-printers-after-monitoring.json
+                    grep -q '"printer-timeout"' target/robust-printers-after-monitoring.json
+                    grep -q '"printer-disconnected"' target/robust-printers-after-monitoring.json
+
+                    grep -q '"state":"IDLE"' target/robust-printer-good.json
+                    grep -q '"hotendTemperature":21.80' target/robust-printer-good.json
+                    grep -q '"bedTemperature":21.52' target/robust-printer-good.json
+
+                    grep -q '"state":"ERROR"' target/robust-printer-error.json
+                    grep -q '"state":"ERROR"' target/robust-printer-timeout.json
+                    grep -q '"state":"ERROR"' target/robust-printer-disconnected.json
+
+                    json_field target/robust-printer-good.json updatedAt \
+                      > target/robust-good-updated-before.txt
+
+                    sleep 3
+
+                    curl -fsS "http://localhost:${ROBUST_PORT}/health" \
+                      > target/robust-health-during-runtime.json
+                    curl -fsS "http://localhost:${ROBUST_PORT}/printers/printer-good" \
+                      > target/robust-printer-good-later.json
+
+                    grep -q '"status":"ok"' target/robust-health-during-runtime.json
+                    grep -q '"state":"IDLE"' target/robust-printer-good-later.json
+
+                    json_field target/robust-printer-good-later.json updatedAt \
+                      > target/robust-good-updated-after.txt
+
+                    if cmp -s target/robust-good-updated-before.txt target/robust-good-updated-after.txt; then
+                      echo "Good printer did not continue updating while bad printers were failing"
+                      exit 1
+                    fi
+
+                    curl -fsS "http://localhost:${ROBUST_PORT}/dashboard" \
+                      > target/robust-dashboard.html
+                    curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/dashboard.css" \
+                      > target/robust-dashboard.css
+                    curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/dashboard.js" \
+                      > target/robust-dashboard.js
+
+                    grep -q 'PrinterHub Dashboard' target/robust-dashboard.html
+                    grep -q 'printer-grid' target/robust-dashboard.css
+                    grep -q 'loadDashboard' target/robust-dashboard.js
+
+                    HTTP_400_BODY=$(mktemp)
+                    HTTP_404_BODY=$(mktemp)
+                    HTTP_405_BODY=$(mktemp)
+                    HTTP_400_MISSING_BODY=$(mktemp)
+
+                    HTTP_400_STATUS=$(curl -sS -o "${HTTP_400_BODY}" -w "%{http_code}" \
+                      -X POST "http://localhost:${ROBUST_PORT}/printers" \
+                      -H "Content-Type: application/json" \
+                      -d '{"id":"broken","displayName":"Broken","portName":"SIM_PORT","mode":"sim')
+
+                    HTTP_404_STATUS=$(curl -sS -o "${HTTP_404_BODY}" -w "%{http_code}" \
+                      "http://localhost:${ROBUST_PORT}/printers/unknown-printer")
+
+                    HTTP_405_STATUS=$(curl -sS -o "${HTTP_405_BODY}" -w "%{http_code}" \
+                      -X POST "http://localhost:${ROBUST_PORT}/health")
+
+                    HTTP_400_MISSING_STATUS=$(curl -sS -o "${HTTP_400_MISSING_BODY}" -w "%{http_code}" \
+                      -X POST "http://localhost:${ROBUST_PORT}/printers" \
+                      -H "Content-Type: application/json" \
+                      -d '{"id":"missing-fields","portName":"SIM_PORT","mode":"sim"}')
+
+                    echo "${HTTP_400_STATUS}" > target/robust-http-400-status.txt
+                    echo "${HTTP_404_STATUS}" > target/robust-http-404-status.txt
+                    echo "${HTTP_405_STATUS}" > target/robust-http-405-status.txt
+                    echo "${HTTP_400_MISSING_STATUS}" > target/robust-http-400-missing-status.txt
+
+                    cp "${HTTP_400_BODY}" target/robust-http-400-body.json
+                    cp "${HTTP_404_BODY}" target/robust-http-404-body.json
+                    cp "${HTTP_405_BODY}" target/robust-http-405-body.json
+                    cp "${HTTP_400_MISSING_BODY}" target/robust-http-400-missing-body.json
+
+                    test "${HTTP_400_STATUS}" = "400"
+                    test "${HTTP_404_STATUS}" = "404"
+                    test "${HTTP_405_STATUS}" = "405"
+                    test "${HTTP_400_MISSING_STATUS}" = "400"
+
+                    grep -q '"error"' target/robust-http-400-body.json
+                    grep -q '"printer_not_found"' target/robust-http-404-body.json
+                    grep -q '"method_not_allowed"' target/robust-http-405-body.json
+                    grep -q '"displayName must not be blank"' target/robust-http-400-missing-body.json
+
+                    stop_runtime
+
+                    sqlite3 "${DB_FILE}" '.tables' > target/robust-db-tables.txt
+                    sqlite3 "${DB_FILE}" 'select id,name,port_name,mode,enabled from configured_printers order by id;' \
+                      > target/robust-configured-printers.txt
+                    sqlite3 "${DB_FILE}" 'select printer_id,state,created_at from printer_snapshots order by id desc limit 50;' \
+                      > target/robust-printer-snapshots.txt
+                    sqlite3 "${DB_FILE}" 'select printer_id,event_type,message,created_at from printer_events order by id desc limit 50;' \
+                      > target/robust-printer-events.txt
+                    sqlite3 "${DB_FILE}" 'select printer_id,count(*) from printer_events group by printer_id order by printer_id;' \
+                      > target/robust-printer-event-counts.txt
+
+                    grep -q 'printer-good' target/robust-configured-printers.txt
+                    grep -q 'printer-error' target/robust-configured-printers.txt
+                    grep -q 'printer-timeout' target/robust-configured-printers.txt
+                    grep -q 'printer-disconnected' target/robust-configured-printers.txt
+
+                    grep -q 'printer-good' target/robust-printer-snapshots.txt
+                    grep -q 'printer-error' target/robust-printer-snapshots.txt
+                    grep -q 'printer-timeout' target/robust-printer-snapshots.txt
+                    grep -q 'printer-disconnected' target/robust-printer-snapshots.txt
+
+                    grep -q 'printer-error' target/robust-printer-events.txt
+                    grep -q 'printer-timeout' target/robust-printer-events.txt
+                    grep -q 'printer-disconnected' target/robust-printer-events.txt
+
+                    grep -q 'PRINTER_ERROR\\|PRINTER_TIMEOUT\\|PRINTER_DISCONNECTED' target/robust-printer-events.txt
+
+                    python3 - <<'PY'
+from pathlib import Path
+counts = {}
+for line in Path("target/robust-printer-event-counts.txt").read_text(encoding="utf-8").splitlines():
+    if not line.strip():
+        continue
+    printer_id, count = line.split("|")
+    counts[printer_id] = int(count)
+
+for printer_id in ("printer-error", "printer-timeout", "printer-disconnected"):
+    if printer_id not in counts:
+        raise SystemExit(f"missing event count for {printer_id}")
+    if counts[printer_id] > 10:
+        raise SystemExit(f"too many persisted events for {printer_id}: {counts[printer_id]}")
+PY
+
+                    cat > target/operator-message-report.md <<'EOF'
+# Operator message report
+
+## Scenario: normal lifecycle smoke
+The normal lifecycle smoke test verified startup, health, printer creation,
+monitoring updates, disable/enable behavior, update, delete, persistence
+inspection, and restart reload.
+
+## Scenario: robustness smoke
+The robustness smoke test verified that one healthy printer remained operational
+while sim-error, sim-timeout, and sim-disconnected printers failed independently.
+
+Observed operational evidence:
+- API remained responsive through /health and /printers during mixed failures.
+- Good printer remained IDLE and continued updating updatedAt.
+- Bad printers transitioned to ERROR.
+- Failure events were persisted with origin printer ids.
+- Event growth stayed bounded during repeated monitoring cycles.
+- Dashboard resources remained available.
+- HTTP robustness responses remained controlled:
+  - invalid POST body -> 400
+  - unknown printer -> 404
+  - wrong method -> 405
+  - missing required field -> 400
+EOF
+
+                    echo "Robustness health initial:"
+                    cat target/robust-health-initial.json
+
+                    echo
+                    echo "Robustness printers after monitoring:"
+                    cat target/robust-printers-after-monitoring.json
+
+                    echo
+                    echo "Good printer later:"
+                    cat target/robust-printer-good-later.json
+
+                    echo
+                    echo "Robustness event counts:"
+                    cat target/robust-printer-event-counts.txt
+
+                    echo
+                    echo "Robustness printer events:"
+                    cat target/robust-printer-events.txt
+
+                    echo
+                    echo "Robustness runtime log:"
+                    cat target/runtime-robustness.log
+                '''
+            }
+        }
+
+
         stage('Prepare Release Bundle') {
             when {
                 expression {
@@ -597,6 +923,46 @@ PY
             archiveArtifacts artifacts: 'release/**', allowEmptyArchive: true
             archiveArtifacts artifacts: '*.tar.gz', allowEmptyArchive: true
             archiveArtifacts artifacts: 'github-release-response.json', allowEmptyArchive: true
+
+                        archiveArtifacts artifacts: 'target/runtime-robustness.log', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'target/robust-health-initial.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-health-after-failures.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-health-during-runtime.json', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'target/robust-printer-good-created.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-error-created.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-timeout-created.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-disconnected-created.json', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'target/robust-printers-after-create.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printers-after-monitoring.json', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'target/robust-printer-good.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-error.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-timeout.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-disconnected.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-good-later.json', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'target/robust-dashboard.html', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-dashboard.css', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-dashboard.js', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'target/robust-http-400-status.txt', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-http-404-status.txt', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-http-405-status.txt', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-http-400-missing-status.txt', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'target/robust-http-400-body.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-http-404-body.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-http-405-body.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-http-400-missing-body.json', allowEmptyArchive: true
+
+            archiveArtifacts artifacts: 'target/robust-db-tables.txt', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-configured-printers.txt', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-snapshots.txt', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-events.txt', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-printer-event-counts.txt', allowEmptyArchive: true
         }
 
         success {

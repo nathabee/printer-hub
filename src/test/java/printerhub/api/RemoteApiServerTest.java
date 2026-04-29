@@ -20,6 +20,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.time.Instant;
+import printerhub.OperatorMessageReportWriter;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -438,7 +439,6 @@ class RemoteApiServerTest {
         }
     }
 
-
     @Test
     void malformedJsonReturns400() throws Exception {
         TestContext context = createContext("printers-malformed-json.db");
@@ -503,6 +503,29 @@ class RemoteApiServerTest {
         } finally {
             context.close();
         }
+    }
+
+    @Test
+    void writesOperatorMessageReportScenario() throws Exception {
+        OperatorMessageReportWriter.appendScenario(
+                "remote api verification summary",
+                "Remote API unit verification covered health, printer CRUD, enable/disable, dashboard access, and controlled error handling.",
+                "[PrinterHub] API server started on port ...\n"
+                        + "[PrinterHub] API server stopped\n"
+                        + "[PrinterHub] API operation failed: Failed to save printer configuration",
+                "GET /health -> 200\n"
+                        + "GET /printers -> 200\n"
+                        + "POST /printers -> 201\n"
+                        + "PUT /printers/{id} -> 200\n"
+                        + "DELETE /printers/{id} -> 200\n"
+                        + "invalid POST -> 400\n"
+                        + "unknown printer -> 404\n"
+                        + "wrong method -> 405\n"
+                        + "persistence failure -> 500",
+                "Printer configuration persistence was exercised through create/update/delete flows.\n"
+                        + "Controlled persistence failure path was also verified.");
+
+        assertTrue(java.nio.file.Files.exists(java.nio.file.Path.of("target", "operator-message-report.md")));
     }
 
     private TestContext createContext(String dbName) throws Exception {
@@ -593,4 +616,5 @@ class RemoteApiServerTest {
             }
         }
     }
+
 }
