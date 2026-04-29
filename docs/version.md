@@ -12,6 +12,7 @@ see ROADMAP.md
 ### 0.1.x — Local Farm Runtime Architecture
 
 
+- 0.1.4 Step GH — Jenkins and Coverage and Release Readiness
 - 0.1.4 Step F — Jenkins Normal Lifecycle Smoke Test
 - 0.1.4 Step E — Serial and Simulation Non-Regression Tests
 - 0.1.4 Step D — API and Dashboard Unit Tests
