@@ -1182,7 +1182,7 @@ Expected result:
 
 ### 0.2.1 — Manual Command Execution API
 
-status: planned
+status: done
 
 Goals:
 
