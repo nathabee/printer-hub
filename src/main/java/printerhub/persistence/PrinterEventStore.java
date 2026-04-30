@@ -1,10 +1,15 @@
 package printerhub.persistence;
 
 import printerhub.OperationMessages;
+import printerhub.config.RuntimeDefaults;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class PrinterEventStore {
 
@@ -53,5 +58,56 @@ public final class PrinterEventStore {
                 eventType,
                 message
         ));
+    }
+
+    public List<PrinterEvent> findRecentByPrinterId(String printerId, int limit) {
+        if (printerId == null || printerId.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
+        }
+
+        int safeLimit = limit <= 0
+                ? RuntimeDefaults.DEFAULT_RECENT_SNAPSHOT_LIMIT
+                : limit;
+
+        String sql = """
+                SELECT
+                    id,
+                    printer_id,
+                    job_id,
+                    event_type,
+                    message,
+                    created_at
+                FROM printer_events
+                WHERE printer_id = ?
+                ORDER BY id DESC
+                LIMIT ?;
+                """;
+
+        List<PrinterEvent> events = new ArrayList<>();
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, printerId.trim());
+            statement.setInt(2, safeLimit);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    events.add(new PrinterEvent(
+                            resultSet.getLong("id"),
+                            resultSet.getString("printer_id"),
+                            resultSet.getString("job_id"),
+                            resultSet.getString("event_type"),
+                            resultSet.getString("message"),
+                            Instant.parse(resultSet.getString("created_at"))
+                    ));
+                }
+            }
+
+            return events;
+        } catch (SQLException exception) {
+            throw new IllegalStateException(OperationMessages.FAILED_TO_LOAD_PRINTER_EVENTS, exception);
+        }
     }
 }

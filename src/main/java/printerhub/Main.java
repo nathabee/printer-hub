@@ -1,11 +1,13 @@
 package printerhub;
 
 import printerhub.api.RemoteApiServer;
+import printerhub.command.PrinterCommandService;
 import printerhub.config.RuntimeDefaults;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrinterConfigurationStore;
+import printerhub.persistence.PrinterEventStore;
 import printerhub.runtime.PrinterHubRuntime;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeStateCache;
@@ -29,6 +31,8 @@ public final class Main {
             DatabaseInitializer databaseInitializer = new DatabaseInitializer();
             PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
             MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+            PrinterEventStore printerEventStore = new PrinterEventStore();
+            PrinterCommandService printerCommandService = new PrinterCommandService(printerEventStore);
 
             PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                     printerRegistry,
@@ -41,7 +45,9 @@ public final class Main {
                     stateCache,
                     monitoringScheduler,
                     printerConfigurationStore,
-                    monitoringRulesStore
+                    monitoringRulesStore,
+                    printerEventStore,
+                    printerCommandService
             );
 
             PrinterHubRuntime runtime = new PrinterHubRuntime(

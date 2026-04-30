@@ -9,6 +9,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Instant;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -83,6 +84,67 @@ class PrinterEventStoreTest {
     }
 
     @Test
+    void findRecentByPrinterIdReturnsPrinterEventsInDescendingOrder() throws Exception {
+        useDatabase("event-find-recent.db");
+
+        PrinterEventStore store = new PrinterEventStore();
+        store.save(new PrinterEvent(
+                0L,
+                "printer-1",
+                null,
+                "COMMAND_EXECUTED",
+                "first",
+                Instant.parse("2026-04-29T10:00:00Z")
+        ));
+        store.save(new PrinterEvent(
+                0L,
+                "printer-1",
+                null,
+                "COMMAND_FAILED",
+                "second",
+                Instant.parse("2026-04-29T10:01:00Z")
+        ));
+        store.save(new PrinterEvent(
+                0L,
+                "printer-2",
+                null,
+                "PRINTER_ERROR",
+                "other printer",
+                Instant.parse("2026-04-29T10:02:00Z")
+        ));
+
+        List<PrinterEvent> events = store.findRecentByPrinterId("printer-1", 10);
+
+        assertEquals(2, events.size());
+        assertEquals("COMMAND_FAILED", events.get(0).eventType());
+        assertEquals("second", events.get(0).message());
+        assertEquals("COMMAND_EXECUTED", events.get(1).eventType());
+        assertEquals("first", events.get(1).message());
+    }
+
+    @Test
+    void findRecentByPrinterIdUsesDefaultLimitWhenNonPositive() throws Exception {
+        useDatabase("event-default-limit.db");
+
+        PrinterEventStore store = new PrinterEventStore();
+
+        for (int i = 0; i < 25; i++) {
+            store.save(new PrinterEvent(
+                    0L,
+                    "printer-1",
+                    null,
+                    "COMMAND_EXECUTED",
+                    "event-" + i,
+                    Instant.parse("2026-04-29T10:00:00Z").plusSeconds(i)
+            ));
+        }
+
+        List<PrinterEvent> events = store.findRecentByPrinterId("printer-1", 0);
+
+        assertEquals(20, events.size());
+    }
+
+    @Test
     void saveFailsForNullEvent() {
         PrinterEventStore store = new PrinterEventStore();
 
@@ -92,6 +154,18 @@ class PrinterEventStoreTest {
         );
 
         assertEquals("printer event must not be null", exception.getMessage());
+    }
+
+    @Test
+    void findRecentByPrinterIdFailsForBlankPrinterId() {
+        PrinterEventStore store = new PrinterEventStore();
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> store.findRecentByPrinterId("   ", 10)
+        );
+
+        assertEquals("printerId must not be blank", exception.getMessage());
     }
 
     @Test

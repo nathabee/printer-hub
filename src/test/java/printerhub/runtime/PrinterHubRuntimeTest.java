@@ -4,10 +4,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import printerhub.api.RemoteApiServer;
+import printerhub.command.PrinterCommandService;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrinterConfigurationStore;
+import printerhub.persistence.PrinterEventStore;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -189,7 +191,9 @@ class PrinterHubRuntimeTest {
                 stateCache,
                 monitoringScheduler,
                 configurationStore,
-                monitoringRulesStore
+                monitoringRulesStore,
+                new PrinterEventStore(),
+                new PrinterCommandService(new PrinterEventStore())
         );
 
         PrinterHubRuntime runtime = new PrinterHubRuntime(
@@ -241,7 +245,9 @@ class PrinterHubRuntimeTest {
                 stateCache,
                 monitoringScheduler,
                 configurationStore,
-                monitoringRulesStore
+                monitoringRulesStore,
+                new PrinterEventStore(),
+                new PrinterCommandService(new PrinterEventStore())
         );
 
         PrinterHubRuntime runtime = new PrinterHubRuntime(
@@ -270,7 +276,9 @@ class PrinterHubRuntimeTest {
                 stateCache,
                 monitoringScheduler,
                 new PrinterConfigurationStore(),
-                new MonitoringRulesStore()
+                new MonitoringRulesStore(),
+                new PrinterEventStore(),
+                new PrinterCommandService(new PrinterEventStore())
         );
     }
 

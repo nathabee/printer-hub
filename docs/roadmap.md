@@ -1178,6 +1178,7 @@ Expected result:
 * operators can immediately see whether a printer is intentionally disabled or operationally failing
 
 ---
+ 
 
 ### 0.2.1 — Manual Command Execution API
 
@@ -1191,6 +1192,7 @@ Goals:
 * persist command-related events
 * support diagnostics, maintenance, and operator intervention
 * start with a controlled predefined command set, not unrestricted raw command entry
+* support single operator-triggered actions from the dashboard
 
 Initial command scope:
 
@@ -1226,6 +1228,9 @@ Dashboard expectations:
 ```text
 predefined command buttons for safe read/info commands
 small parameter forms for controlled commands such as target temperatures
+single operator-triggered actions directly from the printer card
+command result feedback visible in the dashboard
+recent printer events visible for diagnostics
 no direct free-text command box in the first step
 ```
 
@@ -1234,6 +1239,7 @@ Expected result:
 * controlled operator commands become possible
 * diagnostics are no longer limited to background monitoring
 * monitoring and command execution remain separated internally
+* dashboard-based single-command operator actions are available
 * command handling creates the basis for later job execution services
 
 ---
@@ -1263,6 +1269,15 @@ FAILED
 CANCELLED
 ```
 
+Job model note:
+
+```text
+A job is a first-class runtime object with its own lifecycle.
+A job may contain one or more printer commands executed in sequence.
+Individual commands are execution steps of the job, not separate lifecycle objects.
+Manual commands from 0.2.1 remain operator-triggered actions outside the job lifecycle.
+```
+
 Expected result:
 
 * jobs become a first-class runtime concept
@@ -1272,6 +1287,7 @@ Expected result:
 
 ---
 
+ 
 ### 0.2.3 — Local Audit and History Views
 
 status: planned
