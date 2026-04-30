@@ -4,7 +4,7 @@ This document summarizes the current CI pipeline, the verification scope, and th
 
 Environment setup and Jenkins installation are described in:
 
-- `install.md`
+* `install.md`
 
 ---
 
@@ -19,11 +19,11 @@ sudo apt install maven
 sudo apt install sqlite3
 sudo apt install curl
 sudo apt install python3
-````
+```
 
 Check:
 
-```bash id="2yx0qy"
+```bash
 java -version
 javac -version
 mvn -version
@@ -38,7 +38,7 @@ python3 --version
 
 The Jenkins pipeline currently performs:
 
-```text id="svkouf"
+```text
 Checkout
 -> Environment check
 -> Maven verify
@@ -52,7 +52,7 @@ Checkout
 
 Core verification command:
 
-```bash id="44euow"
+```bash
 mvn clean verify
 ```
 
@@ -78,18 +78,18 @@ This covers:
 | Integrate      | Done    | Runtime components verified together                                               |
 | Package        | Done    | shaded jar and release archive produced                                            |
 | Runtime verify | Done    | Jenkins smoke lifecycle and robustness checks                                      |
-| Release        | Partial | optional GitHub release publishing exists                                          |
+| Release        | Partial | optional GitHub release publication exists                                         |
 | Deploy         | Not yet | no persistent staging or production deployment from Jenkins                        |
 
 Current classification:
 
-```text id="emk9o5"
+```text
 Continuous Integration with release preparation
 ```
 
 Not yet fully implemented:
 
-```text id="aqjf8x"
+```text
 continuous deployment
 ```
 
@@ -101,7 +101,7 @@ continuous deployment
 
 The `Verify` stage runs:
 
-```bash id="q1n91t"
+```bash
 mvn -B -ntp clean verify
 ```
 
@@ -116,7 +116,7 @@ This produces:
 
 The normal lifecycle smoke stage verifies the public runtime/API surface:
 
-```text id="lmu21e"
+```text
 remove test database
 start runtime
 verify /health
@@ -138,7 +138,7 @@ verify persisted printers reload
 
 The robustness stage verifies mixed healthy and failing printers together:
 
-```text id="lvsd03"
+```text
 good simulated printer
 sim-error printer
 sim-timeout printer
@@ -155,7 +155,7 @@ dashboard still loads
 
 The pipeline also verifies controlled error responses:
 
-```text id="qgaqyj"
+```text
 invalid POST body -> 400
 unknown printer -> 404
 wrong method -> 405
@@ -168,7 +168,7 @@ missing required field -> 400
 
 After a successful pipeline run, the archived artifacts include:
 
-```text id="v9e52c"
+```text
 target/surefire-reports/**
 target/site/jacoco/**
 target/runtime-smoke.log
@@ -197,7 +197,7 @@ The release preparation stage collects runtime and verification outputs into a r
 
 Typical contents:
 
-```text id="jlwmvq"
+```text
 release/
 ├── printer-hub-<version>-all.jar
 ├── jacoco/
@@ -211,7 +211,7 @@ release/
 
 The smoke folder may include:
 
-```text id="wd2u5k"
+```text
 health.json
 printers-initial.json
 printer-created.json
@@ -230,11 +230,11 @@ printer-events.txt
 
 The pipeline keeps an operator-facing report:
 
-```text id="hq8lgw"
+```text
 target/operator-message-report.md
 ```
 
-This report is intended to summarize operationally relevant CI evidence such as:
+This report summarizes operationally relevant CI evidence such as:
 
 * runtime startup and shutdown
 * health and API behavior
@@ -246,39 +246,95 @@ This continues the old `0.0.x` operator-message idea in the current `0.1.x` runt
 
 ---
 
-## Current maturity summary
+## Release and branch workflow
 
-Current state:
+PrinterHub uses two GitHub branches:
 
-```text id="y1f6bj"
-CI with runtime smoke verification, robustness verification,
-coverage reporting, release bundling, and optional GitHub release publishing
+* `develop` = current development
+* `main` = approved production branch
+
+A release is prepared from `develop` and marked with a tested tag such as:
+
+```text
+0.1.16
 ```
 
-What is already solid:
+Later, `main` is aligned to that exact tag.
 
-* centralized runtime/API verification
-* simulation-based CI without real hardware
-* persistence-backed smoke evidence
-* robustness validation under partial printer failure
-* release archive preparation
+This allows `develop` to move forward independently while `main` stays on the approved release.
 
-What is still future work:
+Important rule:
 
-* dedicated deployment stage
-* staging or production promotion flow
-* long-running runtime supervision outside CI
-* operational packaging/install flow beyond the current archive
+```text
+If production must match a tested release, reset main to the tag, not to origin/develop.
+```
 
----
+### 1. On local `develop`: prepare and push the release candidate
 
-## Practical note
+```bash
+git checkout develop
+git add .
+git status
+git commit -m "0.1.16 docs update"
+git push origin develop
+```
 
-For normal branch verification, the pipeline is already strong enough to act as the quality gate for `0.1.x`.
+If Jenkins creates the release tag, stop here and let Jenkins publish the release and tag `0.1.16`.
 
-The remaining DevOps expansion is mainly about:
+If the tag is created manually instead, use:
 
-* deployment automation
-* environment promotion
-* production operations
- 
+```bash
+git tag 0.1.16
+git push origin 0.1.16
+```
+
+### 2. Continue development on `develop`
+
+After the release tag exists, `develop` may continue with new unfinished work.
+
+That is valid.
+
+Example:
+
+```bash
+git checkout develop
+git add .
+git commit -m "Start 0.1.17 work"
+git push origin develop
+```
+
+Now:
+
+* `0.1.16` still points to the tested release commit
+* `develop` may already be ahead
+* `main` is still unchanged until promotion is done
+
+### 3. Later: promote `main` to the tested tag
+
+From a local repository where branch switching is possible:
+
+```bash
+git fetch origin --tags
+git checkout main
+git reset --hard 0.1.16
+git push --force-with-lease origin main
+```
+
+This aligns `main` to the tested release tag.
+
+It does not use `origin/develop`.
+
+### 4. Update the separate local `main` folder
+
+If a second local clone or folder is used for the production branch:
+
+```bash
+cd ~/coding/github/printer-hub/main
+git fetch origin --tags
+git checkout main
+git reset --hard origin/main
+```
+
+This updates the local production folder to the current remote `main`.
+
+--- 

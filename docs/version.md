@@ -12,6 +12,8 @@ see ROADMAP.md
 ### 0.1.x — Local Farm Runtime Architecture
 
 
+- 0.1.6 minor doc updates README
+- 0.1.5 final version Local Farm Runtime Architecture
 - 0.1.4 Step GH — Jenkins and Coverage and Release Readiness
 - 0.1.4 Step F — Jenkins Normal Lifecycle Smoke Test
 - 0.1.4 Step E — Serial and Simulation Non-Regression Tests
