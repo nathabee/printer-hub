@@ -19,4 +19,5 @@ printerhub.db
 
 # development files
 chat.txt
+chat.sh
 old_src

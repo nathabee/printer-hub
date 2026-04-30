@@ -146,14 +146,14 @@ public final class PrinterSnapshotStore {
                 PrinterState lastState = parseStoredState(resultSet.getString("state"));
                 Instant lastCreatedAt = parseStoredInstant(resultSet.getString("created_at"));
 
-                if (monitoringRules.snapshotOnStateChange() && lastState != snapshot.state()) {
+                if (lastState != snapshot.state()) {
                     return true;
                 }
 
                 if (temperatureDifferenceExceeded(
                         resultSet,
                         snapshot,
-                        monitoringRules.temperatureThreshold()
+                        monitoringRules.temperatureDeltaThreshold()
                 )) {
                     return true;
                 }
@@ -163,7 +163,7 @@ public final class PrinterSnapshotStore {
                         snapshot.updatedAt()
                 ).toSeconds();
 
-                return secondsSinceLastSnapshot >= monitoringRules.minIntervalSeconds();
+                return secondsSinceLastSnapshot >= monitoringRules.snapshotMinimumIntervalSeconds();
             }
         } catch (SQLException exception) {
             throw new IllegalStateException(OperationMessages.FAILED_TO_CHECK_LATEST_PRINTER_SNAPSHOT, exception);

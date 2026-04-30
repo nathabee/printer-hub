@@ -12,15 +12,23 @@
       <div>
         <p class="eyebrow">PrinterHub</p>
         <h1>Printer Farm Monitoring</h1>
-        <p class="lead">Live status overview for the configured local printer runtime.</p>
+        <p class="lead">Live status overview and local runtime administration for configured printers.</p>
       </div>
       <button id="refreshButton" type="button">Refresh now</button>
     </header>
 
     <section class="summary">
       <div class="summary-card">
-        <span class="summary-label">Enabled printers</span>
+        <span class="summary-label">Configured printers</span>
         <strong id="printerCount">0</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Enabled printers</span>
+        <strong id="enabledPrinterCount">0</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Disabled printers</span>
+        <strong id="disabledPrinterCount">0</strong>
       </div>
       <div class="summary-card">
         <span class="summary-label">Last refresh</span>
@@ -29,7 +37,7 @@
     </section>
 
     <section>
-      <h2>Live printers</h2>
+      <h2>Configured printer status</h2>
       <div id="printerGrid" class="printer-grid">
         <p class="muted">Loading printer status...</p>
       </div>
@@ -39,7 +47,7 @@
       <div class="section-heading">
         <div>
           <h2>Printer configuration</h2>
-          <p class="muted">Add or update local printer nodes. Disabled printers are hidden from the live dashboard.</p>
+          <p class="muted">Add or update printer nodes. Enabled and disabled printers stay visible for administration.</p>
         </div>
       </div>
 
@@ -86,24 +94,37 @@
       <div class="section-heading">
         <div>
           <h2>Monitoring rules</h2>
-          <p class="muted">Control when printer snapshots are persisted to SQLite.</p>
+          <p class="muted">Control poll timing, snapshot persistence, event deduplication, and error-event persistence.</p>
         </div>
       </div>
 
       <form id="monitoringRulesForm" class="form-grid">
-        <label class="checkbox-label">
-          <input id="snapshotOnStateChangeInput" name="snapshotOnStateChange" type="checkbox">
-          Store when state changes
+        <label>
+          Poll interval seconds
+          <input id="pollIntervalSecondsInput" name="pollIntervalSeconds" type="number" step="1" min="1" required>
         </label>
 
         <label>
-          Temperature threshold
-          <input id="temperatureThresholdInput" name="temperatureThreshold" type="number" step="0.1" min="0" required>
+          Snapshot minimum interval seconds
+          <input id="snapshotMinimumIntervalSecondsInput" name="snapshotMinimumIntervalSeconds" type="number" step="1" min="0" required>
         </label>
 
         <label>
-          Minimum interval seconds
-          <input id="minIntervalSecondsInput" name="minIntervalSeconds" type="number" step="1" min="0" required>
+          Temperature delta threshold
+          <input id="temperatureDeltaThresholdInput" name="temperatureDeltaThreshold" type="number" step="0.1" min="0" required>
+        </label>
+
+        <label>
+          Event deduplication window seconds
+          <input id="eventDeduplicationWindowSecondsInput" name="eventDeduplicationWindowSeconds" type="number" step="1" min="0" required>
+        </label>
+
+        <label>
+          Error persistence behavior
+          <select id="errorPersistenceBehaviorInput" name="errorPersistenceBehavior" required>
+            <option value="DEDUPLICATED">DEDUPLICATED</option>
+            <option value="ALWAYS">ALWAYS</option>
+          </select>
         </label>
 
         <div class="form-actions">

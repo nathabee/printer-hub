@@ -4,9 +4,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import printerhub.api.RemoteApiServer;
+import printerhub.command.PrinterCommandService;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
+import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrinterConfigurationStore;
+import printerhub.persistence.PrinterEventStore;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -35,10 +38,11 @@ class PrinterHubRuntimeTest {
                 () -> new PrinterHubRuntime(
                         null,
                         new PrinterConfigurationStore(),
+                        new MonitoringRulesStore(),
                         new PrinterRegistry(),
                         new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60))
+                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
+                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
                 )
         );
 
@@ -52,14 +56,33 @@ class PrinterHubRuntimeTest {
                 () -> new PrinterHubRuntime(
                         new DatabaseInitializer(),
                         null,
+                        new MonitoringRulesStore(),
                         new PrinterRegistry(),
                         new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60))
+                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
+                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
                 )
         );
 
         assertEquals("printerConfigurationStore must not be null", exception.getMessage());
+    }
+
+    @Test
+    void constructorFailsWhenMonitoringRulesStoreIsNull() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new PrinterHubRuntime(
+                        new DatabaseInitializer(),
+                        new PrinterConfigurationStore(),
+                        null,
+                        new PrinterRegistry(),
+                        new PrinterRuntimeStateCache(),
+                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
+                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
+                )
+        );
+
+        assertEquals("monitoringRulesStore must not be null", exception.getMessage());
     }
 
     @Test
@@ -69,10 +92,11 @@ class PrinterHubRuntimeTest {
                 () -> new PrinterHubRuntime(
                         new DatabaseInitializer(),
                         new PrinterConfigurationStore(),
+                        new MonitoringRulesStore(),
                         null,
                         new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60))
+                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
+                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
                 )
         );
 
@@ -86,10 +110,11 @@ class PrinterHubRuntimeTest {
                 () -> new PrinterHubRuntime(
                         new DatabaseInitializer(),
                         new PrinterConfigurationStore(),
+                        new MonitoringRulesStore(),
                         new PrinterRegistry(),
                         null,
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60))
+                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
+                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
                 )
         );
 
@@ -103,10 +128,11 @@ class PrinterHubRuntimeTest {
                 () -> new PrinterHubRuntime(
                         new DatabaseInitializer(),
                         new PrinterConfigurationStore(),
+                        new MonitoringRulesStore(),
                         new PrinterRegistry(),
                         new PrinterRuntimeStateCache(),
                         null,
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60))
+                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
                 )
         );
 
@@ -120,9 +146,10 @@ class PrinterHubRuntimeTest {
                 () -> new PrinterHubRuntime(
                         new DatabaseInitializer(),
                         new PrinterConfigurationStore(),
+                        new MonitoringRulesStore(),
                         new PrinterRegistry(),
                         new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache(), 60),
+                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
                         null
                 )
         );
@@ -139,6 +166,7 @@ class PrinterHubRuntimeTest {
         databaseInitializer.initialize();
 
         PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
+        MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
         configurationStore.save(
                 PrinterRuntimeNodeFactory.create(
                         "printer-1",
@@ -153,8 +181,7 @@ class PrinterHubRuntimeTest {
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                 printerRegistry,
-                stateCache,
-                60
+                stateCache
         );
 
         int port = findFreePort();
@@ -163,12 +190,16 @@ class PrinterHubRuntimeTest {
                 printerRegistry,
                 stateCache,
                 monitoringScheduler,
-                configurationStore
+                configurationStore,
+                monitoringRulesStore,
+                new PrinterEventStore(),
+                new PrinterCommandService(new PrinterEventStore())
         );
 
         PrinterHubRuntime runtime = new PrinterHubRuntime(
                 databaseInitializer,
                 configurationStore,
+                monitoringRulesStore,
                 printerRegistry,
                 stateCache,
                 monitoringScheduler,
@@ -199,12 +230,12 @@ class PrinterHubRuntimeTest {
 
         DatabaseInitializer databaseInitializer = new DatabaseInitializer();
         PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
+        MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
         PrinterRegistry printerRegistry = new PrinterRegistry();
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                 printerRegistry,
-                stateCache,
-                60
+                stateCache
         );
 
         int port = findFreePort();
@@ -213,12 +244,16 @@ class PrinterHubRuntimeTest {
                 printerRegistry,
                 stateCache,
                 monitoringScheduler,
-                configurationStore
+                configurationStore,
+                monitoringRulesStore,
+                new PrinterEventStore(),
+                new PrinterCommandService(new PrinterEventStore())
         );
 
         PrinterHubRuntime runtime = new PrinterHubRuntime(
                 databaseInitializer,
                 configurationStore,
+                monitoringRulesStore,
                 printerRegistry,
                 stateCache,
                 monitoringScheduler,
@@ -240,7 +275,10 @@ class PrinterHubRuntimeTest {
                 printerRegistry,
                 stateCache,
                 monitoringScheduler,
-                new PrinterConfigurationStore()
+                new PrinterConfigurationStore(),
+                new MonitoringRulesStore(),
+                new PrinterEventStore(),
+                new PrinterCommandService(new PrinterEventStore())
         );
     }
 

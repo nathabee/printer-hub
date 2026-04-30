@@ -27,7 +27,13 @@ class PrinterSnapshotStoreTest {
         useDatabase("snapshot-first.db");
 
         PrinterSnapshotStore store = new PrinterSnapshotStore(
-                new MonitoringRules(true, 1.0, 30)
+                new MonitoringRules(
+                        5,
+                        30,
+                        1.0,
+                        60,
+                        MonitoringRules.ErrorPersistenceBehavior.DEDUPLICATED
+                )
         );
 
         PrinterSnapshot snapshot = PrinterSnapshot.fromResponse(
@@ -53,7 +59,13 @@ class PrinterSnapshotStoreTest {
         useDatabase("snapshot-state-change.db");
 
         PrinterSnapshotStore store = new PrinterSnapshotStore(
-                new MonitoringRules(true, 100.0, 9999)
+                new MonitoringRules(
+                        5,
+                        9999,
+                        100.0,
+                        60,
+                        MonitoringRules.ErrorPersistenceBehavior.DEDUPLICATED
+                )
         );
 
         store.save("printer-1", PrinterSnapshot.fromResponse(
@@ -81,7 +93,13 @@ class PrinterSnapshotStoreTest {
         useDatabase("snapshot-temp-delta.db");
 
         PrinterSnapshotStore store = new PrinterSnapshotStore(
-                new MonitoringRules(false, 1.0, 9999)
+                new MonitoringRules(
+                        5,
+                        9999,
+                        1.0,
+                        60,
+                        MonitoringRules.ErrorPersistenceBehavior.DEDUPLICATED
+                )
         );
 
         store.save("printer-1", PrinterSnapshot.fromResponse(
@@ -109,7 +127,13 @@ class PrinterSnapshotStoreTest {
         useDatabase("snapshot-skip.db");
 
         PrinterSnapshotStore store = new PrinterSnapshotStore(
-                new MonitoringRules(false, 5.0, 9999)
+                new MonitoringRules(
+                        5,
+                        9999,
+                        5.0,
+                        60,
+                        MonitoringRules.ErrorPersistenceBehavior.DEDUPLICATED
+                )
         );
 
         store.save("printer-1", PrinterSnapshot.fromResponse(
@@ -137,7 +161,13 @@ class PrinterSnapshotStoreTest {
         useDatabase("snapshot-min-interval.db");
 
         PrinterSnapshotStore store = new PrinterSnapshotStore(
-                new MonitoringRules(false, 100.0, 30)
+                new MonitoringRules(
+                        5,
+                        30,
+                        100.0,
+                        60,
+                        MonitoringRules.ErrorPersistenceBehavior.DEDUPLICATED
+                )
         );
 
         store.save("printer-1", PrinterSnapshot.fromResponse(

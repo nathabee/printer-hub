@@ -8,6 +8,13 @@ see ROADMAP.md
 
 ## Version (done)
 
+## 0.2.x — Local Runtime Administration and Job Management
+
+- 0.2.1 — Manual Command Execution API
+- 0.2.0 — Monitoring Configuration and Dashboard Administration Basics
+
+
+
 
 ### 0.1.x — Local Farm Runtime Architecture
 

@@ -4,6 +4,8 @@ import printerhub.OperationMessages;
 import printerhub.api.RemoteApiServer;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
+import printerhub.persistence.MonitoringRules;
+import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrinterConfigurationStore;
 
 public final class PrinterHubRuntime implements AutoCloseable {
@@ -14,10 +16,12 @@ public final class PrinterHubRuntime implements AutoCloseable {
     private final PrinterMonitoringScheduler monitoringScheduler;
     private final RemoteApiServer apiServer;
     private final PrinterConfigurationStore printerConfigurationStore;
+    private final MonitoringRulesStore monitoringRulesStore;
 
     public PrinterHubRuntime(
             DatabaseInitializer databaseInitializer,
             PrinterConfigurationStore printerConfigurationStore,
+            MonitoringRulesStore monitoringRulesStore,
             PrinterRegistry printerRegistry,
             PrinterRuntimeStateCache stateCache,
             PrinterMonitoringScheduler monitoringScheduler,
@@ -28,6 +32,9 @@ public final class PrinterHubRuntime implements AutoCloseable {
         }
         if (printerConfigurationStore == null) {
             throw new IllegalArgumentException(OperationMessages.PRINTER_CONFIGURATION_STORE_MUST_NOT_BE_NULL);
+        }
+        if (monitoringRulesStore == null) {
+            throw new IllegalArgumentException(OperationMessages.MONITORING_RULES_STORE_MUST_NOT_BE_NULL);
         }
         if (printerRegistry == null) {
             throw new IllegalArgumentException(OperationMessages.PRINTER_REGISTRY_MUST_NOT_BE_NULL);
@@ -44,6 +51,7 @@ public final class PrinterHubRuntime implements AutoCloseable {
 
         this.databaseInitializer = databaseInitializer;
         this.printerConfigurationStore = printerConfigurationStore;
+        this.monitoringRulesStore = monitoringRulesStore;
         this.printerRegistry = printerRegistry;
         this.stateCache = stateCache;
         this.monitoringScheduler = monitoringScheduler;
@@ -52,6 +60,11 @@ public final class PrinterHubRuntime implements AutoCloseable {
 
     public void start() {
         databaseInitializer.initialize();
+
+        MonitoringRules monitoringRules = monitoringRulesStore.load();
+        monitoringRulesStore.save(monitoringRules);
+        monitoringScheduler.updateMonitoringRules(monitoringRules);
+
         loadConfiguredPrinters();
         printerRegistry.initialize();
         monitoringScheduler.start();

@@ -1,4 +1,5 @@
 package printerhub.config;
+ 
 
 public final class RuntimeDefaults {
 
@@ -27,7 +28,6 @@ public final class RuntimeDefaults {
     public static final boolean DEFAULT_SNAPSHOT_ON_STATE_CHANGE = true;
     public static final double DEFAULT_TEMPERATURE_THRESHOLD = 1.0;
     public static final long DEFAULT_MIN_SNAPSHOT_INTERVAL_SECONDS = 30L;
-    public static final long MONITORING_EVENT_DEDUP_WINDOW_SECONDS = 60L;
-    
-
+    public static final long DEFAULT_MONITORING_EVENT_DEDUP_WINDOW_SECONDS = 60L;
+    public static final String DEFAULT_ERROR_PERSISTENCE_BEHAVIOR = "DEDUPLICATED";
 }

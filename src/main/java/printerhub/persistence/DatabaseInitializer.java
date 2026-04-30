@@ -18,6 +18,7 @@ public final class DatabaseInitializer {
             createPrinterEventsTable(statement);
             createConfiguredPrintersTable(statement);
             createMonitoringRulesTable(statement);
+            migrateMonitoringRulesTable(statement);
 
             System.out.println(OperationMessages.databaseInitialized(DatabaseConfig.databaseFile()));
         } catch (SQLException exception) {
@@ -93,13 +94,45 @@ public final class DatabaseInitializer {
         String sql = """
                 CREATE TABLE IF NOT EXISTS monitoring_rules (
                     id TEXT PRIMARY KEY,
-                    snapshot_on_state_change INTEGER NOT NULL,
+                    snapshot_on_state_change INTEGER NOT NULL DEFAULT 1,
                     temperature_threshold REAL NOT NULL,
                     min_interval_seconds INTEGER NOT NULL,
+                    poll_interval_seconds INTEGER NOT NULL DEFAULT 5,
+                    event_dedup_window_seconds INTEGER NOT NULL DEFAULT 60,
+                    error_persistence_behavior TEXT NOT NULL DEFAULT 'DEDUPLICATED',
                     updated_at TEXT NOT NULL
                 );
                 """;
 
         statement.execute(sql);
+    }
+
+    private void migrateMonitoringRulesTable(Statement statement) throws SQLException {
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE monitoring_rules ADD COLUMN poll_interval_seconds INTEGER NOT NULL DEFAULT 5;"
+        );
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE monitoring_rules ADD COLUMN event_dedup_window_seconds INTEGER NOT NULL DEFAULT 60;"
+        );
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE monitoring_rules ADD COLUMN error_persistence_behavior TEXT NOT NULL DEFAULT 'DEDUPLICATED';"
+        );
+    }
+
+    private void addColumnIfMissing(Statement statement, String sql) throws SQLException {
+        try {
+            statement.execute(sql);
+        } catch (SQLException exception) {
+            String message = exception.getMessage();
+
+            if (message != null && message.toLowerCase().contains("duplicate column name")) {
+                return;
+            }
+
+            throw exception;
+        }
     }
 }

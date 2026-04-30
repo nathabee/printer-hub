@@ -5,49 +5,105 @@ import printerhub.config.RuntimeDefaults;
 
 public final class MonitoringRules {
 
-    private final boolean snapshotOnStateChange;
-    private final double temperatureThreshold;
-    private final long minIntervalSeconds;
+    public enum ErrorPersistenceBehavior {
+        DEDUPLICATED,
+        ALWAYS
+    }
+
+    private final long pollIntervalSeconds;
+    private final long snapshotMinimumIntervalSeconds;
+    private final double temperatureDeltaThreshold;
+    private final long eventDeduplicationWindowSeconds;
+    private final ErrorPersistenceBehavior errorPersistenceBehavior;
 
     public MonitoringRules(
-            boolean snapshotOnStateChange,
-            double temperatureThreshold,
-            long minIntervalSeconds
+            long pollIntervalSeconds,
+            long snapshotMinimumIntervalSeconds,
+            double temperatureDeltaThreshold,
+            long eventDeduplicationWindowSeconds,
+            ErrorPersistenceBehavior errorPersistenceBehavior
     ) {
-        if (temperatureThreshold < 0) {
+        if (pollIntervalSeconds <= 0) {
             throw new IllegalArgumentException(
-                    OperationMessages.TEMPERATURE_THRESHOLD_MUST_NOT_BE_NEGATIVE
+                    OperationMessages.POLL_INTERVAL_SECONDS_MUST_BE_GREATER_THAN_ZERO
             );
         }
 
-        if (minIntervalSeconds < 0) {
+        if (snapshotMinimumIntervalSeconds < 0) {
             throw new IllegalArgumentException(
-                    OperationMessages.MIN_INTERVAL_SECONDS_MUST_NOT_BE_NEGATIVE
+                    OperationMessages.SNAPSHOT_MINIMUM_INTERVAL_SECONDS_MUST_NOT_BE_NEGATIVE
             );
         }
 
-        this.snapshotOnStateChange = snapshotOnStateChange;
-        this.temperatureThreshold = temperatureThreshold;
-        this.minIntervalSeconds = minIntervalSeconds;
+        if (temperatureDeltaThreshold < 0) {
+            throw new IllegalArgumentException(
+                    OperationMessages.TEMPERATURE_DELTA_THRESHOLD_MUST_NOT_BE_NEGATIVE
+            );
+        }
+
+        if (eventDeduplicationWindowSeconds < 0) {
+            throw new IllegalArgumentException(
+                    OperationMessages.EVENT_DEDUPLICATION_WINDOW_SECONDS_MUST_NOT_BE_NEGATIVE
+            );
+        }
+
+        if (errorPersistenceBehavior == null) {
+            throw new IllegalArgumentException(
+                    OperationMessages.ERROR_PERSISTENCE_BEHAVIOR_MUST_NOT_BE_NULL
+            );
+        }
+
+        this.pollIntervalSeconds = pollIntervalSeconds;
+        this.snapshotMinimumIntervalSeconds = snapshotMinimumIntervalSeconds;
+        this.temperatureDeltaThreshold = temperatureDeltaThreshold;
+        this.eventDeduplicationWindowSeconds = eventDeduplicationWindowSeconds;
+        this.errorPersistenceBehavior = errorPersistenceBehavior;
     }
 
     public static MonitoringRules defaults() {
         return new MonitoringRules(
-                RuntimeDefaults.DEFAULT_SNAPSHOT_ON_STATE_CHANGE,
+                RuntimeDefaults.DEFAULT_MONITORING_INTERVAL_SECONDS,
+                RuntimeDefaults.DEFAULT_MIN_SNAPSHOT_INTERVAL_SECONDS,
                 RuntimeDefaults.DEFAULT_TEMPERATURE_THRESHOLD,
-                RuntimeDefaults.DEFAULT_MIN_SNAPSHOT_INTERVAL_SECONDS
+                RuntimeDefaults.DEFAULT_MONITORING_EVENT_DEDUP_WINDOW_SECONDS,
+                parseErrorPersistenceBehavior(RuntimeDefaults.DEFAULT_ERROR_PERSISTENCE_BEHAVIOR)
         );
     }
 
-    public boolean snapshotOnStateChange() {
-        return snapshotOnStateChange;
+    public long pollIntervalSeconds() {
+        return pollIntervalSeconds;
     }
 
-    public double temperatureThreshold() {
-        return temperatureThreshold;
+    public long snapshotMinimumIntervalSeconds() {
+        return snapshotMinimumIntervalSeconds;
     }
 
-    public long minIntervalSeconds() {
-        return minIntervalSeconds;
+    public double temperatureDeltaThreshold() {
+        return temperatureDeltaThreshold;
+    }
+
+    public long eventDeduplicationWindowSeconds() {
+        return eventDeduplicationWindowSeconds;
+    }
+
+    public ErrorPersistenceBehavior errorPersistenceBehavior() {
+        return errorPersistenceBehavior;
+    }
+
+    public static ErrorPersistenceBehavior parseErrorPersistenceBehavior(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    OperationMessages.ERROR_PERSISTENCE_BEHAVIOR_MUST_NOT_BE_NULL
+            );
+        }
+
+        try {
+            return ErrorPersistenceBehavior.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    OperationMessages.invalidErrorPersistenceBehavior(value),
+                    exception
+            );
+        }
     }
 }

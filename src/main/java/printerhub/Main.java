@@ -1,10 +1,13 @@
 package printerhub;
 
 import printerhub.api.RemoteApiServer;
+import printerhub.command.PrinterCommandService;
 import printerhub.config.RuntimeDefaults;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
+import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrinterConfigurationStore;
+import printerhub.persistence.PrinterEventStore;
 import printerhub.runtime.PrinterHubRuntime;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeStateCache;
@@ -23,20 +26,17 @@ public final class Main {
                     RuntimeDefaults.DEFAULT_API_PORT
             );
 
-            long monitoringIntervalSeconds = readLongProperty(
-                    RuntimeDefaults.MONITORING_INTERVAL_SECONDS_PROPERTY,
-                    RuntimeDefaults.DEFAULT_MONITORING_INTERVAL_SECONDS
-            );
-
             PrinterRegistry printerRegistry = new PrinterRegistry();
             PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
             DatabaseInitializer databaseInitializer = new DatabaseInitializer();
             PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
+            MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+            PrinterEventStore printerEventStore = new PrinterEventStore();
+            PrinterCommandService printerCommandService = new PrinterCommandService(printerEventStore);
 
             PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                     printerRegistry,
-                    stateCache,
-                    monitoringIntervalSeconds
+                    stateCache
             );
 
             RemoteApiServer apiServer = new RemoteApiServer(
@@ -44,12 +44,16 @@ public final class Main {
                     printerRegistry,
                     stateCache,
                     monitoringScheduler,
-                    printerConfigurationStore
+                    printerConfigurationStore,
+                    monitoringRulesStore,
+                    printerEventStore,
+                    printerCommandService
             );
 
             PrinterHubRuntime runtime = new PrinterHubRuntime(
                     databaseInitializer,
                     printerConfigurationStore,
+                    monitoringRulesStore,
                     printerRegistry,
                     stateCache,
                     monitoringScheduler,
@@ -63,6 +67,7 @@ public final class Main {
             System.out.println(OperationMessages.localRuntimeStarted());
             System.out.println(OperationMessages.healthEndpoint(apiPort));
             System.out.println(OperationMessages.printersEndpoint(apiPort));
+            System.out.println(OperationMessages.monitoringSettingsEndpoint(apiPort));
 
             new CountDownLatch(1).await();
         } catch (InterruptedException exception) {
@@ -106,23 +111,6 @@ public final class Main {
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException(
                     OperationMessages.invalidIntegerSystemProperty(key, value),
-                    exception
-            );
-        }
-    }
-
-    private static long readLongProperty(String key, long defaultValue) {
-        String value = System.getProperty(key);
-
-        if (value == null || value.isBlank()) {
-            return defaultValue;
-        }
-
-        try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(
-                    OperationMessages.invalidLongSystemProperty(key, value),
                     exception
             );
         }

@@ -8,7 +8,6 @@ import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
 import printerhub.runtime.PrinterRuntimeStateCache;
 
-import java.time.Duration;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,8 +20,7 @@ class PrinterMonitoringSchedulerTest {
                 IllegalArgumentException.class,
                 () -> new PrinterMonitoringScheduler(
                         null,
-                        new PrinterRuntimeStateCache(),
-                        1
+                        new PrinterRuntimeStateCache()
                 )
         );
 
@@ -35,26 +33,11 @@ class PrinterMonitoringSchedulerTest {
                 IllegalArgumentException.class,
                 () -> new PrinterMonitoringScheduler(
                         new PrinterRegistry(),
-                        null,
-                        1
+                        null
                 )
         );
 
         assertEquals("stateCache must not be null", exception.getMessage());
-    }
-
-    @Test
-    void constructorFailsForNonPositiveInterval() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new PrinterMonitoringScheduler(
-                        new PrinterRegistry(),
-                        new PrinterRuntimeStateCache(),
-                        0
-                )
-        );
-
-        assertEquals("intervalSeconds must be greater than zero", exception.getMessage());
     }
 
     @Test
@@ -75,8 +58,7 @@ class PrinterMonitoringSchedulerTest {
 
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 registry,
-                stateCache,
-                60
+                stateCache
         );
 
         scheduler.start();
@@ -103,8 +85,7 @@ class PrinterMonitoringSchedulerTest {
 
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 registry,
-                stateCache,
-                60
+                stateCache
         );
 
         scheduler.startMonitoring(enabledNode);
@@ -131,8 +112,7 @@ class PrinterMonitoringSchedulerTest {
 
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 registry,
-                stateCache,
-                60
+                stateCache
         );
 
         assertDoesNotThrow(() -> scheduler.startMonitoring(disabledNode));
@@ -148,8 +128,7 @@ class PrinterMonitoringSchedulerTest {
     void startMonitoringFailsForNullNode() {
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 new PrinterRegistry(),
-                new PrinterRuntimeStateCache(),
-                60
+                new PrinterRuntimeStateCache()
         );
 
         IllegalArgumentException exception = assertThrows(
@@ -166,8 +145,7 @@ class PrinterMonitoringSchedulerTest {
     void restartMonitoringFailsForNullNode() {
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 new PrinterRegistry(),
-                new PrinterRuntimeStateCache(),
-                60
+                new PrinterRuntimeStateCache()
         );
 
         IllegalArgumentException exception = assertThrows(
@@ -184,8 +162,7 @@ class PrinterMonitoringSchedulerTest {
     void stopMonitoringIgnoresNullOrBlankPrinterId() {
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 new PrinterRegistry(),
-                new PrinterRuntimeStateCache(),
-                60
+                new PrinterRuntimeStateCache()
         );
 
         assertDoesNotThrow(() -> scheduler.stopMonitoring(null));
@@ -199,8 +176,7 @@ class PrinterMonitoringSchedulerTest {
     void stopCanBeCalledWithoutStart() {
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 new PrinterRegistry(),
-                new PrinterRuntimeStateCache(),
-                60
+                new PrinterRuntimeStateCache()
         );
 
         assertDoesNotThrow(scheduler::stop);
@@ -222,8 +198,7 @@ class PrinterMonitoringSchedulerTest {
 
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 registry,
-                stateCache,
-                60
+                stateCache
         );
 
         assertDoesNotThrow(scheduler::start);
@@ -250,8 +225,7 @@ class PrinterMonitoringSchedulerTest {
 
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 registry,
-                stateCache,
-                60
+                stateCache
         );
 
         scheduler.start();
@@ -275,8 +249,7 @@ class PrinterMonitoringSchedulerTest {
 
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 registry,
-                stateCache,
-                60
+                stateCache
         );
 
         scheduler.startMonitoring(node);
@@ -289,7 +262,7 @@ class PrinterMonitoringSchedulerTest {
     }
 
     @Test
-    void restartMonitoringReinitializesPrinterState() throws Exception {
+    void restartMonitoringReinitializesPrinterState() {
         PrinterRegistry registry = new PrinterRegistry();
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
 
@@ -315,8 +288,7 @@ class PrinterMonitoringSchedulerTest {
 
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 registry,
-                stateCache,
-                60
+                stateCache
         );
 
         scheduler.restartMonitoring(node);
@@ -351,8 +323,7 @@ class PrinterMonitoringSchedulerTest {
 
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(
                 registry,
-                stateCache,
-                60
+                stateCache
         );
 
         scheduler.start();
