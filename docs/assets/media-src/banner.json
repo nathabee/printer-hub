@@ -1,43 +1,31 @@
 {
   "appName": "PrinterHub",
-
   "tagline": "Java control and monitoring service for USB-connected 3D printers",
-
   "subline": "Serial communication • live monitoring • simulated job API",
-
   "featureTitle": "Industrial-style printer communication",
-
   "featureLeft1": "• USB serial device control",
   "featureLeft2": "• reliable G-code communication",
-
   "featureRight1": "• state and job modeling",
   "featureRight2": "• REST monitoring and job endpoints",
-
   "chip1": "Java",
   "chip2": "Serial IO",
-  "chip3": "G-code",
-  "chip4": "REST + Jobs API",
-
+  "chip3": "REST API",
+  "chip4": "Multi-Threaded",
   "iconFile": "printerhub-icon.svg",
-
   "screenshot1": "printerhub-image.png",
   "screenshot1Label": "",
-
-  "screenshot2": "printerhub-screenshot-dashboard.png", 
+  "screenshot2": "printerhub-screenshot-dashboard.png",
   "screenshot2Label": "",
- 
-
-  "shot1X": 920,
-  "shot1Y": 152,
-  "shot1Width": 400,
-  "shot1Height": 400,
+  "shot1X": 850,
+  "shot1Y": 212,
+  "shot1Width": 200,
+  "shot1Height": 200,
   "shot1Radius": 18,
   "shot1Fit": "xMidYMid meet",
-
   "shot2X": 1060,
   "shot2Y": 5,
   "shot2Width": 450,
-  "shot2Height": 300,
+  "shot2Height": 450,
   "shot2Radius": 18,
   "shot2Fit": "xMidYMid meet"
 }

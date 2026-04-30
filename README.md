@@ -1,181 +1,212 @@
+
+---
+
 <p align="center">
   <img src="docs/assets/media/banner-1544x500.png" alt="PrinterHub banner">
 </p>
 
 # PrinterHub
 
-**PrinterHub** is a Java-based system-integration project that models how industrial printer farms are monitored and controlled.
+**PrinterHub** is a Java-based system integration project for monitoring and controlling 3D printers in a structured runtime environment.
 
-The project began with direct serial communication to a real **Creality Ender-3 V2 Neo** printer and is now entering a **major architectural refactoring phase**.
+It started with direct serial communication to a real **Creality Ender-3 V2 Neo** and is now evolving into a **local multi-printer runtime architecture** with background monitoring, persistence, REST API access, and dashboard support.
+
+
+Roadmap:
+
+* [`docs/roadmap.md`](docs/roadmap.md)
 
 ---
 
-# ⚠️ Work in Progress — Runtime Refactoring
+## Current scope
 
-PrinterHub is currently being refactored to establish the final **local farm runtime architecture**.
 
-This phase introduces:
+Current focus:
 
-* multi-threaded printer monitoring
-* runtime-based printer orchestration
-* background polling scheduler
+```text
+0.1.x — local farm runtime architecture
+```
+
+Next focus:
+
+```text
+0.2.x — local job and administration features
+```
+
+
+The current `0.1.x` line provides:
+
+* local multi-printer runtime
+* background monitoring per configured printer
 * runtime state cache
-* clean separation between API and hardware polling
+* REST API for runtime and printer administration
+* SQLite persistence for configuration, snapshots, and events
+* embedded dashboard
+* simulation modes for normal and failing printer behavior
+* Jenkins CI verification and runtime smoke tests
 
-During this phase:
+The implementation is intentionally still local-runtime oriented.
 
-```text
-Features from 0.0.x are being reorganized
-into a new runtime backbone (0.1.x).
-```
+It is the foundation for later:
 
-Some previously implemented features may be temporarily unavailable while the architecture stabilizes.
-
-For the full design plan:
-
-→ See [`docs/roadmap.md`](docs/roadmap.md)
+* job management
+* administration hardening
+* multi-site orchestration
 
 ---
 
-# Local Runtime Architecture
-
-```text
-PrinterHub Java Runtime
-├── Web server thread pool
-│   └── handles REST API / dashboard HTTP requests
-│
-├── Monitoring scheduler
-│   ├── printer-1 polling task
-│   ├── printer-2 polling task
-│   ├── printer-3 polling task
-│   └── ...
-│
-├── Runtime state cache
-│   └── latest known printer state per configured printer
-│
-├── Database access layer
-│   └── persists snapshots, events, jobs, config
-│
-└── Serial communication layer
-    ├── /dev/ttyUSB0
-    ├── /dev/ttyUSB1
-    └── SIM_PORT
-```
-
-Important rule:
-
-```text
-The API must not poll printers directly during normal dashboard/status reads.
-The monitoring scheduler polls printers in the background.
-The API reads the latest known state from the runtime state cache.
-```
-
+## Current runtime architecture
 
 ```mermaid
 flowchart TB
-    runtime["PrinterHub Java Runtime"]
+    runtime["PrinterHub Local Runtime"]
 
-    runtime --> web["Web server thread pool"]
-    web --> api["REST API requests"]
-    web --> dashboard["Dashboard HTTP requests"]
-
-    runtime --> scheduler["Monitoring scheduler"]
-    scheduler --> task1["printer-1 polling task"]
-    scheduler --> task2["printer-2 polling task"]
-    scheduler --> task3["printer-3 polling task"]
-    scheduler --> taskN["..."]
-
+    runtime --> api["REST API and dashboard server"]
+    runtime --> monitor["Background monitoring scheduler"]
     runtime --> cache["Runtime state cache"]
-    cache --> latest["Latest known state per configured printer"]
+    runtime --> persistence["SQLite persistence layer"]
+    runtime --> serial["Serial / simulation communication"]
 
-    runtime --> database["Database access layer"]
-    database --> persisted["Snapshots, events, jobs, configuration"]
+    monitor --> p1["Printer 1"]
+    monitor --> p2["Printer 2"]
+    monitor --> p3["Printer 3"]
+    monitor --> px["..."]
 
-    runtime --> serial["Serial communication layer"]
-    serial --> usb0["/dev/ttyUSB0"]
-    serial --> usb1["/dev/ttyUSB1"]
-    serial --> sim["SIM_PORT"]
+    cache --> latest["Latest known state per printer"]
+    persistence --> data["Configuration, snapshots, events"]
+    serial --> ports["USB ports or simulated ports"]
+```
 
+Operational rule:
+
+```text
+The API reads runtime state from the cache.
+Background monitoring performs the polling.
+Normal status and dashboard reads must not poll printers directly.
 ```
 
 ---
 
-# Target Project Architecture
+## Dashboard
+
+Current runtime state can be viewed through the embedded dashboard.
+
+<p align="center">
+  <img src="docs/assets/media-src/printerhub-screenshot-dashboard.png" alt="PrinterHub dashboard screenshot">
+</p>
+
+The dashboard is part of the current local runtime architecture and reads only from the API layer.
+
+---
+
+## Printer state machine
+
+Each monitored printer node follows the same runtime state model.
 
 ```mermaid
 flowchart TB
-    ui["Centralized Web UI<br/>printer overview, job upload, live monitoring"]
+    A["Configured printer"] --> B{"Enabled?"}
 
-    api["Backend REST API<br/>job management, printer state API, user requests"]
+    B -- "No" --> C["DISCONNECTED"]
 
-    db["Database<br/>jobs, printer states, logs, errors, history"]
+    B -- "Yes" --> D["CONNECTING"]
+    D --> E{"Poll outcome"}
 
-    runtime["Farm Backend / Java Control Service<br/>printer orchestration, polling, command execution"]
+    E -- "timeout / disconnect / failure" --> F["ERROR"]
+    E -- "busy / printing" --> G["PRINTING"]
+    E -- "hotend above threshold" --> H["HEATING"]
+    E -- "ok / T:" --> I["IDLE"]
+    E -- "unclassifiable response" --> J["UNKNOWN"]
 
-    deviceLayer["Device Communication Layer<br/>USB / serial communication"]
+    F --> D
+    G --> D
+    H --> D
+    I --> D
+    J --> D
+```
 
-    printer["Printer Device<br/>Ender-3 / simulated industrial printer"]
+Defined states:
+
+```text
+DISCONNECTED
+CONNECTING
+IDLE
+HEATING
+PRINTING
+ERROR
+UNKNOWN
+```
+
+This state model is part of the current runtime behavior and is used by monitoring, persistence, API output, and dashboard rendering.
+
+---
+
+## Target architecture direction
+
+The longer-term direction goes beyond a local runtime and moves toward centralized orchestration.
+
+```mermaid
+flowchart TB
+    ui["Central web UI"]
+    api["Backend API"]
+    db["Database"]
+    runtime["Printer runtime services"]
+    device["Device communication layer"]
+    printers["Printer devices / printer farms"]
 
     ui <--> api
     api <--> db
     api <--> runtime
     runtime <--> db
-    runtime --> deviceLayer
-    deviceLayer --> printer
-
+    runtime --> device
+    device --> printers
 ```
+
+This target is not fully implemented yet.
+
+It represents the intended direction after the local runtime foundation is stable.
 
 ---
- 
-# Industrial Context
 
-Modern laboratory and industrial printers are rarely standalone devices.
+## Industrial context
 
-They operate inside structured environments where:
+PrinterHub is not just a single-printer control exercise.
 
-* multiple printers run simultaneously
-* failures must be isolated
-* monitoring runs continuously
-* operations must remain responsive
-* hardware communication must be abstracted
-
-PrinterHub models this transition from:
+It models the transition from:
 
 ```text
-single USB printer
+single USB-connected printer
 ```
 
-to:
+toward:
 
 ```text
-multi-printer runtime environment
+structured multi-printer runtime monitoring
 ```
 
-and eventually:
+and later:
 
 ```text
-multi-site centralized printer orchestration
+centralized multi-site printer management
 ```
 
-See:
+Related background:
 
 * [`docs/industrial-bio-printer-simulation.md`](docs/industrial-bio-printer-simulation.md)
 
 ---
 
-# DevOps and Continuous Integration
+## DevOps and verification
 
 PrinterHub uses Jenkins-based CI.
 
-Current CI pipeline validates:
+The current pipeline verifies:
 
-```text
-Branch checkout
-Build verification
-Runtime startup
-API health check
-Multi-printer monitoring activity
-```
+* Maven build and test execution
+* runtime/API smoke lifecycle
+* robustness scenarios with mixed healthy and failing printers
+* JaCoCo coverage reporting
+* release bundle preparation
 
 Details:
 
@@ -183,7 +214,7 @@ Details:
 
 ---
 
-# Repository Structure (0.1.x)
+## Repository structure
 
 ```text
 printer-hub/
@@ -191,15 +222,18 @@ printer-hub/
 ├── Jenkinsfile
 ├── docs/
 │   ├── roadmap.md
+│   ├── developer.md
+│   ├── install.md
+│   ├── quickstart.md
 │   ├── devops.md
 │   ├── industrial-bio-printer-simulation.md
 │   └── version.md
 ├── src/
 │   ├── main/java/printerhub/
-│   │   ├── runtime/
-│   │   ├── monitoring/
 │   │   ├── api/
+│   │   ├── monitoring/
 │   │   ├── persistence/
+│   │   ├── runtime/
 │   │   └── serial/
 │   └── test/java/
 └── pom.xml
@@ -207,28 +241,20 @@ printer-hub/
 
 ---
 
-# Roadmap
+## Documentation
 
-PrinterHub evolves in staged architecture steps:
-
-```text
-0.0.x — Prototype validation (completed)
-0.1.x — Runtime architecture (in progress)
-0.2.x — Local administration features
-1.0.x — Multi-farm centralized management
-```
-
-Full details:
-
-→ [`docs/roadmap.md`](docs/roadmap.md)
+* Setup and prerequisites: [`docs/install.md`](docs/install.md)
+* Local usage: [`docs/quickstart.md`](docs/quickstart.md)
+* Developer reference: [`docs/developer.md`](docs/developer.md)
+* CI and release workflow: [`docs/devops.md`](docs/devops.md)
+* Planned evolution: [`docs/roadmap.md`](docs/roadmap.md)
 
 ---
 
-# License
+## License
 
-MIT License.
-
-See:
+MIT License
 
 * [`LICENSE`](LICENSE)
- 
+
+---

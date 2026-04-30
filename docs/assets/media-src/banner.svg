@@ -32,11 +32,11 @@
     </filter>
 
     <clipPath id="shotLeftClip">
-      <rect x="920" y="152" width="400" height="400" rx="18"/>
+      <rect x="850" y="212" width="200" height="200" rx="18"/>
     </clipPath>
 
     <clipPath id="shotRightClip">
-      <rect x="1060" y="5" width="450" height="300" rx="18"/>
+      <rect x="1060" y="5" width="450" height="450" rx="18"/>
     </clipPath>
   </defs>
 
@@ -91,10 +91,10 @@
     <text x="238" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#40596a">Serial IO</text>
 
     <rect x="402" y="68" width="160" height="38" rx="19" fill="#e9eef1"/>
-    <text x="422" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#40596a">G-code</text>
+    <text x="422" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#40596a">REST API</text>
 
     <rect x="586" y="68" width="160" height="38" rx="19" fill="#e9eef1"/>
-    <text x="616" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#40596a">REST + Jobs API</text>
+    <text x="616" y="93" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#40596a">Multi-Threaded</text>
 
 
 
@@ -105,10 +105,10 @@
   </g>
 
   <g filter="url(#shadow)"> 
-    <rect x="920" y="152" width="400" height="400" rx="18" fill="#edf1f4"  opacity="0.42"/>
+    <rect x="850" y="212" width="200" height="200" rx="18" fill="#edf1f4"  opacity="0.42"/>
     <image href="printerhub-image.png" xlink:href="printerhub-image.png"
-           x="920" y="152"
-           width="400" height="400"
+           x="850" y="212"
+           width="200" height="200"
            preserveAspectRatio="xMidYMid meet"
            clip-path="url(#shotLeftClip)"/>
     <text x="930" y="390"
@@ -118,10 +118,10 @@
   </g>
 
   <g filter="url(#shadow)"> 
-    <rect x="1060" y="5" width="450" height="300" rx="18" fill="#edf1f4"  opacity="0.42"/>
-    <image href="printerhub-screenshot-2.png" xlink:href="printerhub-screenshot-2.png"
+    <rect x="1060" y="5" width="450" height="450" rx="18" fill="#edf1f4"  opacity="0.42"/>
+    <image href="printerhub-screenshot-dashboard.png" xlink:href="printerhub-screenshot-dashboard.png"
            x="1060" y="5"
-           width="450" height="300"
+           width="450" height="450"
            preserveAspectRatio="xMidYMid meet"
            clip-path="url(#shotRightClip)"/>
     <text x="1250" y="390"
