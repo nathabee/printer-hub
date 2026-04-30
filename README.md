@@ -1,4 +1,3 @@
- 
 <p align="center">
   <img src="docs/assets/media/banner-1544x500.png" alt="PrinterHub banner">
 </p>
@@ -7,7 +6,7 @@
 
 **PrinterHub** is a Java-based system integration project for monitoring and controlling 3D printers in a structured runtime environment.
 
-It started with direct serial communication to a real **Creality Ender-3 V2 Neo** and is now evolving into a **local multi-printer runtime architecture** with background monitoring, persistence, REST API access, and dashboard support.
+It started with direct serial communication to a real **Creality Ender-3 V2 Neo** and is evolving into a **local multi-printer runtime architecture** with background monitoring, persistence, REST API access, dashboard administration, and controlled operator actions.
 
 Roadmap:
 
@@ -23,39 +22,18 @@ Current focus:
 0.2.x — local runtime administration and job management
 ````
 
-Current implemented baseline:
-
-```text
-0.2.0 — monitoring configuration and dashboard administration basics
-```
-
-Next focus:
-
-```text
-0.2.1+ — manual commands, jobs, history, and runtime packaging
-```
-
-The current `0.2.0` baseline provides:
+The current implementation provides:
 
 * local multi-printer runtime
 * background monitoring per configured printer
 * runtime state cache
-* REST API for printer administration
-* SQLite persistence for configuration, snapshots, events, and monitoring rules
-* embedded dashboard for printer administration
-* global monitoring configuration through the API and dashboard
+* REST API for printer administration and controlled manual commands
+* SQLite persistence for configuration, monitoring rules, snapshots, and events
+* embedded dashboard for printer administration and diagnostic actions
 * simulation modes for normal and failing printer behavior
 * Jenkins CI verification and runtime smoke tests
 
 The implementation is intentionally still local-runtime oriented.
-
-It is the foundation for later:
-
-* controlled manual command execution
-* job lifecycle handling
-* audit and history views
-* stronger real-device administration
-* multi-site orchestration
 
 ---
 
@@ -93,7 +71,7 @@ Normal status and dashboard reads must not poll printers directly.
 
 ## Monitoring configuration
 
-The current `0.2.0` implementation supports runtime-global monitoring rules.
+PrinterHub supports runtime-global monitoring rules.
 
 Available settings:
 
@@ -117,19 +95,7 @@ Current runtime state can be viewed through the embedded dashboard.
   <img src="docs/assets/media-src/printerhub-screenshot-dashboard.png" alt="PrinterHub dashboard screenshot">
 </p>
 
-The dashboard supports:
-
-* live printer cards
-* configured printer administration
-* enable / disable handling
-* clearer distinction between:
-
-  * enabled and disabled printers
-  * failing and intentionally disabled printers
-  * real and simulated printers
-* monitoring rule editing
-
-The dashboard is part of the current local runtime architecture and reads only from the API layer.
+The dashboard is part of the local runtime architecture and reads only from the API layer.
 
 ---
 
@@ -171,8 +137,6 @@ ERROR
 UNKNOWN
 ```
 
-This state model is part of the current runtime behavior and is used by monitoring, persistence, API output, and dashboard rendering.
-
 ---
 
 ## Target architecture direction
@@ -195,10 +159,6 @@ flowchart TB
     runtime --> device
     device --> printers
 ```
-
-This target is not fully implemented yet.
-
-It represents the intended direction after the local runtime foundation is stable.
 
 ---
 
@@ -265,6 +225,7 @@ printer-hub/
 ├── src/
 │   ├── main/java/printerhub/
 │   │   ├── api/
+│   │   ├── command/
 │   │   ├── config/
 │   │   ├── monitoring/
 │   │   ├── persistence/
@@ -291,6 +252,4 @@ printer-hub/
 MIT License
 
 * [`LICENSE`](LICENSE)
-
----
  

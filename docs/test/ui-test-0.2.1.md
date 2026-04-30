@@ -91,6 +91,86 @@ Check:
 * missing temperature for `M104` or `M140` is rejected
 * command-related events appear in printer events
 
+
+### M105
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"M105"}'
+```
+
+### M114
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"M114"}'
+```
+
+### M115
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"M115"}'
+```
+
+### M104 with target
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"M104","targetTemperature":190}'
+```
+
+### M140 with target
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"M140","targetTemperature":60}'
+```
+
+### M106
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"M106"}'
+```
+
+### M107
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"M107"}'
+```
+
+### invalid command rejected
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"G1"}'
+```
+
+### missing target temperature rejected
+
+```bash
+curl -s -X POST http://localhost:18080/printers/printer-1/commands \
+  -H "Content-Type: application/json" \
+  -d '{"command":"M104"}'
+```
+
+### events
+
+```bash
+curl -s http://localhost:18080/printers/printer2/events
+```
+
+
 6. Events
    Check that `GET /printers/{id}/events` returns:
 

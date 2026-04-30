@@ -21,6 +21,8 @@ const temperatureDeltaThresholdInput = document.getElementById("temperatureDelta
 const eventDeduplicationWindowSecondsInput = document.getElementById("eventDeduplicationWindowSecondsInput");
 const errorPersistenceBehaviorInput = document.getElementById("errorPersistenceBehaviorInput");
 const adminMessage = document.getElementById("adminMessage");
+const printerEventState = new Map();
+const printerCommandResultState = new Map();
 
 async function loadDashboard() {
   await Promise.all([
@@ -195,6 +197,158 @@ async function handleConfiguredPrinterClick(event) {
   }
 }
 
+async function handlePrinterGridClick(event) {
+  const button = event.target.closest("button[data-command], button[data-action]");
+
+  if (!button) {
+    return;
+  }
+
+  const printerId = button.dataset.id;
+
+  if (!printerId) {
+    return;
+  }
+
+  if (button.dataset.action === "load-events") {
+    await loadPrinterEvents(printerId);
+    return;
+  }
+
+  const command = button.dataset.command;
+
+  if (command) {
+    await executePrinterCommand(printerId, command);
+  }
+}
+
+ 
+async function executePrinterCommand(printerId, command) {
+  const resultElement = document.getElementById(`command-result-${cssSafeId(printerId)}`);
+  const runningMessage = `Running ${command}...`;
+
+  printerCommandResultState.set(printerId, runningMessage);
+
+  if (resultElement) {
+    resultElement.textContent = runningMessage;
+  }
+
+  const payload = { command };
+
+
+  try {
+    const response = await fetch(`/printers/${encodeURIComponent(printerId)}/commands`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const responseBody = await response.json();
+
+    if (!response.ok) {
+      throw new Error(responseBody.error || `HTTP ${response.status}`);
+    }
+
+    const printerResponse = responseBody.response ?? "no response";
+    const successMessage = `${responseBody.sentCommand}: ${printerResponse}`;
+
+    printerCommandResultState.set(printerId, successMessage);
+
+    if (resultElement) {
+      resultElement.textContent = successMessage;
+    }
+
+    showAdminMessage(`Executed ${responseBody.sentCommand} on ${printerId}.`);
+
+    await Promise.all([
+      loadPrinters(),
+      loadPrinterEvents(printerId)
+    ]);
+  } catch (error) {
+    const failureMessage = `Command failed: ${error.message}`;
+
+    printerCommandResultState.set(printerId, failureMessage);
+
+    if (resultElement) {
+      resultElement.textContent = failureMessage;
+    }
+
+    showAdminMessage(`Failed to execute ${command} on ${printerId}: ${error.message}`);
+
+    await Promise.all([
+      loadPrinters(),
+      loadPrinterEvents(printerId)
+    ]);
+  }
+}
+
+async function loadPrinterEvents(printerId) {
+  const eventsElement = document.getElementById(`printer-events-${cssSafeId(printerId)}`);
+
+  if (!eventsElement) {
+    return;
+  }
+
+  const loadingHtml = `<p class="muted">Loading events...</p>`;
+
+  printerEventState.set(printerId, {
+    isLoaded: false,
+    html: loadingHtml
+  });
+
+  eventsElement.innerHTML = loadingHtml;
+
+  try {
+    const response = await fetch(`/printers/${encodeURIComponent(printerId)}/events`);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const events = Array.isArray(data.events) ? data.events : [];
+
+    let html;
+
+    if (events.length === 0) {
+      html = `<p class="muted">No events recorded yet.</p>`;
+    } else {
+      const recentEvents = events.slice(0, 5);
+      html = recentEvents.map(renderPrinterEvent).join("");
+    }
+
+    printerEventState.set(printerId, {
+      isLoaded: true,
+      html
+    });
+
+    eventsElement.innerHTML = html;
+  } catch (error) {
+    const html = `<p class="muted">Failed to load events: ${escapeHtml(error.message)}</p>`;
+
+    printerEventState.set(printerId, {
+      isLoaded: true,
+      html
+    });
+
+    eventsElement.innerHTML = html;
+  }
+}
+
+function renderPrinterEvent(event) {
+  return `
+    <div class="event-item">
+      <div class="event-header">
+        <strong>${escapeHtml(event.eventType || "UNKNOWN")}</strong>
+        <span class="event-time">${escapeHtml(event.createdAt || "n/a")}</span>
+      </div>
+      <div class="event-message">${escapeHtml(event.message || "none")}</div>
+    </div>
+  `;
+}
+
 function renderPrinters(printers) {
   if (printers.length === 0) {
     printerGrid.innerHTML = `<p class="muted">No configured printers found.</p>`;
@@ -213,6 +367,17 @@ function renderPrinterCard(printer) {
   const modeBadge = isSimulatedMode(printer.mode)
     ? `<span class="badge badge-simulated">simulated</span>`
     : `<span class="badge badge-real">real</span>`;
+
+  const safeId = cssSafeId(printer.id);
+  const disabledAttribute = printer.enabled ? "" : "disabled";
+
+  const eventState = printerEventState.get(printer.id);
+  const eventsHtml = eventState && eventState.isLoaded
+    ? eventState.html
+    : `<p class="muted">Events not loaded yet.</p>`;
+
+  const commandResult = printerCommandResultState.get(printer.id)
+    ?? "No manual command executed yet.";
 
   return `
     <article class="printer-card ${printer.enabled ? "" : "printer-card-disabled"}">
@@ -254,6 +419,29 @@ function renderPrinterCard(printer) {
       <div class="message-block">
         <span class="message-label">Error</span>
         <div class="message-value">${escapeHtml(printer.errorMessage || "none")}</div>
+      </div>
+
+      <div class="command-section">
+        <h4>Manual commands</h4>
+
+        <div class="command-button-grid">
+          <button type="button" data-id="${escapeHtml(printer.id)}" data-command="M105" ${disabledAttribute}>Read temp</button>
+          <button type="button" data-id="${escapeHtml(printer.id)}" data-command="M114" ${disabledAttribute}>Read position</button>
+          <button type="button" data-id="${escapeHtml(printer.id)}" data-command="M115" ${disabledAttribute}>Read firmware</button>
+        </div>
+ 
+
+        <div id="command-result-${safeId}" class="command-result muted">${escapeHtml(commandResult)}</div>
+      </div>
+
+      <div class="events-section">
+        <div class="events-header">
+          <h4>Recent events</h4>
+          <button type="button" class="secondary-button small-button" data-action="load-events" data-id="${escapeHtml(printer.id)}">Load events</button>
+        </div>
+        <div id="printer-events-${safeId}" class="events-list">
+          ${eventsHtml}
+        </div>
       </div>
     </article>
   `;
@@ -401,6 +589,10 @@ function isSimulatedMode(mode) {
     || normalized === "sim-disconnected";
 }
 
+function cssSafeId(value) {
+  return String(value).replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+}
+
 function clearPrinterForm() {
   printerConfigForm.reset();
   printerModeInput.value = "real";
@@ -423,7 +615,7 @@ function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
+    .replaceAll("\"", "&quot;")
     .replaceAll("'", "&#039;");
 }
 
@@ -431,6 +623,7 @@ refreshButton.addEventListener("click", loadDashboard);
 printerConfigForm.addEventListener("submit", savePrinter);
 monitoringRulesForm.addEventListener("submit", saveMonitoringRules);
 configuredPrinterList.addEventListener("click", handleConfiguredPrinterClick);
+printerGrid.addEventListener("click", handlePrinterGridClick); 
 clearPrinterFormButton.addEventListener("click", clearPrinterForm);
 
 loadDashboard();

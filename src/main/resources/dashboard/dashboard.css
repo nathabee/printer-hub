@@ -53,6 +53,7 @@ body {
 h1,
 h2,
 h3,
+h4,
 p {
   margin-top: 0;
 }
@@ -60,6 +61,10 @@ p {
 h1 {
   margin-bottom: 10px;
   font-size: clamp(2rem, 4vw, 3.5rem);
+}
+
+h4 {
+  margin-bottom: 12px;
 }
 
 .lead {
@@ -75,6 +80,11 @@ button {
   color: #111827;
   font-weight: 700;
   cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .summary {
@@ -108,7 +118,7 @@ button {
 
 .printer-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 18px;
 }
 
@@ -153,7 +163,9 @@ button {
   color: var(--muted);
 }
 
-.message-block {
+.message-block,
+.command-section,
+.events-section {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
@@ -169,6 +181,75 @@ button {
 .message-value {
   font-size: 0.92rem;
   line-height: 1.4;
+  word-break: break-word;
+}
+
+.command-button-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.command-form-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.inline-command-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.inline-command-form label {
+  margin: 0;
+}
+
+.command-result {
+  min-height: 22px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.events-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.events-list {
+  display: grid;
+  gap: 10px;
+}
+
+.event-item {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.event-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.event-time {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.event-message {
+  font-size: 0.9rem;
+  line-height: 1.35;
   word-break: break-word;
 }
 
@@ -285,6 +366,11 @@ select {
   color: var(--text);
 }
 
+.small-button {
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+
 .config-list {
   display: grid;
   gap: 12px;
@@ -320,7 +406,9 @@ select {
 @media (max-width: 720px) {
   .hero,
   .config-card,
-  .card-header {
+  .card-header,
+  .events-header,
+  .inline-command-form {
     flex-direction: column;
     align-items: stretch;
   }
@@ -332,5 +420,14 @@ select {
   .form-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .command-button-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inline-command-form {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }

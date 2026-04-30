@@ -1200,11 +1200,6 @@ Initial command scope:
 M105  read temperature
 M114  read current position
 M115  read firmware info
-G28   home printer
-M104  set hotend temperature
-M140  set bed temperature
-M106  fan on
-M107  fan off
 ```
 
 Possible later extensions:
@@ -1268,6 +1263,17 @@ COMPLETED
 FAILED
 CANCELLED
 ```
+
+add to scope the commands :
+
+```text
+G28   home printer
+M104  set hotend temperature
+M140  set bed temperature
+M106  fan on
+M107  fan off
+``` 
+
 
 Job model note:
 
@@ -1339,9 +1345,10 @@ Goals:
 * make real-printer administration more robust
 * improve operator visibility for serial-port failures
 
-Extras :
+Minor CR/Anomalies :
 
 * README banner and dashboard screenshot path currently points to `docs/assets/media-src/...`,  not a final published-media location.
+* dashboard.js : editing a disabled printer will re-enable it unintentionally (enabled: true always true even if update)
 
 
 Focus:
