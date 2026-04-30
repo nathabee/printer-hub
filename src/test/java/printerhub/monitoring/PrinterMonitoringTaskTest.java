@@ -7,6 +7,7 @@ import printerhub.PrinterPort;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.persistence.DatabaseInitializer;
+import printerhub.persistence.MonitoringRules;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.persistence.PrinterSnapshotStore;
 import printerhub.runtime.PrinterRuntimeNode;
@@ -20,6 +21,7 @@ import java.sql.Statement;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -59,7 +61,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 () -> false,
-                new MonitoringEventPolicy(clock, Duration.ofSeconds(60))
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults()
         );
 
         task.run();
@@ -99,7 +102,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 () -> false,
-                new MonitoringEventPolicy(clock, Duration.ofSeconds(60))
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults()
         );
 
         task.run();
@@ -146,7 +150,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 () -> false,
-                new MonitoringEventPolicy(clock, Duration.ofSeconds(60))
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults()
         );
 
         task.run();
@@ -187,7 +192,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 () -> false,
-                new MonitoringEventPolicy(clock, Duration.ofSeconds(60))
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults()
         );
 
         task.run();
@@ -227,7 +233,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 () -> false,
-                new MonitoringEventPolicy(clock, Duration.ofSeconds(60))
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults()
         );
 
         task.run();
@@ -270,7 +277,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 () -> false,
-                eventPolicy
+                eventPolicy,
+                MonitoringRules.defaults()
         );
 
         task.run();
@@ -307,7 +315,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 () -> false,
-                eventPolicy
+                eventPolicy,
+                MonitoringRules.defaults()
         );
 
         port.response = "";
@@ -352,7 +361,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 shutdown::get,
-                new MonitoringEventPolicy(clock, Duration.ofSeconds(60))
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults()
         );
 
         try {
@@ -390,7 +400,8 @@ class PrinterMonitoringTaskTest {
                 clock,
                 "M105",
                 () -> false,
-                new MonitoringEventPolicy(clock, Duration.ofSeconds(60))
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults()
         );
 
         assertDoesNotThrow(task::run);
@@ -485,7 +496,7 @@ class PrinterMonitoringTaskTest {
         }
 
         @Override
-        public Clock withZone(java.time.ZoneId zone) {
+        public Clock withZone(ZoneId zone) {
             return this;
         }
 

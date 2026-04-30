@@ -4,12 +4,14 @@ import printerhub.OperationMessages;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.config.PrinterProtocolDefaults;
+import printerhub.persistence.MonitoringRules;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.persistence.PrinterSnapshotStore;
 import printerhub.runtime.PrinterRuntimeNode;
 import printerhub.runtime.PrinterRuntimeStateCache;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.function.BooleanSupplier;
@@ -29,17 +31,22 @@ public final class PrinterMonitoringTask implements Runnable {
     private final String statusCommand;
     private final BooleanSupplier shutdownSignal;
     private final MonitoringEventPolicy eventPolicy;
+    private final MonitoringRules monitoringRules;
 
     public PrinterMonitoringTask(PrinterRuntimeNode node, PrinterRuntimeStateCache stateCache) {
         this(
                 node,
                 stateCache,
-                new PrinterSnapshotStore(),
+                new PrinterSnapshotStore(MonitoringRules.defaults()),
                 new PrinterEventStore(),
                 Clock.systemUTC(),
                 PrinterProtocolDefaults.DEFAULT_STATUS_COMMAND,
                 () -> false,
-                new MonitoringEventPolicy(Clock.systemUTC(), java.time.Duration.ofSeconds(60))
+                new MonitoringEventPolicy(
+                        Clock.systemUTC(),
+                        Duration.ofSeconds(MonitoringRules.defaults().eventDeduplicationWindowSeconds())
+                ),
+                MonitoringRules.defaults()
         );
     }
 
@@ -51,7 +58,8 @@ public final class PrinterMonitoringTask implements Runnable {
             Clock clock,
             String statusCommand,
             BooleanSupplier shutdownSignal,
-            MonitoringEventPolicy eventPolicy
+            MonitoringEventPolicy eventPolicy,
+            MonitoringRules monitoringRules
     ) {
         if (node == null) {
             throw new IllegalArgumentException(OperationMessages.NODE_MUST_NOT_BE_NULL);
@@ -77,6 +85,9 @@ public final class PrinterMonitoringTask implements Runnable {
         if (eventPolicy == null) {
             throw new IllegalArgumentException(OperationMessages.MONITORING_EVENT_POLICY_MUST_NOT_BE_NULL);
         }
+        if (monitoringRules == null) {
+            throw new IllegalArgumentException(OperationMessages.MONITORING_RULES_MUST_NOT_BE_NULL);
+        }
 
         this.node = node;
         this.stateCache = stateCache;
@@ -86,6 +97,7 @@ public final class PrinterMonitoringTask implements Runnable {
         this.statusCommand = statusCommand;
         this.shutdownSignal = shutdownSignal;
         this.eventPolicy = eventPolicy;
+        this.monitoringRules = monitoringRules;
     }
 
     @Override
@@ -151,15 +163,16 @@ public final class PrinterMonitoringTask implements Runnable {
 
             PrinterState state = resolveState(response, hotendTemperature);
 
-            PrinterSnapshot snapshot = PrinterSnapshot.fromResponse(
-                    state,
-                    hotendTemperature != null ? hotendTemperature : previousSnapshot.hotendTemperature(),
-                    bedTemperature != null ? bedTemperature : previousSnapshot.bedTemperature(),
-                    response,
-                    Instant.now(clock)
-            );
-
             if (state == PrinterState.ERROR) {
+                PrinterSnapshot snapshot = PrinterSnapshot.error(
+                        PrinterState.ERROR,
+                        hotendTemperature != null ? hotendTemperature : previousSnapshot.hotendTemperature(),
+                        bedTemperature != null ? bedTemperature : previousSnapshot.bedTemperature(),
+                        response,
+                        response,
+                        Instant.now(clock)
+                );
+
                 storeAndCache(
                         snapshot,
                         OperationMessages.EVENT_PRINTER_ERROR,
@@ -168,6 +181,14 @@ public final class PrinterMonitoringTask implements Runnable {
                 );
                 return;
             }
+
+            PrinterSnapshot snapshot = PrinterSnapshot.fromResponse(
+                    state,
+                    hotendTemperature != null ? hotendTemperature : previousSnapshot.hotendTemperature(),
+                    bedTemperature != null ? bedTemperature : previousSnapshot.bedTemperature(),
+                    response,
+                    Instant.now(clock)
+            );
 
             eventPolicy.clearPrinter(node.id());
             storeAndCache(
@@ -222,7 +243,7 @@ public final class PrinterMonitoringTask implements Runnable {
             return;
         }
 
-        if (!eventPolicy.shouldPersistEvent(node.id(), eventType, eventMessage)) {
+        if (!shouldPersistEvent(eventType, eventMessage)) {
             return;
         }
 
@@ -235,6 +256,14 @@ public final class PrinterMonitoringTask implements Runnable {
                     safeMessage(exception)
             ));
         }
+    }
+
+    private boolean shouldPersistEvent(String eventType, String eventMessage) {
+        if (monitoringRules.errorPersistenceBehavior() == MonitoringRules.ErrorPersistenceBehavior.ALWAYS) {
+            return true;
+        }
+
+        return eventPolicy.shouldPersistEvent(node.id(), eventType, eventMessage);
     }
 
     private boolean shouldSuppressFailureDuringShutdown(Exception exception) {

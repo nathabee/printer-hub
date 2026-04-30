@@ -1,6 +1,4 @@
-
----
-
+ 
 <p align="center">
   <img src="docs/assets/media/banner-1544x500.png" alt="PrinterHub banner">
 </p>
@@ -11,7 +9,6 @@
 
 It started with direct serial communication to a real **Creality Ender-3 V2 Neo** and is now evolving into a **local multi-printer runtime architecture** with background monitoring, persistence, REST API access, and dashboard support.
 
-
 Roadmap:
 
 * [`docs/roadmap.md`](docs/roadmap.md)
@@ -20,28 +17,33 @@ Roadmap:
 
 ## Current scope
 
-
 Current focus:
 
 ```text
-0.1.x — local farm runtime architecture
+0.2.x — local runtime administration and job management
+````
+
+Current implemented baseline:
+
+```text
+0.2.0 — monitoring configuration and dashboard administration basics
 ```
 
 Next focus:
 
 ```text
-0.2.x — local job and administration features
+0.2.1+ — manual commands, jobs, history, and runtime packaging
 ```
 
-
-The current `0.1.x` line provides:
+The current `0.2.0` baseline provides:
 
 * local multi-printer runtime
 * background monitoring per configured printer
 * runtime state cache
-* REST API for runtime and printer administration
-* SQLite persistence for configuration, snapshots, and events
-* embedded dashboard
+* REST API for printer administration
+* SQLite persistence for configuration, snapshots, events, and monitoring rules
+* embedded dashboard for printer administration
+* global monitoring configuration through the API and dashboard
 * simulation modes for normal and failing printer behavior
 * Jenkins CI verification and runtime smoke tests
 
@@ -49,8 +51,10 @@ The implementation is intentionally still local-runtime oriented.
 
 It is the foundation for later:
 
-* job management
-* administration hardening
+* controlled manual command execution
+* job lifecycle handling
+* audit and history views
+* stronger real-device administration
 * multi-site orchestration
 
 ---
@@ -73,7 +77,7 @@ flowchart TB
     monitor --> px["..."]
 
     cache --> latest["Latest known state per printer"]
-    persistence --> data["Configuration, snapshots, events"]
+    persistence --> data["Configuration, monitoring rules, snapshots, events"]
     serial --> ports["USB ports or simulated ports"]
 ```
 
@@ -87,6 +91,24 @@ Normal status and dashboard reads must not poll printers directly.
 
 ---
 
+## Monitoring configuration
+
+The current `0.2.0` implementation supports runtime-global monitoring rules.
+
+Available settings:
+
+```text
+poll interval
+snapshot minimum interval
+temperature delta threshold
+event deduplication window
+error persistence behavior
+```
+
+These rules are currently global to the runtime and not yet printer-specific.
+
+---
+
 ## Dashboard
 
 Current runtime state can be viewed through the embedded dashboard.
@@ -94,6 +116,18 @@ Current runtime state can be viewed through the embedded dashboard.
 <p align="center">
   <img src="docs/assets/media-src/printerhub-screenshot-dashboard.png" alt="PrinterHub dashboard screenshot">
 </p>
+
+The dashboard supports:
+
+* live printer cards
+* configured printer administration
+* enable / disable handling
+* clearer distinction between:
+
+  * enabled and disabled printers
+  * failing and intentionally disabled printers
+  * real and simulated printers
+* monitoring rule editing
 
 The dashboard is part of the current local runtime architecture and reads only from the API layer.
 
@@ -181,7 +215,7 @@ single USB-connected printer
 toward:
 
 ```text
-structured multi-printer runtime monitoring
+structured multi-printer runtime monitoring and administration
 ```
 
 and later:
@@ -231,6 +265,7 @@ printer-hub/
 ├── src/
 │   ├── main/java/printerhub/
 │   │   ├── api/
+│   │   ├── config/
 │   │   ├── monitoring/
 │   │   ├── persistence/
 │   │   ├── runtime/
@@ -258,3 +293,4 @@ MIT License
 * [`LICENSE`](LICENSE)
 
 ---
+ 

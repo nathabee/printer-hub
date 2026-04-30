@@ -1111,52 +1111,38 @@ Expected result:
 
 
 ---
+ 
+
 ## 0.2.x — Local Runtime Administration and Job Management
 
 Goal:
 
-Add the operational features originally planned for `0.0.20+`, but now on top of the correct `0.1.x` local runtime architecture.
+* configurable runtime behavior
+* clearer local administration
+* controlled manual printer commands
+* job lifecycle support
+* operational history and diagnostics
+* local service-style packaging
 
 ---
 
-### 0.2.0 — Local Runtime Administration API
+### 0.2.0 — Monitoring Configuration and Dashboard Administration Basics
 
-status: planned
-
-Goals:
-
-* add API endpoints for printer registration and removal
-* enable and disable printer nodes at runtime
-* update printer mode, port, and display name
-* persist printer configuration
-
-Endpoints:
-
-```text
-GET    /printers
-POST   /printers
-PUT    /printers/{id}
-DELETE /printers/{id}
-POST   /printers/{id}/enable
-POST   /printers/{id}/disable
-```
-
-Expected result:
-
-* printers can be managed without changing source code
-* local printer farm configuration becomes persistent
-
----
-
-### 0.2.1 — Monitoring Configuration API
-
-status: planned
+status: done
 
 Goals:
 
 * expose monitoring rules through the API
 * persist monitoring intervals and thresholds
-* allow local tuning without code changes
+* allow runtime tuning without code changes
+* improve dashboard cards for local administration use
+* show whether a printer is enabled or disabled directly on the card
+* distinguish more clearly between:
+
+  * disabled printer
+  * disconnected/error printer
+  * real printer
+  * simulated printer
 
 Endpoints:
 
@@ -1171,39 +1157,99 @@ Expected settings:
 poll interval
 snapshot minimum interval
 temperature delta threshold
+event deduplication window
 error persistence behavior
 ```
 
+Dashboard expectations:
+
+```text
+show enabled / disabled status on each printer card
+show real / simulated mode more clearly
+make disabled state visually distinct from failure state
+keep printer cards limited to configured printers
+```
+
+Expected result:
+
+* monitoring behavior becomes configurable without source changes
+* runtime tuning becomes persistent
+* the dashboard becomes clearer for day-to-day local administration
+* operators can immediately see whether a printer is intentionally disabled or operationally failing
+
 ---
 
-### 0.2.2 — Local Dashboard Administration
+### 0.2.1 — Manual Command Execution API
 
 status: planned
 
 Goals:
 
-* add dashboard controls for printer configuration
-* add enable/disable buttons
-* show configured printers only
-* distinguish real and simulated printers clearly
+* allow controlled manual printer commands
+* execute commands through a dedicated command service
+* keep manual command execution separate from monitoring
+* persist command-related events
+* support diagnostics, maintenance, and operator intervention
+* start with a controlled predefined command set, not unrestricted raw command entry
+
+Initial command scope:
+
+```text
+M105  read temperature
+M114  read current position
+M115  read firmware info
+G28   home printer
+M104  set hotend temperature
+M140  set bed temperature
+M106  fan on
+M107  fan off
+```
+
+Possible later extensions:
+
+```text
+raw command input
+movement commands beyond homing
+pause/resume commands
+restricted admin-only commands
+```
+
+Example endpoints:
+
+```text
+POST /printers/{id}/commands
+GET  /printers/{id}/events
+```
+
+Dashboard expectations:
+
+```text
+predefined command buttons for safe read/info commands
+small parameter forms for controlled commands such as target temperatures
+no direct free-text command box in the first step
+```
 
 Expected result:
 
-* the dashboard becomes a local administration UI
-* no source-code change is needed to manage printers
+* controlled operator commands become possible
+* diagnostics are no longer limited to background monitoring
+* monitoring and command execution remain separated internally
+* command handling creates the basis for later job execution services
 
 ---
 
-### 0.2.3 — Job Management over Runtime Architecture
+### 0.2.2 — Job Management over Runtime Architecture
 
 status: planned
 
 Goals:
 
 * connect print jobs to the runtime printer registry
+* add persistent job creation and storage
 * assign jobs to configured printers
 * track job lifecycle through persisted state
-* avoid job logic being coupled directly to HTTP handlers
+* keep job logic out of HTTP handlers
+* prepare later execution orchestration without coupling it directly to the API layer
 
 Expected lifecycle:
 
@@ -1217,47 +1263,36 @@ FAILED
 CANCELLED
 ```
 
----
+Expected result:
 
-### 0.2.4 — Manual Command Execution API
-
-status: planned
-
-Goals:
-
-* allow controlled manual printer commands
-* execute commands through `PrinterCommandService`
-* persist command events
-* keep command execution separate from monitoring
-
-Example endpoints:
-
-```text
-POST /printers/{id}/commands
-GET  /printers/{id}/events
-```
+* jobs become a first-class runtime concept
+* printer administration and job management are connected
+* persistence is ready for later execution logic
+* the runtime architecture becomes ready for more realistic printer workload handling
 
 ---
 
-### 0.2.5 — Local Audit and History Views
+### 0.2.3 — Local Audit and History Views
 
 status: planned
 
 Goals:
 
 * expose printer event history
+* expose snapshot history
 * expose job history
 * expose error history
-* make local diagnostics easier
+* make local diagnostics easier through both API and dashboard views
 
 Expected result:
 
-* local runtime can be inspected after failures
-* dashboard becomes useful for troubleshooting
+* the local runtime becomes easier to inspect after failures
+* dashboard and API become more useful for troubleshooting
+* printer behavior, operator actions, and job state changes become reviewable after the fact
 
 ---
 
-### 0.2.6 — Packaging Local Runtime
+### 0.2.4 — Packaging Local Runtime
 
 status: planned
 
@@ -1274,9 +1309,49 @@ Expected result:
 ```text
 PrinterHub runs as a local service near the printers.
 ```
-
+  
 ---
 
+### 0.2.5 — Runtime Recovery and Serial Device Robustness
+
+status: planned
+
+Goals:
+
+* improve recovery after real USB disconnect/reconnect
+* reduce problems caused by unstable `/dev/ttyUSB*` device names
+* make real-printer administration more robust
+* improve operator visibility for serial-port failures
+
+Extras :
+
+* README banner and dashboard screenshot path currently points to `docs/assets/media-src/...`,  not a final published-media location.
+
+
+Focus:
+
+* keep automatic retry behavior for recoverable monitoring failures
+* better distinguish between:
+
+  * disconnected device
+  * invalid configured port
+  * temporary communication failure
+* support or document use of stable serial paths such as:
+
+```text
+/dev/serial/by-id/...
+```
+
+* improve dashboard/API error clarity for real printer connection problems
+
+Expected result:
+
+* real printers recover more reliably after reconnect scenarios
+* operators can understand whether the failure is caused by cable disconnect, changed port path, or invalid configuration
+* local runtime administration becomes safer for real hardware use
+
+
+---
 ## 1.0.x — Central VPS Multi-Farm Management
 
 Goal:

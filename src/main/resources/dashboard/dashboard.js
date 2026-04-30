@@ -1,5 +1,7 @@
 const printerGrid = document.getElementById("printerGrid");
 const printerCount = document.getElementById("printerCount");
+const enabledPrinterCount = document.getElementById("enabledPrinterCount");
+const disabledPrinterCount = document.getElementById("disabledPrinterCount");
 const lastRefresh = document.getElementById("lastRefresh");
 const refreshButton = document.getElementById("refreshButton");
 
@@ -13,9 +15,11 @@ const printerPortInput = document.getElementById("printerPortInput");
 const printerModeInput = document.getElementById("printerModeInput");
 
 const monitoringRulesForm = document.getElementById("monitoringRulesForm");
-const snapshotOnStateChangeInput = document.getElementById("snapshotOnStateChangeInput");
-const temperatureThresholdInput = document.getElementById("temperatureThresholdInput");
-const minIntervalSecondsInput = document.getElementById("minIntervalSecondsInput");
+const pollIntervalSecondsInput = document.getElementById("pollIntervalSecondsInput");
+const snapshotMinimumIntervalSecondsInput = document.getElementById("snapshotMinimumIntervalSecondsInput");
+const temperatureDeltaThresholdInput = document.getElementById("temperatureDeltaThresholdInput");
+const eventDeduplicationWindowSecondsInput = document.getElementById("eventDeduplicationWindowSecondsInput");
+const errorPersistenceBehaviorInput = document.getElementById("errorPersistenceBehaviorInput");
 const adminMessage = document.getElementById("adminMessage");
 
 async function loadDashboard() {
@@ -37,7 +41,12 @@ async function loadPrinters() {
     const data = await response.json();
     const printers = Array.isArray(data.printers) ? data.printers : [];
 
+    const enabledPrinters = printers.filter((printer) => printer.enabled);
+    const disabledPrinters = printers.filter((printer) => !printer.enabled);
+
     printerCount.textContent = String(printers.length);
+    enabledPrinterCount.textContent = String(enabledPrinters.length);
+    disabledPrinterCount.textContent = String(disabledPrinters.length);
     lastRefresh.textContent = new Date().toLocaleTimeString();
 
     renderPrinters(printers);
@@ -64,7 +73,23 @@ async function loadConfiguredPrinters() {
 }
 
 async function loadMonitoringRules() {
-  return;
+  try {
+    const response = await fetch("/settings/monitoring");
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const rules = await response.json();
+
+    pollIntervalSecondsInput.value = rules.pollIntervalSeconds ?? 5;
+    snapshotMinimumIntervalSecondsInput.value = rules.snapshotMinimumIntervalSeconds ?? 30;
+    temperatureDeltaThresholdInput.value = rules.temperatureDeltaThreshold ?? 1.0;
+    eventDeduplicationWindowSecondsInput.value = rules.eventDeduplicationWindowSeconds ?? 60;
+    errorPersistenceBehaviorInput.value = rules.errorPersistenceBehavior ?? "DEDUPLICATED";
+  } catch (error) {
+    showAdminMessage(`Failed to load monitoring rules: ${error.message}`);
+  }
 }
 
 async function savePrinter(event) {
@@ -116,8 +141,33 @@ async function savePrinter(event) {
 
 async function saveMonitoringRules(event) {
   event.preventDefault();
-  showAdminMessage("Monitoring rules are not active yet.");
-  return;
+
+  const rules = {
+    pollIntervalSeconds: Number.parseInt(pollIntervalSecondsInput.value, 10),
+    snapshotMinimumIntervalSeconds: Number.parseInt(snapshotMinimumIntervalSecondsInput.value, 10),
+    temperatureDeltaThreshold: Number.parseFloat(temperatureDeltaThresholdInput.value),
+    eventDeduplicationWindowSeconds: Number.parseInt(eventDeduplicationWindowSecondsInput.value, 10),
+    errorPersistenceBehavior: errorPersistenceBehaviorInput.value
+  };
+
+  try {
+    const response = await fetch("/settings/monitoring", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(rules)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    await loadMonitoringRules();
+    showAdminMessage("Saved monitoring rules.");
+  } catch (error) {
+    showAdminMessage(`Failed to save monitoring rules: ${error.message}`);
+  }
 }
 
 async function handleConfiguredPrinterClick(event) {
@@ -145,10 +195,9 @@ async function handleConfiguredPrinterClick(event) {
   }
 }
 
-
 function renderPrinters(printers) {
   if (printers.length === 0) {
-    printerGrid.innerHTML = `<p class="muted">No enabled printers available.</p>`;
+    printerGrid.innerHTML = `<p class="muted">No configured printers found.</p>`;
     return;
   }
 
@@ -157,16 +206,34 @@ function renderPrinters(printers) {
 
 function renderPrinterCard(printer) {
   const state = String(printer.state || "UNKNOWN");
-  const stateClass = `state-${state.toLowerCase()}`;
+  const stateClass = resolveStateClass(printer);
+  const enabledBadge = printer.enabled
+    ? `<span class="badge badge-enabled">enabled</span>`
+    : `<span class="badge badge-disabled">disabled</span>`;
+  const modeBadge = isSimulatedMode(printer.mode)
+    ? `<span class="badge badge-simulated">simulated</span>`
+    : `<span class="badge badge-real">real</span>`;
 
   return `
-    <article class="printer-card">
-      <h3>${escapeHtml(printer.name || printer.id)}</h3>
-      <p class="meta">${escapeHtml(printer.id)} · ${escapeHtml(printer.portName || "n/a")} · ${escapeHtml(printer.mode || "n/a")}</p>
+    <article class="printer-card ${printer.enabled ? "" : "printer-card-disabled"}">
+      <div class="card-header">
+        <div>
+          <h3>${escapeHtml(printer.displayName || printer.name || printer.id)}</h3>
+          <p class="meta">${escapeHtml(printer.id)} · ${escapeHtml(printer.portName || "n/a")}</p>
+        </div>
+        <div class="card-badges">
+          ${enabledBadge}
+          ${modeBadge}
+        </div>
+      </div>
 
       <div class="row">
-        <span>State</span>
-        <span class="badge ${stateClass}">${escapeHtml(state)}</span>
+        <span>Status</span>
+        <span class="badge ${stateClass}">${escapeHtml(renderStatusLabel(printer, state))}</span>
+      </div>
+      <div class="row">
+        <span>Mode</span>
+        <strong>${escapeHtml(printer.mode || "n/a")}</strong>
       </div>
       <div class="row">
         <span>Hotend</span>
@@ -177,12 +244,16 @@ function renderPrinterCard(printer) {
         <strong>${formatTemperature(printer.bedTemperature)}</strong>
       </div>
       <div class="row">
-        <span>Assigned job</span>
-        <strong>${escapeHtml(printer.assignedJobId || "none")}</strong>
-      </div>
-      <div class="row">
         <span>Updated</span>
         <strong>${escapeHtml(printer.updatedAt || "n/a")}</strong>
+      </div>
+      <div class="message-block">
+        <span class="message-label">Last response</span>
+        <div class="message-value">${escapeHtml(printer.lastResponse || "n/a")}</div>
+      </div>
+      <div class="message-block">
+        <span class="message-label">Error</span>
+        <div class="message-value">${escapeHtml(printer.errorMessage || "none")}</div>
       </div>
     </article>
   `;
@@ -198,11 +269,22 @@ function renderConfiguredPrinters(printers) {
 }
 
 function renderConfiguredPrinter(printer) {
+  const enabledBadge = printer.enabled
+    ? `<span class="badge badge-enabled">enabled</span>`
+    : `<span class="badge badge-disabled">disabled</span>`;
+  const modeBadge = isSimulatedMode(printer.mode)
+    ? `<span class="badge badge-simulated">simulated</span>`
+    : `<span class="badge badge-real">real</span>`;
+
   return `
     <article class="config-card">
       <div>
         <h3>${escapeHtml(printer.displayName || printer.name || printer.id)}</h3>
         <p class="meta">${escapeHtml(printer.id)} · ${escapeHtml(printer.portName || "n/a")} · ${escapeHtml(printer.mode || "n/a")}</p>
+        <div class="card-badges">
+          ${enabledBadge}
+          ${modeBadge}
+        </div>
       </div>
 
       <div class="config-actions">
@@ -235,7 +317,7 @@ async function fillPrinterForm(printerId) {
   printerIdInput.value = printer.id || "";
   printerNameInput.value = printer.displayName || printer.name || "";
   printerPortInput.value = printer.portName || "";
-  printerModeInput.value = printer.mode || "simulated";
+  printerModeInput.value = printer.mode || "sim";
 }
 
 async function deletePrinter(printerId) {
@@ -280,6 +362,44 @@ async function updatePrinterEnabled(printerId, action) {
   }
 }
 
+function resolveStateClass(printer) {
+  if (!printer.enabled) {
+    return "status-disabled";
+  }
+
+  const state = String(printer.state || "UNKNOWN").toLowerCase();
+
+  if (state === "error" || state === "disconnected") {
+    return "status-error";
+  }
+
+  if (state === "connecting" || state === "heating" || state === "printing") {
+    return "status-warn";
+  }
+
+  if (state === "idle") {
+    return "status-ok";
+  }
+
+  return "status-unknown";
+}
+
+function renderStatusLabel(printer, state) {
+  if (!printer.enabled) {
+    return "DISABLED";
+  }
+
+  return state;
+}
+
+function isSimulatedMode(mode) {
+  const normalized = String(mode || "").toLowerCase();
+  return normalized === "sim"
+    || normalized === "simulated"
+    || normalized === "sim-error"
+    || normalized === "sim-timeout"
+    || normalized === "sim-disconnected";
+}
 
 function clearPrinterForm() {
   printerConfigForm.reset();

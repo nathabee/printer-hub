@@ -9,6 +9,7 @@ public final class OperationMessages {
     public static final String INFO_PREFIX = "[INFO] ";
 
     public static final String MONITORING_SCHEDULER_MUST_NOT_BE_NULL = "monitoringScheduler must not be null";
+    public static final String MONITORING_RULES_STORE_MUST_NOT_BE_NULL = "monitoringRulesStore must not be null";
 
     public static final String FAILED_TO_SAVE_PRINTER_CONFIGURATION = "Failed to save printer configuration";
     public static final String FAILED_TO_LOAD_PRINTER_CONFIGURATION = "Failed to load printer configuration";
@@ -36,6 +37,17 @@ public final class OperationMessages {
     public static final String PRINTER_EVENT_MUST_NOT_BE_NULL = "printer event must not be null";
     public static final String MONITORING_RULES_MUST_NOT_BE_NULL = "monitoringRules must not be null";
     public static final String INTERVAL_SECONDS_MUST_BE_GREATER_THAN_ZERO = "intervalSeconds must be greater than zero";
+
+    public static final String POLL_INTERVAL_SECONDS_MUST_BE_GREATER_THAN_ZERO =
+            "pollIntervalSeconds must be greater than zero";
+    public static final String SNAPSHOT_MINIMUM_INTERVAL_SECONDS_MUST_NOT_BE_NEGATIVE =
+            "snapshotMinimumIntervalSeconds must not be negative";
+    public static final String TEMPERATURE_DELTA_THRESHOLD_MUST_NOT_BE_NEGATIVE =
+            "temperatureDeltaThreshold must not be negative";
+    public static final String EVENT_DEDUPLICATION_WINDOW_SECONDS_MUST_NOT_BE_NEGATIVE =
+            "eventDeduplicationWindowSeconds must not be negative";
+    public static final String ERROR_PERSISTENCE_BEHAVIOR_MUST_NOT_BE_NULL =
+            "errorPersistenceBehavior must not be null";
 
     public static final String EVENT_PRINTER_POLLED = "PRINTER_POLLED";
     public static final String EVENT_PRINTER_DISABLED = "PRINTER_DISABLED";
@@ -65,6 +77,9 @@ public final class OperationMessages {
     public static final String INVALID_STORED_PRINTER_SNAPSHOT_STATE = "Invalid stored printer snapshot state";
     public static final String INVALID_STORED_PRINTER_SNAPSHOT_TIMESTAMP = "Invalid stored printer snapshot timestamp";
     public static final String FAILED_TO_SAVE_PRINTER_EVENT = "Failed to save printer event";
+
+    public static final String FAILED_TO_LOAD_MONITORING_RULES = "Failed to load monitoring rules";
+    public static final String FAILED_TO_SAVE_MONITORING_RULES = "Failed to save monitoring rules";
 
     public static final String SERIAL_CONNECTION_IS_NOT_OPEN = "Serial port is not open.";
     public static final String INTERRUPTED_WHILE_READING_RESPONSE = "Interrupted while reading response from serial port.";
@@ -124,6 +139,10 @@ public final class OperationMessages {
 
     public static String printersEndpoint(int apiPort) {
         return "[PrinterHub] Printers: http://localhost:" + apiPort + "/printers";
+    }
+
+    public static String monitoringSettingsEndpoint(int apiPort) {
+        return "[PrinterHub] Settings: http://localhost:" + apiPort + "/settings/monitoring";
     }
 
     public static String invalidIntegerSystemProperty(String key, String value) {
@@ -186,6 +205,10 @@ public final class OperationMessages {
         return fieldName + " must not be blank";
     }
 
+    public static String invalidEnumField(String fieldName, String value) {
+        return "Invalid value for " + fieldName + ": " + value;
+    }
+
     public static String failedToOpenSerialPort(String portName) {
         return "Failed to open serial port '" + portName + "'. "
                 + "Possible causes: device path is wrong, permission is missing, "
@@ -237,6 +260,10 @@ public final class OperationMessages {
     public static String failedToRestorePrinterAfterDelete(String printerId, String detail) {
         return "[PrinterHub] Failed to restore printer after DELETE failure for "
                 + printerId + ": " + detail;
+    }
+
+    public static String invalidErrorPersistenceBehavior(String value) {
+        return "Invalid errorPersistenceBehavior: " + value;
     }
 
     public static String safeDetail(String detail, String fallback) {

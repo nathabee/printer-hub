@@ -14,8 +14,8 @@ public final class SerialConnection implements PrinterPort {
 
     private final String portName;
     private final int baudRate;
-    private final SerialPortAdapter port;
 
+    private SerialPortAdapter port;
     private InputStream in;
     private OutputStream out;
 
@@ -24,7 +24,13 @@ public final class SerialConnection implements PrinterPort {
     }
 
     public SerialConnection(String portName, int baudRate) {
-        this(portName, baudRate, new JSerialCommPortAdapter(portName));
+        if (portName == null || portName.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PORT_NAME_MUST_NOT_BE_BLANK);
+        }
+
+        this.portName = portName.trim();
+        this.baudRate = baudRate;
+        this.port = null;
     }
 
     public SerialConnection(String portName, int baudRate, SerialPortAdapter portAdapter) {
@@ -46,21 +52,27 @@ public final class SerialConnection implements PrinterPort {
             return;
         }
 
-        port.setBaudRate(baudRate);
-        port.setNumDataBits(SerialPortAdapter.EIGHT_DATA_BITS);
-        port.setNumStopBits(SerialPortAdapter.ONE_STOP_BIT);
-        port.setParity(SerialPortAdapter.NO_PARITY);
-        port.setComPortTimeouts(SerialPortAdapter.TIMEOUT_NONBLOCKING, 0, 0);
+        disconnect();
 
-        if (!port.openPort()) {
+        SerialPortAdapter activePort = port();
+
+        activePort.setBaudRate(baudRate);
+        activePort.setNumDataBits(SerialPortAdapter.EIGHT_DATA_BITS);
+        activePort.setNumStopBits(SerialPortAdapter.ONE_STOP_BIT);
+        activePort.setParity(SerialPortAdapter.NO_PARITY);
+        activePort.setComPortTimeouts(SerialPortAdapter.TIMEOUT_NONBLOCKING, 0, 0);
+
+        if (!activePort.openPort()) {
             throw new IllegalStateException(OperationMessages.failedToOpenSerialPort(portName));
         }
 
         try {
-            in = port.getInputStream();
-            out = port.getOutputStream();
+            in = activePort.getInputStream();
+            out = activePort.getOutputStream();
         } catch (Exception exception) {
             safelyClosePortOnly();
+            in = null;
+            out = null;
             throw new IllegalStateException(
                     OperationMessages.failedToInitializeSerialStreams(portName),
                     exception
@@ -84,21 +96,27 @@ public final class SerialConnection implements PrinterPort {
             out.flush();
             return readLine();
         } catch (IOException exception) {
+            disconnect();
             throw new IllegalStateException(
                     OperationMessages.failedToSendCommand(trimmedCommand, portName),
                     exception
             );
         } catch (TimeoutException exception) {
+            disconnect();
             throw new IllegalStateException(
                     OperationMessages.noResponseForCommandOnPort(trimmedCommand, portName),
                     exception
             );
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            disconnect();
             throw new IllegalStateException(
                     OperationMessages.interruptedWhileReadingResponse(portName),
                     exception
             );
+        } catch (RuntimeException exception) {
+            disconnect();
+            throw exception;
         }
     }
 
@@ -111,7 +129,7 @@ public final class SerialConnection implements PrinterPort {
         out = null;
 
         try {
-            if (port.isOpen()) {
+            if (port != null && port.isOpen()) {
                 port.closePort();
             }
         } catch (Exception exception) {
@@ -129,8 +147,8 @@ public final class SerialConnection implements PrinterPort {
         return portName;
     }
 
-    public boolean isConnected() {
-        return port.isOpen() && in != null && out != null;
+    public synchronized boolean isConnected() {
+        return port != null && port.isOpen() && in != null && out != null;
     }
 
     private String readLine() throws IOException, TimeoutException, InterruptedException {
@@ -180,9 +198,17 @@ public final class SerialConnection implements PrinterPort {
         }
     }
 
+    private SerialPortAdapter port() {
+        if (port == null) {
+            port = new JSerialCommPortAdapter(portName);
+        }
+
+        return port;
+    }
+
     private void safelyClosePortOnly() {
         try {
-            if (port.isOpen()) {
+            if (port != null && port.isOpen()) {
                 port.closePort();
             }
         } catch (Exception exception) {

@@ -8,6 +8,8 @@ import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.config.RuntimeDefaults;
 import printerhub.monitoring.PrinterMonitoringScheduler;
+import printerhub.persistence.MonitoringRules;
+import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
@@ -33,6 +35,7 @@ public final class RemoteApiServer {
     private final PrinterRuntimeStateCache stateCache;
     private final PrinterMonitoringScheduler monitoringScheduler;
     private final PrinterConfigurationStore printerConfigurationStore;
+    private final MonitoringRulesStore monitoringRulesStore;
 
     private HttpServer server;
 
@@ -41,7 +44,8 @@ public final class RemoteApiServer {
             PrinterRegistry printerRegistry,
             PrinterRuntimeStateCache stateCache,
             PrinterMonitoringScheduler monitoringScheduler,
-            PrinterConfigurationStore printerConfigurationStore
+            PrinterConfigurationStore printerConfigurationStore,
+            MonitoringRulesStore monitoringRulesStore
     ) {
         if (port < RuntimeDefaults.MIN_PORT || port > RuntimeDefaults.MAX_PORT) {
             throw new IllegalArgumentException(OperationMessages.PORT_MUST_BE_IN_VALID_RANGE);
@@ -58,12 +62,16 @@ public final class RemoteApiServer {
         if (printerConfigurationStore == null) {
             throw new IllegalArgumentException(OperationMessages.PRINTER_CONFIGURATION_STORE_MUST_NOT_BE_NULL);
         }
+        if (monitoringRulesStore == null) {
+            throw new IllegalArgumentException(OperationMessages.MONITORING_RULES_STORE_MUST_NOT_BE_NULL);
+        }
 
         this.port = port;
         this.printerRegistry = printerRegistry;
         this.stateCache = stateCache;
         this.monitoringScheduler = monitoringScheduler;
         this.printerConfigurationStore = printerConfigurationStore;
+        this.monitoringRulesStore = monitoringRulesStore;
     }
 
     public void start() {
@@ -77,6 +85,7 @@ public final class RemoteApiServer {
 
             server.createContext("/health", exchange -> safeHandle(exchange, this::handleHealth));
             server.createContext("/printers", exchange -> safeHandle(exchange, this::handlePrinters));
+            server.createContext("/settings/monitoring", exchange -> safeHandle(exchange, this::handleMonitoringSettings));
             server.createContext("/dashboard", exchange -> safeHandle(exchange, this::handleDashboard));
 
             server.start();
@@ -116,6 +125,50 @@ public final class RemoteApiServer {
         }
 
         sendJson(exchange, 200, "{\"status\":\"ok\"}");
+    }
+
+    private void handleMonitoringSettings(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 200, monitoringRulesJson(monitoringRulesStore.load()));
+            return;
+        }
+
+        if ("PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+            MonitoringRules currentRules = monitoringRulesStore.load();
+
+            MonitoringRules updatedRules = new MonitoringRules(
+                    optionalJsonLong(body, "pollIntervalSeconds", currentRules.pollIntervalSeconds()),
+                    optionalJsonLong(
+                            body,
+                            "snapshotMinimumIntervalSeconds",
+                            currentRules.snapshotMinimumIntervalSeconds()
+                    ),
+                    optionalJsonDouble(
+                            body,
+                            "temperatureDeltaThreshold",
+                            currentRules.temperatureDeltaThreshold()
+                    ),
+                    optionalJsonLong(
+                            body,
+                            "eventDeduplicationWindowSeconds",
+                            currentRules.eventDeduplicationWindowSeconds()
+                    ),
+                    optionalJsonErrorPersistenceBehavior(
+                            body,
+                            "errorPersistenceBehavior",
+                            currentRules.errorPersistenceBehavior()
+                    )
+            );
+
+            monitoringRulesStore.save(updatedRules);
+            monitoringScheduler.updateMonitoringRules(updatedRules);
+
+            sendJson(exchange, 200, monitoringRulesJson(updatedRules));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
     }
 
     private void handlePrinters(HttpExchange exchange) throws IOException {
@@ -399,6 +452,16 @@ public final class RemoteApiServer {
         }
     }
 
+    private String monitoringRulesJson(MonitoringRules monitoringRules) {
+        return "{"
+                + "\"pollIntervalSeconds\":" + monitoringRules.pollIntervalSeconds() + ","
+                + "\"snapshotMinimumIntervalSeconds\":" + monitoringRules.snapshotMinimumIntervalSeconds() + ","
+                + "\"temperatureDeltaThreshold\":" + formatDouble(monitoringRules.temperatureDeltaThreshold()) + ","
+                + "\"eventDeduplicationWindowSeconds\":" + monitoringRules.eventDeduplicationWindowSeconds() + ","
+                + "\"errorPersistenceBehavior\":\"" + escapeJson(monitoringRules.errorPersistenceBehavior().name()) + "\""
+                + "}";
+    }
+
     private String printersJson() {
         StringBuilder json = new StringBuilder();
         json.append("{\"printers\":[");
@@ -486,6 +549,10 @@ public final class RemoteApiServer {
             return "null";
         }
 
+        return formatDouble(value);
+    }
+
+    private String formatDouble(double value) {
         return String.format(Locale.ROOT, "%.2f", value);
     }
 
@@ -533,6 +600,48 @@ public final class RemoteApiServer {
         }
 
         return Boolean.parseBoolean(matcher.group(1));
+    }
+
+    private long optionalJsonLong(String body, String fieldName, long fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)"
+        );
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return Long.parseLong(matcher.group(1));
+    }
+
+    private double optionalJsonDouble(String body, String fieldName, double fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)"
+        );
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return Double.parseDouble(matcher.group(1));
+    }
+
+    private MonitoringRules.ErrorPersistenceBehavior optionalJsonErrorPersistenceBehavior(
+            String body,
+            String fieldName,
+            MonitoringRules.ErrorPersistenceBehavior fallback
+    ) {
+        String value = optionalJsonString(body, fieldName, null);
+
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+
+        return MonitoringRules.parseErrorPersistenceBehavior(value);
     }
 
     private String escapeJson(String value) {

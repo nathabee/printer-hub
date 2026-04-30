@@ -27,6 +27,17 @@ class PrinterRuntimeNodeFactoryTest {
     }
 
     @Test
+    void createRealNodeDoesNotOpenConnectionDuringFactoryCreation() {
+        assertDoesNotThrow(() -> PrinterRuntimeNodeFactory.create(
+                "printer-1",
+                "Printer 1",
+                "/dev/ttyUSB0",
+                "real",
+                true
+        ));
+    }
+
+    @Test
     void createSimNodeBuildsSimulatedPrinterPortBackedNode() {
         PrinterRuntimeNode node = PrinterRuntimeNodeFactory.create(
                 "printer-1",
