@@ -846,7 +846,7 @@ Expected result:
  
 ### 0.1.4 — Runtime Verification, Error Management, and Non-Regression
 
-status: planned
+status: done
 
 Purpose:
 
@@ -1239,22 +1239,24 @@ Expected result:
 
 ---
 
+
 ### 0.2.2 — Job Management over Runtime Architecture
 
-status: planned
+status: in progress
+
+#### Step A — Job foundation
 
 Goals:
 
-* connect print jobs to the runtime printer registry
-* add persistent job creation and storage
-* assign jobs to configured printers
-* track job lifecycle through persisted state
-* keep job logic out of HTTP handlers
-* prepare later execution orchestration without coupling it directly to the API layer
+* introduce jobs as first-class runtime objects
+* persist jobs and lifecycle state
+* connect jobs to configured printers in the runtime registry
+* add guarded execution services outside HTTP handlers
+* coordinate execution with monitoring to avoid concurrent printer access
+* prepare later richer execution orchestration
 
 Expected lifecycle:
 
-```text
 CREATED
 QUEUED
 ASSIGNED
@@ -1262,38 +1264,69 @@ RUNNING
 COMPLETED
 FAILED
 CANCELLED
-```
 
-add to scope the commands :
+Initial semantic action scope:
 
-```text
-G28   home printer
-M104  set hotend temperature
-M140  set bed temperature
-M106  fan on
-M107  fan off
-``` 
+READ_TEMPERATURE
+READ_POSITION
+READ_FIRMWARE_INFO
+HOME_AXES
+SET_NOZZLE_TEMPERATURE
+SET_BED_TEMPERATURE
+SET_FAN_SPEED
+TURN_FAN_OFF
 
+Current protocol mapping for this printer family:
 
-Job model note:
+M105
+M114
+M115
+G28
+M104
+M140
+M106
+M107
 
-```text
-A job is a first-class runtime object with its own lifecycle.
-A job may contain one or more printer commands executed in sequence.
-Individual commands are execution steps of the job, not separate lifecycle objects.
-Manual commands from 0.2.1 remain operator-triggered actions outside the job lifecycle.
-```
+Expected result for step A:
 
-Expected result:
+* job persistence exists
+* runtime nodes own execution state
+* guarded execution service exists
+* monitoring is stopped and restarted around execution
+* lifecycle changes and job events are persisted
+* the job foundation is covered by tests
 
-* jobs become a first-class runtime concept
-* printer administration and job management are connected
-* persistence is ready for later execution logic
-* the runtime architecture becomes ready for more realistic printer workload handling
+#### Step B — Job API and Dashboard
 
----
+Goals:
 
- 
+* expose job creation, listing, execution, and cancellation through the REST API
+* add dashboard controls for job-based printer actions
+* show job state and recent job history in the dashboard
+* keep job execution orchestration in services, not in HTTP handlers
+
+Expected API scope:
+
+POST /jobs
+GET  /jobs
+GET  /jobs/{id}
+POST /jobs/{id}/start
+POST /jobs/{id}/cancel
+
+Dashboard expectations:
+
+* create a job from safe predefined actions
+* start a job from the dashboard
+* show current job state
+* show recent jobs and their outcomes
+* show command/job result feedback per printer
+
+Expected result for step B:
+
+* job handling is available through API and dashboard
+* operators can launch guarded jobs from the UI
+* 0.2.2 delivers both runtime job handling and visible administration support
+
 ### 0.2.3 — Local Audit and History Views
 
 status: planned

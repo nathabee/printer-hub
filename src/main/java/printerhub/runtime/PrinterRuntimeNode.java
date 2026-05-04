@@ -10,7 +10,10 @@ public final class PrinterRuntimeNode {
     private final String portName;
     private final String mode;
     private final PrinterPort printerPort;
+
     private volatile boolean enabled;
+    private volatile boolean executionInProgress;
+    private volatile String activeJobId;
 
     public PrinterRuntimeNode(
             String id,
@@ -42,6 +45,8 @@ public final class PrinterRuntimeNode {
         this.mode = mode.trim();
         this.printerPort = printerPort;
         this.enabled = enabled;
+        this.executionInProgress = false;
+        this.activeJobId = null;
     }
 
     public String id() {
@@ -74,6 +79,31 @@ public final class PrinterRuntimeNode {
 
     public void disable() {
         enabled = false;
+    }
+
+    public synchronized boolean executionInProgress() {
+        return executionInProgress;
+    }
+
+    public synchronized String activeJobId() {
+        return activeJobId;
+    }
+
+    public synchronized void beginJobExecution(String jobId) {
+        if (jobId == null || jobId.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.JOB_ID_MUST_NOT_BE_BLANK);
+        }
+        if (executionInProgress) {
+            throw new IllegalStateException(OperationMessages.PRINTER_BUSY);
+        }
+
+        executionInProgress = true;
+        activeJobId = jobId.trim();
+    }
+
+    public synchronized void endJobExecution() {
+        executionInProgress = false;
+        activeJobId = null;
     }
 
     public void close() {

@@ -10,6 +10,7 @@ see ROADMAP.md
 
 ## 0.2.x — Local Runtime Administration and Job Management
 
+- 0.2.2 — Job Management over Runtime Architecture - step A
 - 0.2.1 — Manual Command Execution API
 - 0.2.0 — Monitoring Configuration and Dashboard Administration Basics
 

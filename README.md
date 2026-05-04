@@ -227,10 +227,12 @@ printer-hub/
 │   │   ├── api/
 │   │   ├── command/
 │   │   ├── config/
+│   │   ├── job/
 │   │   ├── monitoring/
 │   │   ├── persistence/
 │   │   ├── runtime/
 │   │   └── serial/
+│   ├── main/resources/dashboard/
 │   └── test/java/
 └── pom.xml
 ```

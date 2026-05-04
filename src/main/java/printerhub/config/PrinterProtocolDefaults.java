@@ -5,6 +5,15 @@ public final class PrinterProtocolDefaults {
     private PrinterProtocolDefaults() {
     }
 
+    public static final String COMMAND_READ_TEMPERATURE = "M105";
+    public static final String COMMAND_READ_POSITION = "M114";
+    public static final String COMMAND_READ_FIRMWARE_INFO = "M115";
+    public static final String COMMAND_HOME_AXES = "G28";
+    public static final String COMMAND_SET_NOZZLE_TEMPERATURE = "M104";
+    public static final String COMMAND_SET_BED_TEMPERATURE = "M140";
+    public static final String COMMAND_SET_FAN_SPEED = "M106";
+    public static final String COMMAND_TURN_FAN_OFF = "M107";
+
     public static final String DEFAULT_STATUS_COMMAND = "M105";
     public static final double DEFAULT_HEATING_TEMPERATURE_THRESHOLD = 45.0;
 
