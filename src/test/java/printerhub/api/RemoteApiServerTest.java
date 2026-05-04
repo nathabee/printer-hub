@@ -7,24 +7,19 @@ import printerhub.OperatorMessageReportWriter;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.command.PrinterCommandService;
+import printerhub.job.PrintJobExecutionService;
+import printerhub.job.PrintJobService;
+import printerhub.job.PrinterActionGuard;
+import printerhub.job.PrinterActionMapper;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNodeFactory;
 import printerhub.runtime.PrinterRuntimeStateCache;
-import printerhub.job.PrintJobExecutionService;
-import printerhub.job.PrintJobService;
-import printerhub.job.PrinterActionGuard;
-import printerhub.job.PrinterActionMapper;
-import printerhub.persistence.PrintJobStore;
-import printerhub.job.PrintJobExecutionService;
-import printerhub.job.PrintJobService;
-import printerhub.job.PrinterActionGuard;
-import printerhub.job.PrinterActionMapper;
-import printerhub.persistence.PrintJobStore;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -684,6 +679,7 @@ class RemoteApiServerTest {
         TestContext context = new TestContext(
                 port,
                 server,
+                monitoringScheduler,
                 printerRegistry,
                 stateCache,
                 configurationStore);
@@ -927,6 +923,7 @@ class RemoteApiServerTest {
         return new TestContext(
                 port,
                 server,
+                monitoringScheduler,
                 printerRegistry,
                 stateCache,
                 configurationStore);
@@ -988,6 +985,7 @@ class RemoteApiServerTest {
     private static final class TestContext {
         private final int port;
         private final RemoteApiServer server;
+        private final PrinterMonitoringScheduler monitoringScheduler;
         private final PrinterRegistry printerRegistry;
         private final PrinterRuntimeStateCache stateCache;
         private final PrinterConfigurationStore configurationStore;
@@ -996,11 +994,13 @@ class RemoteApiServerTest {
         private TestContext(
                 int port,
                 RemoteApiServer server,
+                PrinterMonitoringScheduler monitoringScheduler,
                 PrinterRegistry printerRegistry,
                 PrinterRuntimeStateCache stateCache,
                 PrinterConfigurationStore configurationStore) {
             this.port = port;
             this.server = server;
+            this.monitoringScheduler = monitoringScheduler;
             this.printerRegistry = printerRegistry;
             this.stateCache = stateCache;
             this.configurationStore = configurationStore;
@@ -1025,9 +1025,11 @@ class RemoteApiServerTest {
         }
 
         private void close() {
-            server.stop();
+            try {
+                monitoringScheduler.stop();
+            } finally {
+                server.stop();
+            }
         }
-
     }
-
 }

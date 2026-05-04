@@ -44,42 +44,43 @@ class PrintJobExecutionServiceTest {
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(registry, stateCache);
 
-        PrinterRuntimeNode node = new PrinterRuntimeNode(
-                "printer-1",
-                "Printer 1",
-                "SIM_PORT",
-                "sim",
-                new SuccessPrinterPort(),
-                true
-        );
-        registry.register(node);
+        try {
+            PrinterRuntimeNode node = new PrinterRuntimeNode(
+                    "printer-1",
+                    "Printer 1",
+                    "SIM_PORT",
+                    "sim",
+                    new SuccessPrinterPort(),
+                    true);
+            registry.register(node);
 
-        PrintJob job = jobService.create(
-                "Read firmware",
-                JobType.READ_FIRMWARE_INFO,
-                "printer-1",
-                null,
-                null
-        );
+            PrintJob job = jobService.create(
+                    "Read firmware",
+                    JobType.READ_FIRMWARE_INFO,
+                    "printer-1",
+                    null,
+                    null);
 
-        PrintJobExecutionService executionService = new PrintJobExecutionService(
-                jobService,
-                registry,
-                scheduler,
-                new PrinterActionGuard(),
-                new PrinterActionMapper()
-        );
+            PrintJobExecutionService executionService = new PrintJobExecutionService(
+                    jobService,
+                    registry,
+                    scheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper());
 
-        PrinterActionExecutionResult result = executionService.execute(job.id());
+            PrinterActionExecutionResult result = executionService.execute(job.id());
 
-        assertTrue(result.success());
-        assertEquals("M115", result.wireCommand());
-        assertEquals("ok FIRMWARE_NAME:Marlin", result.response());
+            assertTrue(result.success());
+            assertEquals("M115", result.wireCommand());
+            assertEquals("ok FIRMWARE_NAME:Marlin", result.response());
 
-        PrintJob loaded = store.findById(job.id()).orElseThrow();
-        assertEquals(JobState.COMPLETED, loaded.state());
-        assertFalse(node.executionInProgress());
-        assertNull(node.activeJobId());
+            PrintJob loaded = store.findById(job.id()).orElseThrow();
+            assertEquals(JobState.COMPLETED, loaded.state());
+            assertFalse(node.executionInProgress());
+            assertNull(node.activeJobId());
+        } finally {
+            scheduler.stop();
+        }
     }
 
     @Test
@@ -96,39 +97,40 @@ class PrintJobExecutionServiceTest {
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(registry, stateCache);
 
-        PrinterRuntimeNode node = new PrinterRuntimeNode(
-                "printer-1",
-                "Printer 1",
-                "SIM_PORT",
-                "sim",
-                new SuccessPrinterPort(),
-                false
-        );
-        registry.register(node);
+        try {
+            PrinterRuntimeNode node = new PrinterRuntimeNode(
+                    "printer-1",
+                    "Printer 1",
+                    "SIM_PORT",
+                    "sim",
+                    new SuccessPrinterPort(),
+                    false);
+            registry.register(node);
 
-        PrintJob job = jobService.create(
-                "Home axes",
-                JobType.HOME_AXES,
-                "printer-1",
-                null,
-                null
-        );
+            PrintJob job = jobService.create(
+                    "Home axes",
+                    JobType.HOME_AXES,
+                    "printer-1",
+                    null,
+                    null);
 
-        PrintJobExecutionService executionService = new PrintJobExecutionService(
-                jobService,
-                registry,
-                scheduler,
-                new PrinterActionGuard(),
-                new PrinterActionMapper()
-        );
+            PrintJobExecutionService executionService = new PrintJobExecutionService(
+                    jobService,
+                    registry,
+                    scheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper());
 
-        PrinterActionExecutionResult result = executionService.execute(job.id());
+            PrinterActionExecutionResult result = executionService.execute(job.id());
 
-        assertFalse(result.success());
-        assertEquals(JobFailureReason.PRINTER_DISABLED, result.failureReason());
+            assertFalse(result.success());
+            assertEquals(JobFailureReason.PRINTER_DISABLED, result.failureReason());
 
-        PrintJob loaded = store.findById(job.id()).orElseThrow();
-        assertEquals(JobState.FAILED, loaded.state());
+            PrintJob loaded = store.findById(job.id()).orElseThrow();
+            assertEquals(JobState.FAILED, loaded.state());
+        } finally {
+            scheduler.stop();
+        }
     }
 
     @Test
@@ -145,41 +147,42 @@ class PrintJobExecutionServiceTest {
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
         PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(registry, stateCache);
 
-        PrinterRuntimeNode node = new PrinterRuntimeNode(
-                "printer-1",
-                "Printer 1",
-                "SIM_PORT",
-                "sim",
-                new FailingPrinterPort(),
-                true
-        );
-        registry.register(node);
+        try {
+            PrinterRuntimeNode node = new PrinterRuntimeNode(
+                    "printer-1",
+                    "Printer 1",
+                    "SIM_PORT",
+                    "sim",
+                    new FailingPrinterPort(),
+                    true);
+            registry.register(node);
 
-        PrintJob job = jobService.create(
-                "Home axes",
-                JobType.HOME_AXES,
-                "printer-1",
-                null,
-                null
-        );
+            PrintJob job = jobService.create(
+                    "Home axes",
+                    JobType.HOME_AXES,
+                    "printer-1",
+                    null,
+                    null);
 
-        PrintJobExecutionService executionService = new PrintJobExecutionService(
-                jobService,
-                registry,
-                scheduler,
-                new PrinterActionGuard(),
-                new PrinterActionMapper()
-        );
+            PrintJobExecutionService executionService = new PrintJobExecutionService(
+                    jobService,
+                    registry,
+                    scheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper());
 
-        PrinterActionExecutionResult result = executionService.execute(job.id());
+            PrinterActionExecutionResult result = executionService.execute(job.id());
 
-        assertFalse(result.success());
-        assertEquals(JobFailureReason.COMMUNICATION_FAILURE, result.failureReason());
+            assertFalse(result.success());
+            assertEquals(JobFailureReason.COMMUNICATION_FAILURE, result.failureReason());
 
-        PrintJob loaded = store.findById(job.id()).orElseThrow();
-        assertEquals(JobState.FAILED, loaded.state());
-        assertFalse(node.executionInProgress());
-        assertNull(node.activeJobId());
+            PrintJob loaded = store.findById(job.id()).orElseThrow();
+            assertEquals(JobState.FAILED, loaded.state());
+            assertFalse(node.executionInProgress());
+            assertNull(node.activeJobId());
+        } finally {
+            scheduler.stop();
+        }
     }
 
     private void initializeDatabase(String fileName) {

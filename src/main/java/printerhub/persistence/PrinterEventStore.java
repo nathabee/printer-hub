@@ -94,14 +94,7 @@ public final class PrinterEventStore {
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    events.add(new PrinterEvent(
-                            resultSet.getLong("id"),
-                            resultSet.getString("printer_id"),
-                            resultSet.getString("job_id"),
-                            resultSet.getString("event_type"),
-                            resultSet.getString("message"),
-                            Instant.parse(resultSet.getString("created_at"))
-                    ));
+                    events.add(mapEvent(resultSet));
                 }
             }
 
@@ -109,5 +102,60 @@ public final class PrinterEventStore {
         } catch (SQLException exception) {
             throw new IllegalStateException(OperationMessages.FAILED_TO_LOAD_PRINTER_EVENTS, exception);
         }
+    }
+
+    public List<PrinterEvent> findRecentByJobId(String jobId, int limit) {
+        if (jobId == null || jobId.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.JOB_ID_MUST_NOT_BE_BLANK);
+        }
+
+        int safeLimit = limit <= 0
+                ? RuntimeDefaults.DEFAULT_RECENT_JOB_LIMIT
+                : limit;
+
+        String sql = """
+                SELECT
+                    id,
+                    printer_id,
+                    job_id,
+                    event_type,
+                    message,
+                    created_at
+                FROM printer_events
+                WHERE job_id = ?
+                ORDER BY id DESC
+                LIMIT ?;
+                """;
+
+        List<PrinterEvent> events = new ArrayList<>();
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, jobId.trim());
+            statement.setInt(2, safeLimit);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    events.add(mapEvent(resultSet));
+                }
+            }
+
+            return events;
+        } catch (SQLException exception) {
+            throw new IllegalStateException(OperationMessages.FAILED_TO_LOAD_PRINTER_EVENTS, exception);
+        }
+    }
+
+    private PrinterEvent mapEvent(ResultSet resultSet) throws SQLException {
+        return new PrinterEvent(
+                resultSet.getLong("id"),
+                resultSet.getString("printer_id"),
+                resultSet.getString("job_id"),
+                resultSet.getString("event_type"),
+                resultSet.getString("message"),
+                Instant.parse(resultSet.getString("created_at"))
+        );
     }
 }

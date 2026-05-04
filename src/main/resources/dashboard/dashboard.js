@@ -34,6 +34,7 @@ const adminMessage = document.getElementById("adminMessage");
 
 const printerEventState = new Map();
 const printerCommandResultState = new Map();
+const jobEventState = new Map();
 
 async function loadDashboard() {
   await Promise.all([
@@ -316,6 +317,11 @@ async function handleJobListClick(event) {
 
   if (action === "cancel") {
     await cancelJob(jobId);
+    return;
+  }
+
+  if (action === "load-events") {
+    await loadJobEvents(jobId);
   }
 }
 
@@ -393,12 +399,14 @@ async function startJob(jobId) {
 
     const state = responseBody.job?.state || "UNKNOWN";
     const wireCommand = responseBody.execution?.wireCommand || "n/a";
+    const executionResponse = responseBody.execution?.response || responseBody.execution?.failureDetail || "n/a";
 
-    showAdminMessage(`Started job ${jobId}. Result state: ${state}. Command: ${wireCommand}`);
+    showAdminMessage(`Started job ${jobId}. Result state: ${state}. Command: ${wireCommand}. Result: ${executionResponse}`);
 
     await Promise.all([
       loadJobs(),
-      loadPrinters()
+      loadPrinters(),
+      loadJobEvents(jobId)
     ]);
   } catch (error) {
     showAdminMessage(`Failed to start job ${jobId}: ${error.message}`);
@@ -420,7 +428,10 @@ async function cancelJob(jobId) {
 
     showAdminMessage(`Cancelled job ${jobId}.`);
 
-    await loadJobs();
+    await Promise.all([
+      loadJobs(),
+      loadJobEvents(jobId)
+    ]);
   } catch (error) {
     showAdminMessage(`Failed to cancel job ${jobId}: ${error.message}`);
   }
@@ -479,7 +490,72 @@ async function loadPrinterEvents(printerId) {
   }
 }
 
+async function loadJobEvents(jobId) {
+  const eventsElement = document.getElementById(`job-events-${cssSafeId(jobId)}`);
+
+  if (!eventsElement) {
+    return;
+  }
+
+  const loadingHtml = `<p class="muted">Loading job history...</p>`;
+
+  jobEventState.set(jobId, {
+    isLoaded: false,
+    html: loadingHtml
+  });
+
+  eventsElement.innerHTML = loadingHtml;
+
+  try {
+    const response = await fetch(`/jobs/${encodeURIComponent(jobId)}/events`);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const events = Array.isArray(data.events) ? data.events : [];
+
+    let html;
+
+    if (events.length === 0) {
+      html = `<p class="muted">No job history recorded yet.</p>`;
+    } else {
+      const recentEvents = events.slice(0, 10);
+      html = recentEvents.map(renderJobEvent).join("");
+    }
+
+    jobEventState.set(jobId, {
+      isLoaded: true,
+      html
+    });
+
+    eventsElement.innerHTML = html;
+  } catch (error) {
+    const html = `<p class="muted">Failed to load job history: ${escapeHtml(error.message)}</p>`;
+
+    jobEventState.set(jobId, {
+      isLoaded: true,
+      html
+    });
+
+    eventsElement.innerHTML = html;
+  }
+}
+
 function renderPrinterEvent(event) {
+  return `
+    <div class="event-item">
+      <div class="event-header">
+        <strong>${escapeHtml(event.eventType || "UNKNOWN")}</strong>
+        <span class="event-time">${escapeHtml(event.createdAt || "n/a")}</span>
+      </div>
+      <div class="event-message">${escapeHtml(event.message || "none")}</div>
+    </div>
+  `;
+}
+
+function renderJobEvent(event) {
   return `
     <div class="event-item">
       <div class="event-header">
@@ -640,6 +716,11 @@ function renderJobCard(job) {
   const canStart = job.state === "ASSIGNED";
   const canCancel = job.state !== "COMPLETED" && job.state !== "FAILED" && job.state !== "CANCELLED";
 
+  const eventState = jobEventState.get(job.id);
+  const eventsHtml = eventState && eventState.isLoaded
+    ? eventState.html
+    : `<p class="muted">Job history not loaded yet.</p>`;
+
   return `
     <article class="config-card">
       <div>
@@ -653,6 +734,14 @@ function renderJobCard(job) {
         <div class="message-block">
           <span class="message-label">Created</span>
           <div class="message-value">${escapeHtml(job.createdAt || "n/a")}</div>
+        </div>
+        <div class="message-block">
+          <span class="message-label">Started</span>
+          <div class="message-value">${escapeHtml(job.startedAt || "n/a")}</div>
+        </div>
+        <div class="message-block">
+          <span class="message-label">Finished</span>
+          <div class="message-value">${escapeHtml(job.finishedAt || "n/a")}</div>
         </div>
         <div class="message-block">
           <span class="message-label">Failure</span>
@@ -677,6 +766,22 @@ function renderJobCard(job) {
           ${canCancel ? "" : "disabled"}>
           Cancel
         </button>
+        <button
+          type="button"
+          class="secondary-button"
+          data-job-action="load-events"
+          data-job-id="${escapeHtml(job.id)}">
+          Load history
+        </button>
+      </div>
+
+      <div class="events-section">
+        <div class="events-header">
+          <h4>Job history</h4>
+        </div>
+        <div id="job-events-${cssSafeId(job.id)}" class="events-list">
+          ${eventsHtml}
+        </div>
       </div>
     </article>
   `;

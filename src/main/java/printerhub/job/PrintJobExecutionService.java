@@ -58,6 +58,13 @@ public final class PrintJobExecutionService {
                 printerActionGuard.validateForExecution(job, node);
 
         if (!decision.allowed()) {
+            printJobService.recordJobAuditEvent(
+                    job.id(),
+                    OperationMessages.EVENT_JOB_EXECUTION_FAILED,
+                    "Job execution rejected before start: "
+                            + OperationMessages.safeDetail(decision.detail(), decision.failureReason().name())
+            );
+
             printJobService.markFailed(job.id(), decision.failureReason(), decision.detail());
 
             return PrinterActionExecutionResult.failure(
@@ -75,9 +82,21 @@ public final class PrintJobExecutionService {
 
         try {
             printJobService.markRunning(job.id());
+            printJobService.recordJobAuditEvent(
+                    job.id(),
+                    OperationMessages.EVENT_JOB_EXECUTION_STARTED,
+                    "Job execution started: " + wireCommand
+            );
 
             node.printerPort().connect();
             String response = node.printerPort().sendCommand(wireCommand);
+
+            printJobService.recordJobAuditEvent(
+                    job.id(),
+                    OperationMessages.EVENT_JOB_EXECUTION_SUCCEEDED,
+                    "Job execution succeeded: " + wireCommand + " -> "
+                            + OperationMessages.safeDetail(response, "no response")
+            );
 
             printJobService.markCompleted(job.id());
 
@@ -87,6 +106,12 @@ public final class PrintJobExecutionService {
             String failureDetail = OperationMessages.safeDetail(
                     exception.getMessage(),
                     JobFailureReason.UNKNOWN.name()
+            );
+
+            printJobService.recordJobAuditEvent(
+                    job.id(),
+                    OperationMessages.EVENT_JOB_EXECUTION_FAILED,
+                    "Job execution failed: " + wireCommand + " -> " + failureDetail
             );
 
             printJobService.markFailed(job.id(), failureReason, failureDetail);

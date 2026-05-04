@@ -1306,7 +1306,11 @@ Expected result:
 
 ## 0.2.3 — Local Audit, History Views, and Controlled Job Actions
 
-status: planned
+status: in progress
+- step A : done 
+
+
+### step A — Audit and history visibility
 
 Goals:
 
@@ -1314,10 +1318,29 @@ Goals:
 * expose snapshot history
 * expose job history
 * expose error history
-* show job execution command/result details in dashboard and API
+* show job execution command and result details in dashboard and API
 * make local diagnostics easier through both API and dashboard views
-* extend controlled job-based actions for real hardware administration
 * make operator-triggered job outcomes reviewable after the fact
+
+### step B — Controlled real-printer job workflows
+
+Goals:
+
+* implement controlled job actions as predefined workflows, not just single raw command sends
+* support multi-step preparation, validation, execution, and result interpretation for real-printer actions
+* validate printer readiness before state-changing jobs are executed
+* allow required pre-sequences before the main action command is sent
+* make `HOME_AXES` a controlled workflow instead of only a direct `G28` send
+
+### step C — Correct execution diagnostics and reviewability
+
+Goals:
+
+* persist the actual printer response that led to success or failure
+* distinguish between printer-reported failure, timeout/no response, and communication failure
+* ensure printer-reported failures are not rewritten as generic “no response” failures when a response exists
+* persist raw or normalized diagnostics in job history
+* show sent command, actual response, classified outcome, and failure detail in dashboard history
 
 Controlled job-action scope:
 
@@ -1328,14 +1351,6 @@ SET_BED_TEMPERATURE
 SET_FAN_SPEED
 TURN_FAN_OFF
 ```
-
-Dashboard/API expectations:
-
-* show job timeline and lifecycle history
-* show execution command and response per job
-* show failure details and recovery-relevant diagnostics
-* provide clearer operator views for state-changing jobs
-* make printer behavior and job outcomes reviewable afterward
 
 Expected result:
 

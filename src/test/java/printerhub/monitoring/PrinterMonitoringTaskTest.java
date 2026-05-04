@@ -50,8 +50,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 new StubPrinterPort(),
-                false
-        );
+                false);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -62,8 +61,7 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 () -> false,
                 new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         task.run();
 
@@ -71,7 +69,8 @@ class PrinterMonitoringTaskTest {
         assertEquals(PrinterState.DISCONNECTED, snapshot.state());
         assertEquals("Printer node is disabled.", snapshot.errorMessage());
 
-        assertEquals(1, countRows("printer_snapshots"));
+        // assertEquals(1, countRows("printer_snapshots"));
+        assertEquals(1, countRows("printer_snapshots"), dumpPrinterSnapshots());
         assertEquals(0, countRows("printer_events"));
     }
 
@@ -91,8 +90,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 port,
-                true
-        );
+                true);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -103,8 +101,7 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 () -> false,
                 new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         task.run();
 
@@ -139,8 +136,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 port,
-                true
-        );
+                true);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -151,8 +147,7 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 () -> false,
                 new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         task.run();
 
@@ -181,8 +176,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 port,
-                true
-        );
+                true);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -193,15 +187,15 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 () -> false,
                 new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         task.run();
 
         PrinterSnapshot snapshot = stateCache.findByPrinterId("printer-1").orElseThrow();
         assertEquals(PrinterState.ERROR, snapshot.state());
 
-        assertEquals(1, countRows("printer_events"));
+        // assertEquals(1, countRows("printer_events"));
+        assertEquals(1, countRows("printer_events"), dumpPrinterEvents());
         assertEquals("PRINTER_ERROR", firstEventType());
         assertEquals("Printer returned error response.", firstEventMessage());
     }
@@ -222,8 +216,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 port,
-                true
-        );
+                true);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -234,8 +227,7 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 () -> false,
                 new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         task.run();
 
@@ -266,8 +258,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 port,
-                true
-        );
+                true);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -278,8 +269,7 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 () -> false,
                 eventPolicy,
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         task.run();
         clock.setInstant(clock.instant().plusSeconds(10));
@@ -304,8 +294,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 port,
-                true
-        );
+                true);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -316,8 +305,7 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 () -> false,
                 eventPolicy,
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         port.response = "";
         task.run();
@@ -350,8 +338,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 port,
-                true
-        );
+                true);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -362,8 +349,7 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 shutdown::get,
                 new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         try {
             task.run();
@@ -389,8 +375,7 @@ class PrinterMonitoringTaskTest {
                 "SIM_PORT",
                 "sim",
                 port,
-                true
-        );
+                true);
 
         PrinterMonitoringTask task = new PrinterMonitoringTask(
                 node,
@@ -401,8 +386,7 @@ class PrinterMonitoringTaskTest {
                 "M105",
                 () -> false,
                 new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
 
         assertDoesNotThrow(task::run);
         assertTrue(stateCache.findByPrinterId("printer-1").isPresent());
@@ -416,8 +400,8 @@ class PrinterMonitoringTaskTest {
 
     private int countRows(String tableName) throws Exception {
         try (Connection connection = printerhub.persistence.Database.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
+                Statement statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
             resultSet.next();
             return resultSet.getInt(1);
         }
@@ -425,10 +409,9 @@ class PrinterMonitoringTaskTest {
 
     private String firstEventType() throws Exception {
         try (Connection connection = printerhub.persistence.Database.getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                     "SELECT event_type FROM printer_events ORDER BY id ASC LIMIT 1"
-             );
-             ResultSet resultSet = statement.executeQuery()) {
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT event_type FROM printer_events ORDER BY id ASC LIMIT 1");
+                ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
             return resultSet.getString(1);
         }
@@ -436,10 +419,9 @@ class PrinterMonitoringTaskTest {
 
     private String firstEventMessage() throws Exception {
         try (Connection connection = printerhub.persistence.Database.getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                     "SELECT message FROM printer_events ORDER BY id ASC LIMIT 1"
-             );
-             ResultSet resultSet = statement.executeQuery()) {
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT message FROM printer_events ORDER BY id ASC LIMIT 1");
+                ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
             return resultSet.getString(1);
         }
@@ -504,5 +486,68 @@ class PrinterMonitoringTaskTest {
         public Instant instant() {
             return instant;
         }
+    }
+
+    private String dumpPrinterEvents() throws Exception {
+        StringBuilder dump = new StringBuilder();
+
+        try (Connection connection = printerhub.persistence.Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT id, printer_id, job_id, event_type, message, created_at "
+                                + "FROM printer_events ORDER BY id ASC");
+                ResultSet resultSet = statement.executeQuery()) {
+
+            while (resultSet.next()) {
+                if (!dump.isEmpty()) {
+                    dump.append(System.lineSeparator());
+                }
+
+                dump.append("id=").append(resultSet.getLong("id"))
+                        .append(", printerId=").append(resultSet.getString("printer_id"))
+                        .append(", jobId=").append(resultSet.getString("job_id"))
+                        .append(", eventType=").append(resultSet.getString("event_type"))
+                        .append(", message=").append(resultSet.getString("message"))
+                        .append(", createdAt=").append(resultSet.getString("created_at"));
+            }
+        }
+
+        if (dump.isEmpty()) {
+            return "<no printer_events rows>";
+        }
+
+        return dump.toString();
+    }
+
+    private String dumpPrinterSnapshots() throws Exception {
+        StringBuilder dump = new StringBuilder();
+
+        try (Connection connection = printerhub.persistence.Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT id, printer_id, state, hotend_temperature, bed_temperature, "
+                                + "last_response, error_message, created_at "
+                                + "FROM printer_snapshots ORDER BY id ASC");
+                ResultSet resultSet = statement.executeQuery()) {
+
+            while (resultSet.next()) {
+                if (!dump.isEmpty()) {
+                    dump.append(System.lineSeparator());
+                }
+
+                dump.append("id=").append(resultSet.getLong("id"))
+                        .append(", printerId=").append(resultSet.getString("printer_id"))
+                        .append(", state=").append(resultSet.getString("state"))
+                        .append(", hotend=").append(resultSet.getString("hotend_temperature"))
+                        .append(", bed=").append(resultSet.getString("bed_temperature"))
+                        .append(", lastResponse=").append(resultSet.getString("last_response"))
+                        .append(", errorMessage=").append(resultSet.getString("error_message"))
+                        .append(", createdAt=").append(resultSet.getString("created_at"));
+            }
+        }
+
+        if (dump.isEmpty()) {
+            return "<no printer_snapshots rows>";
+        }
+
+        return dump.toString();
     }
 }

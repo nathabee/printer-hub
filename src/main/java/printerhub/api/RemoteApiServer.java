@@ -63,8 +63,7 @@ public final class RemoteApiServer {
             PrinterEventStore printerEventStore,
             PrinterCommandService printerCommandService,
             PrintJobService printJobService,
-            PrintJobExecutionService printJobExecutionService
-    ) {
+            PrintJobExecutionService printJobExecutionService) {
         if (port < RuntimeDefaults.MIN_PORT || port > RuntimeDefaults.MAX_PORT) {
             throw new IllegalArgumentException(OperationMessages.PORT_MUST_BE_IN_VALID_RANGE);
         }
@@ -120,9 +119,9 @@ public final class RemoteApiServer {
             server.createContext("/health", exchange -> safeHandle(exchange, this::handleHealth));
             server.createContext("/printers", exchange -> safeHandle(exchange, this::handlePrinters));
             server.createContext("/jobs", exchange -> safeHandle(exchange, this::handleJobs));
-            server.createContext("/settings/monitoring", exchange -> safeHandle(exchange, this::handleMonitoringSettings));
+            server.createContext("/settings/monitoring",
+                    exchange -> safeHandle(exchange, this::handleMonitoringSettings));
             server.createContext("/dashboard", exchange -> safeHandle(exchange, this::handleDashboard));
-
             server.start();
 
             System.out.println(OperationMessages.apiServerStarted(port));
@@ -185,24 +184,19 @@ public final class RemoteApiServer {
                     optionalJsonLong(
                             body,
                             "snapshotMinimumIntervalSeconds",
-                            currentRules.snapshotMinimumIntervalSeconds()
-                    ),
+                            currentRules.snapshotMinimumIntervalSeconds()),
                     optionalJsonDouble(
                             body,
                             "temperatureDeltaThreshold",
-                            currentRules.temperatureDeltaThreshold()
-                    ),
+                            currentRules.temperatureDeltaThreshold()),
                     optionalJsonLong(
                             body,
                             "eventDeduplicationWindowSeconds",
-                            currentRules.eventDeduplicationWindowSeconds()
-                    ),
+                            currentRules.eventDeduplicationWindowSeconds()),
                     optionalJsonErrorPersistenceBehavior(
                             body,
                             "errorPersistenceBehavior",
-                            currentRules.errorPersistenceBehavior()
-                    )
-            );
+                            currentRules.errorPersistenceBehavior()));
 
             monitoringRulesStore.save(updatedRules);
             monitoringScheduler.updateMonitoringRules(updatedRules);
@@ -267,8 +261,7 @@ public final class RemoteApiServer {
                     type,
                     printerId,
                     targetTemperature,
-                    fanSpeed
-            );
+                    fanSpeed);
 
             sendJson(exchange, 201, printJobJson(job));
             return;
@@ -303,8 +296,34 @@ public final class RemoteApiServer {
             return;
         }
 
+        if (parts.length == 2 && "events".equals(parts[1])) {
+            handleJobEvents(exchange, jobId);
+            return;
+        }
+
         sendJson(exchange, 404, errorJson(OperationMessages.JOB_ENDPOINT_NOT_FOUND));
     }
+
+    private void handleJobEvents(HttpExchange exchange, String jobId) throws IOException {
+    if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+        return;
+    }
+
+    PrintJob job = printJobService.findById(jobId).orElse(null);
+
+    if (job == null) {
+        sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+        return;
+    }
+
+    List<PrinterEvent> events = printerEventStore.findRecentByJobId(
+            jobId,
+            RuntimeDefaults.DEFAULT_RECENT_JOB_LIMIT
+    );
+
+    sendJson(exchange, 200, printerEventsJson(events));
+}
 
     private void handleJobResource(HttpExchange exchange, String jobId) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -359,8 +378,7 @@ public final class RemoteApiServer {
                     requiredJsonString(body, "displayName"),
                     requiredJsonString(body, "portName"),
                     requiredJsonString(body, "mode"),
-                    optionalJsonBoolean(body, "enabled", true)
-            );
+                    optionalJsonBoolean(body, "enabled", true));
 
             boolean registered = false;
 
@@ -459,8 +477,7 @@ public final class RemoteApiServer {
                     requiredJsonString(body, "displayName"),
                     requiredJsonString(body, "portName"),
                     requiredJsonString(body, "mode"),
-                    enabled
-            );
+                    enabled);
 
             monitoringScheduler.stopMonitoring(printerId);
             printerRegistry.remove(printerId);
@@ -481,8 +498,7 @@ public final class RemoteApiServer {
                 } catch (Exception rollbackException) {
                     System.err.println(OperationMessages.failedToRestorePrinterAfterPut(
                             printerId,
-                            safeMessage(rollbackException)
-                    ));
+                            safeMessage(rollbackException)));
                 }
 
                 if (!restored) {
@@ -494,9 +510,7 @@ public final class RemoteApiServer {
                                     null,
                                     null,
                                     OperationMessages.printerUpdateRestoreFailed(printerId),
-                                    Instant.now()
-                            )
-                    );
+                                    Instant.now()));
                 }
 
                 throw exception;
@@ -529,8 +543,7 @@ public final class RemoteApiServer {
                 } catch (Exception rollbackException) {
                     System.err.println(OperationMessages.failedToRestorePrinterAfterDelete(
                             printerId,
-                            safeMessage(rollbackException)
-                    ));
+                            safeMessage(rollbackException)));
                 }
                 throw exception;
             }
@@ -637,8 +650,8 @@ public final class RemoteApiServer {
         String command = requiredJsonString(body, "command");
         Double targetTemperature = optionalJsonDoubleObject(body, "targetTemperature");
 
-        PrinterCommandService.CommandExecutionResult result =
-                printerCommandService.execute(node, command, targetTemperature);
+        PrinterCommandService.CommandExecutionResult result = printerCommandService.execute(node, command,
+                targetTemperature);
 
         sendJson(exchange, 200, commandExecutionJson(result));
     }
@@ -658,8 +671,7 @@ public final class RemoteApiServer {
 
         List<PrinterEvent> events = printerEventStore.findRecentByPrinterId(
                 printerId,
-                RuntimeDefaults.DEFAULT_RECENT_SNAPSHOT_LIMIT
-        );
+                RuntimeDefaults.DEFAULT_RECENT_SNAPSHOT_LIMIT);
 
         sendJson(exchange, 200, printerEventsJson(events));
     }
@@ -670,7 +682,8 @@ public final class RemoteApiServer {
                 + "\"snapshotMinimumIntervalSeconds\":" + monitoringRules.snapshotMinimumIntervalSeconds() + ","
                 + "\"temperatureDeltaThreshold\":" + formatDouble(monitoringRules.temperatureDeltaThreshold()) + ","
                 + "\"eventDeduplicationWindowSeconds\":" + monitoringRules.eventDeduplicationWindowSeconds() + ","
-                + "\"errorPersistenceBehavior\":\"" + escapeJson(monitoringRules.errorPersistenceBehavior().name()) + "\""
+                + "\"errorPersistenceBehavior\":\"" + escapeJson(monitoringRules.errorPersistenceBehavior().name())
+                + "\""
                 + "}";
     }
 
@@ -721,8 +734,7 @@ public final class RemoteApiServer {
 
     private String jobExecutionJson(
             PrintJob job,
-            PrinterActionExecutionResult result
-    ) {
+            PrinterActionExecutionResult result) {
         return "{"
                 + "\"job\":" + printJobJson(job) + ","
                 + "\"execution\":{"
@@ -730,8 +742,8 @@ public final class RemoteApiServer {
                 + "\"wireCommand\":" + nullableString(result.wireCommand()) + ","
                 + "\"response\":" + nullableString(result.response()) + ","
                 + "\"failureReason\":" + nullableString(
-                        result.failureReason() == null ? null : result.failureReason().name()
-                ) + ","
+                        result.failureReason() == null ? null : result.failureReason().name())
+                + ","
                 + "\"failureDetail\":" + nullableString(result.failureDetail())
                 + "}"
                 + "}";
@@ -795,7 +807,8 @@ public final class RemoteApiServer {
                 + "\"mode\":\"" + escapeJson(node.mode()) + "\","
                 + "\"enabled\":" + node.enabled() + ","
                 + "\"state\":\"" + (snapshot == null ? "UNKNOWN" : snapshot.state()) + "\","
-                + "\"hotendTemperature\":" + nullableNumber(snapshot == null ? null : snapshot.hotendTemperature()) + ","
+                + "\"hotendTemperature\":" + nullableNumber(snapshot == null ? null : snapshot.hotendTemperature())
+                + ","
                 + "\"bedTemperature\":" + nullableNumber(snapshot == null ? null : snapshot.bedTemperature()) + ","
                 + "\"lastResponse\":" + nullableString(snapshot == null ? null : snapshot.lastResponse()) + ","
                 + "\"errorMessage\":" + nullableString(snapshot == null ? null : snapshot.errorMessage()) + ","
@@ -886,8 +899,7 @@ public final class RemoteApiServer {
 
     private String optionalJsonString(String body, String fieldName, String fallback) {
         Pattern pattern = Pattern.compile(
-                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*\"([^\"]*)\""
-        );
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*\"([^\"]*)\"");
 
         Matcher matcher = pattern.matcher(body);
 
@@ -900,8 +912,7 @@ public final class RemoteApiServer {
 
     private boolean optionalJsonBoolean(String body, String fieldName, boolean fallback) {
         Pattern pattern = Pattern.compile(
-                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(true|false)"
-        );
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(true|false)");
 
         Matcher matcher = pattern.matcher(body);
 
@@ -914,8 +925,7 @@ public final class RemoteApiServer {
 
     private long optionalJsonLong(String body, String fieldName, long fallback) {
         Pattern pattern = Pattern.compile(
-                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)"
-        );
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)");
 
         Matcher matcher = pattern.matcher(body);
 
@@ -928,8 +938,7 @@ public final class RemoteApiServer {
 
     private int optionalJsonInteger(String body, String fieldName, int fallback) {
         Pattern pattern = Pattern.compile(
-                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)"
-        );
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)");
 
         Matcher matcher = pattern.matcher(body);
 
@@ -942,8 +951,7 @@ public final class RemoteApiServer {
 
     private Integer optionalJsonIntegerObject(String body, String fieldName) {
         Pattern pattern = Pattern.compile(
-                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)"
-        );
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)");
 
         Matcher matcher = pattern.matcher(body);
 
@@ -956,8 +964,7 @@ public final class RemoteApiServer {
 
     private double optionalJsonDouble(String body, String fieldName, double fallback) {
         Pattern pattern = Pattern.compile(
-                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)"
-        );
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)");
 
         Matcher matcher = pattern.matcher(body);
 
@@ -970,8 +977,7 @@ public final class RemoteApiServer {
 
     private Double optionalJsonDoubleObject(String body, String fieldName) {
         Pattern pattern = Pattern.compile(
-                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)"
-        );
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)");
 
         Matcher matcher = pattern.matcher(body);
 
@@ -985,8 +991,7 @@ public final class RemoteApiServer {
     private MonitoringRules.ErrorPersistenceBehavior optionalJsonErrorPersistenceBehavior(
             String body,
             String fieldName,
-            MonitoringRules.ErrorPersistenceBehavior fallback
-    ) {
+            MonitoringRules.ErrorPersistenceBehavior fallback) {
         String value = optionalJsonString(body, fieldName, null);
 
         if (value == null || value.isBlank()) {
@@ -1045,8 +1050,7 @@ public final class RemoteApiServer {
     private void sendResource(
             HttpExchange exchange,
             String resourcePath,
-            String contentType
-    ) throws IOException {
+            String contentType) throws IOException {
         try (InputStream inputStream = RemoteApiServer.class.getResourceAsStream(resourcePath)) {
             if (inputStream == null) {
                 sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(resourcePath)));
@@ -1072,8 +1076,7 @@ public final class RemoteApiServer {
         } catch (Exception exception) {
             System.err.println(OperationMessages.failedToRollbackPrinterRegistration(
                     printerId,
-                    safeMessage(exception)
-            ));
+                    safeMessage(exception)));
         }
     }
 
@@ -1084,8 +1087,7 @@ public final class RemoteApiServer {
 
         return OperationMessages.safeDetail(
                 exception.getMessage(),
-                OperationMessages.UNKNOWN_API_ERROR
-        );
+                OperationMessages.UNKNOWN_API_ERROR);
     }
 
     @FunctionalInterface

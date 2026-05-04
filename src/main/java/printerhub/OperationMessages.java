@@ -136,6 +136,9 @@ public final class OperationMessages {
     public static final String EVENT_JOB_CREATED = "JOB_CREATED";
     public static final String EVENT_JOB_ASSIGNED = "JOB_ASSIGNED";
     public static final String EVENT_JOB_STARTED = "JOB_STARTED";
+    public static final String EVENT_JOB_EXECUTION_STARTED = "JOB_EXECUTION_STARTED";
+    public static final String EVENT_JOB_EXECUTION_SUCCEEDED = "JOB_EXECUTION_SUCCEEDED";
+    public static final String EVENT_JOB_EXECUTION_FAILED = "JOB_EXECUTION_FAILED";
     public static final String EVENT_JOB_COMPLETED = "JOB_COMPLETED";
     public static final String EVENT_JOB_FAILED = "JOB_FAILED";
     public static final String EVENT_JOB_CANCELLED = "JOB_CANCELLED";

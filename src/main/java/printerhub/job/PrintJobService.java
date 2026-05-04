@@ -18,20 +18,17 @@ public final class PrintJobService {
 
     public PrintJobService(
             PrintJobStore printJobStore,
-            PrinterEventStore eventStore
-    ) {
+            PrinterEventStore eventStore) {
         this(
                 printJobStore,
                 eventStore,
-                Clock.systemUTC()
-        );
+                Clock.systemUTC());
     }
 
     public PrintJobService(
             PrintJobStore printJobStore,
             PrinterEventStore eventStore,
-            Clock clock
-    ) {
+            Clock clock) {
         if (printJobStore == null) {
             throw new IllegalArgumentException(OperationMessages.PRINT_JOB_STORE_MUST_NOT_BE_NULL);
         }
@@ -52,8 +49,7 @@ public final class PrintJobService {
             JobType type,
             String printerId,
             Double targetTemperature,
-            Integer fanSpeed
-    ) {
+            Integer fanSpeed) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException(OperationMessages.JOB_NAME_MUST_NOT_BE_BLANK);
         }
@@ -70,8 +66,7 @@ public final class PrintJobService {
                 printerId,
                 targetTemperature,
                 fanSpeed,
-                now
-        );
+                now);
 
         printJobStore.save(job);
 
@@ -79,16 +74,14 @@ public final class PrintJobService {
                 job.printerId(),
                 job.id(),
                 OperationMessages.EVENT_JOB_CREATED,
-                "Job created: " + job.id()
-        );
+                "Job created: " + job.id());
 
         if (job.printerId() != null) {
             recordEvent(
                     job.printerId(),
                     job.id(),
                     OperationMessages.EVENT_JOB_ASSIGNED,
-                    "Job assigned to printer: " + job.printerId()
-            );
+                    "Job assigned to printer: " + job.printerId());
         }
 
         return job;
@@ -113,8 +106,7 @@ public final class PrintJobService {
                 updated.printerId(),
                 updated.id(),
                 OperationMessages.EVENT_JOB_STARTED,
-                "Job started: " + updated.id()
-        );
+                "Job started: " + updated.id());
 
         return updated;
     }
@@ -130,8 +122,7 @@ public final class PrintJobService {
                 updated.printerId(),
                 updated.id(),
                 OperationMessages.EVENT_JOB_COMPLETED,
-                "Job completed: " + updated.id()
-        );
+                "Job completed: " + updated.id());
 
         return updated;
     }
@@ -139,8 +130,7 @@ public final class PrintJobService {
     public PrintJob markFailed(
             String jobId,
             JobFailureReason failureReason,
-            String failureDetail
-    ) {
+            String failureDetail) {
         PrintJob job = loadRequired(jobId);
         Instant now = Instant.now(clock);
 
@@ -148,8 +138,7 @@ public final class PrintJobService {
                 failureReason == null ? null : failureReason.name(),
                 failureDetail,
                 now,
-                now
-        );
+                now);
         printJobStore.update(updated);
 
         recordEvent(
@@ -157,8 +146,7 @@ public final class PrintJobService {
                 updated.id(),
                 OperationMessages.EVENT_JOB_FAILED,
                 "Job failed: " + updated.id() + " -> "
-                        + OperationMessages.safeDetail(failureDetail, JobFailureReason.UNKNOWN.name())
-        );
+                        + OperationMessages.safeDetail(failureDetail, JobFailureReason.UNKNOWN.name()));
 
         return updated;
     }
@@ -174,10 +162,22 @@ public final class PrintJobService {
                 updated.printerId(),
                 updated.id(),
                 OperationMessages.EVENT_JOB_CANCELLED,
-                "Job cancelled: " + updated.id()
-        );
+                "Job cancelled: " + updated.id());
 
         return updated;
+    }
+
+    public void recordJobAuditEvent(
+            String jobId,
+            String eventType,
+            String message) {
+        PrintJob job = loadRequired(jobId);
+
+        recordEvent(
+                job.printerId(),
+                job.id(),
+                eventType,
+                message);
     }
 
     private PrintJob loadRequired(String jobId) {
@@ -193,8 +193,7 @@ public final class PrintJobService {
             String printerId,
             String jobId,
             String eventType,
-            String message
-    ) {
+            String message) {
         try {
             eventStore.record(printerId, jobId, eventType, message);
         } catch (Exception exception) {
@@ -202,9 +201,7 @@ public final class PrintJobService {
                     printerId == null ? "unknown-printer" : printerId,
                     OperationMessages.safeDetail(
                             exception.getMessage(),
-                            OperationMessages.FAILED_TO_SAVE_PRINTER_EVENT
-                    )
-            ));
+                            OperationMessages.FAILED_TO_SAVE_PRINTER_EVENT)));
         }
     }
 }
