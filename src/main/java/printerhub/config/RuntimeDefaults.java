@@ -12,6 +12,7 @@ public final class RuntimeDefaults {
     public static final int MIN_MONITORING_EXECUTOR_POOL_SIZE = 1;
     public static final int MONITORING_EXECUTOR_EXTRA_THREADS = 4;
     public static final int DEFAULT_MONITORING_EXECUTOR_POOL_SIZE = 8;
+    public static final int DEFAULT_RECENT_JOB_LIMIT = 20;
     public static final int DEFAULT_RECENT_SNAPSHOT_LIMIT = 20;
 
     public static final String API_PORT_PROPERTY = "printerhub.api.port";

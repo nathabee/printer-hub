@@ -93,6 +93,62 @@
     <section class="admin-panel">
       <div class="section-heading">
         <div>
+          <h2>Job management</h2>
+          <p class="muted">Create guarded printer jobs, start them from the dashboard, and review recent job outcomes.</p>
+        </div>
+      </div>
+
+      <form id="jobForm" class="form-grid">
+        <label>
+          Job name
+          <input id="jobNameInput" name="jobName" type="text" placeholder="Read firmware on printer-1" required>
+        </label>
+
+        <label>
+          Job type
+          <select id="jobTypeInput" name="type" required>
+            <option value="READ_FIRMWARE_INFO">READ_FIRMWARE_INFO</option>
+            <option value="READ_TEMPERATURE">READ_TEMPERATURE</option>
+            <option value="READ_POSITION">READ_POSITION</option>
+            <option value="HOME_AXES">HOME_AXES</option>
+            <option value="SET_NOZZLE_TEMPERATURE">SET_NOZZLE_TEMPERATURE</option>
+            <option value="SET_BED_TEMPERATURE">SET_BED_TEMPERATURE</option>
+            <option value="SET_FAN_SPEED">SET_FAN_SPEED</option>
+            <option value="TURN_FAN_OFF">TURN_FAN_OFF</option>
+          </select>
+        </label>
+
+        <label>
+          Printer
+          <select id="jobPrinterIdInput" name="printerId">
+            <option value="">Select printer</option>
+          </select>
+        </label>
+
+        <label>
+          Target temperature
+          <input id="jobTargetTemperatureInput" name="targetTemperature" type="number" step="1" min="0" placeholder="200">
+        </label>
+
+        <label>
+          Fan speed
+          <input id="jobFanSpeedInput" name="fanSpeed" type="number" step="1" min="0" max="255" placeholder="255">
+        </label>
+
+        <div class="form-actions">
+          <button type="submit">Create job</button>
+          <button id="clearJobFormButton" type="button" class="secondary-button">Clear form</button>
+        </div>
+      </form>
+
+      <div id="jobList" class="config-list">
+        <p class="muted">Loading jobs...</p>
+      </div>
+    </section>
+
+    <section class="admin-panel">
+      <div class="section-heading">
+        <div>
           <h2>Monitoring rules</h2>
           <p class="muted">Control poll timing, snapshot persistence, event deduplication, and error-event persistence.</p>
         </div>

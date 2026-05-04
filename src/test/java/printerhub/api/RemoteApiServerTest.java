@@ -15,6 +15,16 @@ import printerhub.persistence.PrinterEventStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNodeFactory;
 import printerhub.runtime.PrinterRuntimeStateCache;
+import printerhub.job.PrintJobExecutionService;
+import printerhub.job.PrintJobService;
+import printerhub.job.PrinterActionGuard;
+import printerhub.job.PrinterActionMapper;
+import printerhub.persistence.PrintJobStore;
+import printerhub.job.PrintJobExecutionService;
+import printerhub.job.PrintJobService;
+import printerhub.job.PrinterActionGuard;
+import printerhub.job.PrinterActionMapper;
+import printerhub.persistence.PrintJobStore;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -41,17 +51,7 @@ class RemoteApiServerTest {
     void constructorFailsForInvalidPort() {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> new RemoteApiServer(
-                        0,
-                        new PrinterRegistry(),
-                        new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
-                        new PrinterConfigurationStore(),
-                        new MonitoringRulesStore(),
-                        new PrinterEventStore(),
-                        new PrinterCommandService(new PrinterEventStore())
-                )
-        );
+                () -> createApiServerForConstructorTest(0));
 
         assertEquals("port must be between 1 and 65535", exception.getMessage());
     }
@@ -126,8 +126,7 @@ class RemoteApiServerTest {
                     "/settings/monitoring",
                     """
                             {"pollIntervalSeconds":12,"snapshotMinimumIntervalSeconds":45,"temperatureDeltaThreshold":2.5,"eventDeduplicationWindowSeconds":90,"errorPersistenceBehavior":"ALWAYS"}
-                            """
-            );
+                            """);
 
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"pollIntervalSeconds\":12"));
@@ -150,8 +149,7 @@ class RemoteApiServerTest {
                     "/printers",
                     """
                             {"id":"printer-1","displayName":"Printer 1","portName":"SIM_PORT","mode":"sim","enabled":true}
-                            """
-            );
+                            """);
 
             assertEquals(201, response.statusCode());
             assertTrue(response.body().contains("\"id\":\"printer-1\""));
@@ -176,8 +174,7 @@ class RemoteApiServerTest {
                     "/printers",
                     """
                             {"id":"printer-1","portName":"SIM_PORT","mode":"sim"}
-                            """
-            );
+                            """);
 
             assertEquals(400, response.statusCode());
             assertEquals("{\"error\":\"displayName must not be blank\"}", response.body());
@@ -192,19 +189,16 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
 
             HttpResponse<String> response = context.request(
                     "POST",
                     "/printers/printer-1/commands",
                     """
                             {"command":"M105"}
-                            """
-            );
+                            """);
 
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"printerId\":\"printer-1\""));
@@ -222,19 +216,16 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
 
             HttpResponse<String> response = context.request(
                     "POST",
                     "/printers/printer-1/commands",
                     """
                             {"command":"M104","targetTemperature":200}
-                            """
-            );
+                            """);
 
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"command\":\"M104\""));
@@ -250,19 +241,16 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
 
             HttpResponse<String> response = context.request(
                     "POST",
                     "/printers/printer-1/commands",
                     """
                             {"command":"M104"}
-                            """
-            );
+                            """);
 
             assertEquals(400, response.statusCode());
             assertEquals("{\"error\":\"targetTemperature is required for command M104\"}", response.body());
@@ -277,19 +265,16 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
 
             HttpResponse<String> response = context.request(
                     "POST",
                     "/printers/printer-1/commands",
                     """
                             {"command":"G0"}
-                            """
-            );
+                            """);
 
             assertEquals(400, response.statusCode());
             assertEquals("{\"error\":\"Invalid printer command: G0\"}", response.body());
@@ -304,19 +289,16 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
 
             HttpResponse<String> commandResponse = context.request(
                     "POST",
                     "/printers/printer-1/commands",
                     """
                             {"command":"M114"}
-                            """
-            );
+                            """);
 
             assertEquals(200, commandResponse.statusCode());
 
@@ -337,15 +319,12 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.stateCache.update(
                     "printer-1",
-                    PrinterSnapshot.disconnected(Instant.parse("2026-04-29T10:00:00Z"))
-            );
+                    PrinterSnapshot.disconnected(Instant.parse("2026-04-29T10:00:00Z")));
 
             HttpResponse<String> response = context.get("/printers/printer-1");
 
@@ -377,11 +356,9 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
 
             HttpResponse<String> response = context.get("/printers/printer-1/status");
 
@@ -389,8 +366,7 @@ class RemoteApiServerTest {
             assertEquals(
                     "{\"state\":\"UNKNOWN\",\"hotendTemperature\":null,\"bedTemperature\":null,"
                             + "\"lastResponse\":null,\"errorMessage\":null,\"updatedAt\":null}",
-                    response.body()
-            );
+                    response.body());
         } finally {
             context.close();
         }
@@ -402,11 +378,9 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.stateCache.update(
                     "printer-1",
                     PrinterSnapshot.error(
@@ -415,9 +389,7 @@ class RemoteApiServerTest {
                             25.0,
                             "Error: heater",
                             "Heater failure",
-                            Instant.parse("2026-04-29T10:01:00Z")
-                    )
-            );
+                            Instant.parse("2026-04-29T10:01:00Z")));
 
             HttpResponse<String> response = context.get("/printers/printer-1/status");
 
@@ -437,19 +409,16 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Old Printer", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Old Printer", "SIM_PORT", "sim", true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Old Printer", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Old Printer", "SIM_PORT", "sim", true));
 
             HttpResponse<String> response = context.request(
                     "PUT",
                     "/printers/printer-1",
                     """
                             {"displayName":"Updated Printer","portName":"SIM_PORT_2","mode":"sim-error","enabled":false}
-                            """
-            );
+                            """);
 
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"displayName\":\"Updated Printer\""));
@@ -473,8 +442,7 @@ class RemoteApiServerTest {
                     "/printers/missing",
                     """
                             {"displayName":"Updated Printer","portName":"SIM_PORT_2","mode":"sim","enabled":true}
-                            """
-            );
+                            """);
 
             assertEquals(404, response.statusCode());
             assertEquals("{\"error\":\"printer_not_found\"}", response.body());
@@ -489,15 +457,12 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.stateCache.update(
                     "printer-1",
-                    PrinterSnapshot.disconnected(Instant.parse("2026-04-29T10:00:00Z"))
-            );
+                    PrinterSnapshot.disconnected(Instant.parse("2026-04-29T10:00:00Z")));
 
             HttpResponse<String> response = context.request("DELETE", "/printers/printer-1", null);
 
@@ -530,11 +495,9 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
 
             HttpResponse<String> response = context.request("POST", "/printers/printer-1/enable", null);
 
@@ -552,11 +515,9 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
 
             HttpResponse<String> response = context.request("POST", "/printers/printer-1/disable", null);
 
@@ -574,11 +535,9 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false)
-            );
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", false));
 
             HttpResponse<String> response = context.request("GET", "/printers/printer-1/enable", null);
 
@@ -669,8 +628,7 @@ class RemoteApiServerTest {
                     "/printers",
                     """
                             {"id":"printer-1","displayName":"Printer 1","portName":"SIM_PORT","mode":"sim
-                            """
-            );
+                            """);
 
             assertEquals(400, response.statusCode());
             assertTrue(response.body().contains("\"error\":"));
@@ -692,10 +650,22 @@ class RemoteApiServerTest {
         PrinterEventStore printerEventStore = new PrinterEventStore();
         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                 printerRegistry,
-                stateCache
-        );
+                stateCache);
 
         int port = findFreePort();
+
+        PrintJobStore printJobStore = new PrintJobStore();
+
+        PrintJobService printJobService = new PrintJobService(
+                printJobStore,
+                printerEventStore);
+
+        PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                printJobService,
+                printerRegistry,
+                monitoringScheduler,
+                new PrinterActionGuard(),
+                new PrinterActionMapper());
 
         RemoteApiServer server = new RemoteApiServer(
                 port,
@@ -705,8 +675,10 @@ class RemoteApiServerTest {
                 configurationStore,
                 monitoringRulesStore,
                 printerEventStore,
-                new PrinterCommandService(printerEventStore)
-        );
+                new PrinterCommandService(printerEventStore),
+                printJobService,
+                printJobExecutionService);
+
         server.start();
 
         TestContext context = new TestContext(
@@ -714,8 +686,7 @@ class RemoteApiServerTest {
                 server,
                 printerRegistry,
                 stateCache,
-                configurationStore
-        );
+                configurationStore);
 
         try {
             HttpResponse<String> response = context.request(
@@ -723,12 +694,160 @@ class RemoteApiServerTest {
                     "/printers",
                     """
                             {"id":"printer-1","displayName":"Printer 1","portName":"SIM_PORT","mode":"sim","enabled":true}
-                            """
-            );
+                            """);
 
             assertEquals(500, response.statusCode());
             assertTrue(response.body().contains("\"error\":"));
             assertTrue(context.printerRegistry.findById("printer-1").isEmpty());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postJobsCreatesAssignedJob() throws Exception {
+        TestContext context = createContext("jobs-post.db");
+
+        try {
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/jobs",
+                    """
+                            {"name":"Home axes","type":"HOME_AXES","printerId":"printer-1"}
+                            """);
+
+            assertEquals(201, response.statusCode());
+            assertTrue(response.body().contains("\"name\":\"Home axes\""));
+            assertTrue(response.body().contains("\"type\":\"HOME_AXES\""));
+            assertTrue(response.body().contains("\"state\":\"ASSIGNED\""));
+            assertTrue(response.body().contains("\"printerId\":\"printer-1\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void getJobsReturnsCreatedJobs() throws Exception {
+        TestContext context = createContext("jobs-get.db");
+
+        try {
+            HttpResponse<String> createResponse = context.request(
+                    "POST",
+                    "/jobs",
+                    """
+                            {"name":"Read firmware","type":"READ_FIRMWARE_INFO","printerId":"printer-1"}
+                            """);
+
+            assertEquals(201, createResponse.statusCode());
+
+            HttpResponse<String> response = context.get("/jobs");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"jobs\":["));
+            assertTrue(response.body().contains("\"name\":\"Read firmware\""));
+            assertTrue(response.body().contains("\"type\":\"READ_FIRMWARE_INFO\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void getJobByIdReturnsJob() throws Exception {
+        TestContext context = createContext("job-get.db");
+
+        try {
+            HttpResponse<String> createResponse = context.request(
+                    "POST",
+                    "/jobs",
+                    """
+                            {"name":"Read temperature","type":"READ_TEMPERATURE","printerId":"printer-1"}
+                            """);
+
+            assertEquals(201, createResponse.statusCode());
+            String jobId = extractJsonString(createResponse.body(), "id");
+            assertNotNull(jobId);
+
+            HttpResponse<String> response = context.get("/jobs/" + jobId);
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"id\":\"" + jobId + "\""));
+            assertTrue(response.body().contains("\"name\":\"Read temperature\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postJobStartExecutesAssignedJob() throws Exception {
+        TestContext context = createContext("job-start.db");
+
+        try {
+            HttpResponse<String> createResponse = context.request(
+                    "POST",
+                    "/jobs",
+                    """
+                            {"name":"Read firmware","type":"READ_FIRMWARE_INFO","printerId":"printer-1"}
+                            """);
+
+            assertEquals(201, createResponse.statusCode());
+            String jobId = extractJsonString(createResponse.body(), "id");
+            assertNotNull(jobId);
+
+            context.printerRegistry.register(
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/jobs/" + jobId + "/start",
+                    null);
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"success\":true"));
+            assertTrue(response.body().contains("\"wireCommand\":\"M115\""));
+            assertTrue(response.body().contains("\"state\":\"COMPLETED\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postJobCancelCancelsJob() throws Exception {
+        TestContext context = createContext("job-cancel.db");
+
+        try {
+            HttpResponse<String> createResponse = context.request(
+                    "POST",
+                    "/jobs",
+                    """
+                            {"name":"Fan off","type":"TURN_FAN_OFF","printerId":"printer-1"}
+                            """);
+
+            assertEquals(201, createResponse.statusCode());
+            String jobId = extractJsonString(createResponse.body(), "id");
+            assertNotNull(jobId);
+
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/jobs/" + jobId + "/cancel",
+                    null);
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"id\":\"" + jobId + "\""));
+            assertTrue(response.body().contains("\"state\":\"CANCELLED\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void getMissingJobReturns404() throws Exception {
+        TestContext context = createContext("job-get-404.db");
+
+        try {
+            HttpResponse<String> response = context.get("/jobs/missing-job");
+
+            assertEquals(404, response.statusCode());
+            assertEquals("{\"error\":\"job_not_found\"}", response.body());
         } finally {
             context.close();
         }
@@ -758,8 +877,7 @@ class RemoteApiServerTest {
                 "Printer configuration persistence was exercised through create/update/delete flows.\n"
                         + "Monitoring settings persistence was exercised through GET/PUT flows.\n"
                         + "Manual command execution and event retrieval were exercised through dedicated endpoints.\n"
-                        + "Controlled persistence failure path was also verified."
-        );
+                        + "Controlled persistence failure path was also verified.");
 
         assertTrue(java.nio.file.Files.exists(java.nio.file.Path.of("target", "operator-message-report.md")));
     }
@@ -774,10 +892,22 @@ class RemoteApiServerTest {
         PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
         MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
         PrinterEventStore printerEventStore = new PrinterEventStore();
+        PrintJobStore printJobStore = new PrintJobStore();
+
         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                 printerRegistry,
-                stateCache
-        );
+                stateCache);
+
+        PrintJobService printJobService = new PrintJobService(
+                printJobStore,
+                printerEventStore);
+
+        PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                printJobService,
+                printerRegistry,
+                monitoringScheduler,
+                new PrinterActionGuard(),
+                new PrinterActionMapper());
 
         int port = findFreePort();
 
@@ -789,8 +919,9 @@ class RemoteApiServerTest {
                 configurationStore,
                 monitoringRulesStore,
                 printerEventStore,
-                new PrinterCommandService(printerEventStore)
-        );
+                new PrinterCommandService(printerEventStore),
+                printJobService,
+                printJobExecutionService);
         server.start();
 
         return new TestContext(
@@ -798,14 +929,60 @@ class RemoteApiServerTest {
                 server,
                 printerRegistry,
                 stateCache,
-                configurationStore
-        );
+                configurationStore);
     }
 
     private int findFreePort() throws IOException {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
         }
+    }
+
+    private String extractJsonString(String body, String fieldName) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "\"" + java.util.regex.Pattern.quote(fieldName) + "\"\\s*:\\s*\"([^\"]*)\"");
+        java.util.regex.Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return null;
+        }
+
+        return matcher.group(1);
+    }
+
+    private RemoteApiServer createApiServerForConstructorTest(int port) {
+        PrinterRegistry printerRegistry = new PrinterRegistry();
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+        PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
+                printerRegistry,
+                stateCache);
+        PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
+        MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+        PrinterEventStore printerEventStore = new PrinterEventStore();
+        PrintJobStore printJobStore = new PrintJobStore();
+
+        PrintJobService printJobService = new PrintJobService(
+                printJobStore,
+                printerEventStore);
+
+        PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                printJobService,
+                printerRegistry,
+                monitoringScheduler,
+                new PrinterActionGuard(),
+                new PrinterActionMapper());
+
+        return new RemoteApiServer(
+                port,
+                printerRegistry,
+                stateCache,
+                monitoringScheduler,
+                configurationStore,
+                monitoringRulesStore,
+                printerEventStore,
+                new PrinterCommandService(printerEventStore),
+                printJobService,
+                printJobExecutionService);
     }
 
     private static final class TestContext {
@@ -821,8 +998,7 @@ class RemoteApiServerTest {
                 RemoteApiServer server,
                 PrinterRegistry printerRegistry,
                 PrinterRuntimeStateCache stateCache,
-                PrinterConfigurationStore configurationStore
-        ) {
+                PrinterConfigurationStore configurationStore) {
             this.port = port;
             this.server = server;
             this.printerRegistry = printerRegistry;
@@ -851,5 +1027,7 @@ class RemoteApiServerTest {
         private void close() {
             server.stop();
         }
+
     }
+
 }

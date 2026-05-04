@@ -3,9 +3,14 @@ package printerhub;
 import printerhub.api.RemoteApiServer;
 import printerhub.command.PrinterCommandService;
 import printerhub.config.RuntimeDefaults;
+import printerhub.job.PrintJobExecutionService;
+import printerhub.job.PrintJobService;
+import printerhub.job.PrinterActionGuard;
+import printerhub.job.PrinterActionMapper;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.runtime.PrinterHubRuntime;
@@ -32,11 +37,26 @@ public final class Main {
             PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
             MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
             PrinterEventStore printerEventStore = new PrinterEventStore();
+            PrintJobStore printJobStore = new PrintJobStore();
+
             PrinterCommandService printerCommandService = new PrinterCommandService(printerEventStore);
 
             PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                     printerRegistry,
                     stateCache
+            );
+
+            PrintJobService printJobService = new PrintJobService(
+                    printJobStore,
+                    printerEventStore
+            );
+
+            PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                    printJobService,
+                    printerRegistry,
+                    monitoringScheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper()
             );
 
             RemoteApiServer apiServer = new RemoteApiServer(
@@ -47,7 +67,9 @@ public final class Main {
                     printerConfigurationStore,
                     monitoringRulesStore,
                     printerEventStore,
-                    printerCommandService
+                    printerCommandService,
+                    printJobService,
+                    printJobExecutionService
             );
 
             PrinterHubRuntime runtime = new PrinterHubRuntime(

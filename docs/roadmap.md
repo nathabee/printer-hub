@@ -1241,22 +1241,29 @@ Expected result:
 
 
 ### 0.2.2 — Job Management over Runtime Architecture
+ 
+- step A : Foundation
+- step B : Dashboard
 
-status: in progress
 
-#### Step A — Job foundation
+status: done
 
 Goals:
 
-* introduce jobs as first-class runtime objects
-* persist jobs and lifecycle state
-* connect jobs to configured printers in the runtime registry
-* add guarded execution services outside HTTP handlers
-* coordinate execution with monitoring to avoid concurrent printer access
-* prepare later richer execution orchestration
+* connect print jobs to the runtime printer registry
+* add persistent job creation and storage
+* assign jobs to configured printers
+* track job lifecycle through persisted state
+* keep job logic out of HTTP handlers
+* prepare later execution orchestration without coupling it directly to the API layer
+* extend runtime nodes with execution ownership
+* coordinate job execution with monitoring to avoid concurrent printer access
+* expose basic job operations through the REST API
+* make basic job creation and execution available through the dashboard
 
 Expected lifecycle:
 
+```text
 CREATED
 QUEUED
 ASSIGNED
@@ -1264,9 +1271,11 @@ RUNNING
 COMPLETED
 FAILED
 CANCELLED
+```
 
-Initial semantic action scope:
+Initial semantic job scope:
 
+```text
 READ_TEMPERATURE
 READ_POSITION
 READ_FIRMWARE_INFO
@@ -1275,59 +1284,27 @@ SET_NOZZLE_TEMPERATURE
 SET_BED_TEMPERATURE
 SET_FAN_SPEED
 TURN_FAN_OFF
+```
 
-Current protocol mapping for this printer family:
+Job model note:
 
-M105
-M114
-M115
-G28
-M104
-M140
-M106
-M107
+```text
+A job is a first-class runtime object with its own lifecycle.
+In this first implementation, one job maps to one guarded semantic printer action.
+Manual commands from 0.2.1 remain operator-triggered actions outside the job lifecycle.
+```
 
-Expected result for step A:
+Expected result:
 
-* job persistence exists
-* runtime nodes own execution state
-* guarded execution service exists
-* monitoring is stopped and restarted around execution
-* lifecycle changes and job events are persisted
-* the job foundation is covered by tests
+* jobs become a first-class runtime concept
+* printer administration and job handling are connected
+* persistence is ready for later execution logic
+* basic job creation and execution are available through API and dashboard
+* the runtime architecture is ready for richer execution and audit features later
 
-#### Step B — Job API and Dashboard
+---
 
-Goals:
-
-* expose job creation, listing, execution, and cancellation through the REST API
-* add dashboard controls for job-based printer actions
-* show job state and recent job history in the dashboard
-* keep job execution orchestration in services, not in HTTP handlers
-
-Expected API scope:
-
-POST /jobs
-GET  /jobs
-GET  /jobs/{id}
-POST /jobs/{id}/start
-POST /jobs/{id}/cancel
-
-Dashboard expectations:
-
-* create a job from safe predefined actions
-* start a job from the dashboard
-* show current job state
-* show recent jobs and their outcomes
-* show command/job result feedback per printer
-
-Expected result for step B:
-
-* job handling is available through API and dashboard
-* operators can launch guarded jobs from the UI
-* 0.2.2 delivers both runtime job handling and visible administration support
-
-### 0.2.3 — Local Audit and History Views
+## 0.2.3 — Local Audit, History Views, and Controlled Job Actions
 
 status: planned
 
@@ -1337,13 +1314,36 @@ Goals:
 * expose snapshot history
 * expose job history
 * expose error history
+* show job execution command/result details in dashboard and API
 * make local diagnostics easier through both API and dashboard views
+* extend controlled job-based actions for real hardware administration
+* make operator-triggered job outcomes reviewable after the fact
+
+Controlled job-action scope:
+
+```text
+HOME_AXES
+SET_NOZZLE_TEMPERATURE
+SET_BED_TEMPERATURE
+SET_FAN_SPEED
+TURN_FAN_OFF
+```
+
+Dashboard/API expectations:
+
+* show job timeline and lifecycle history
+* show execution command and response per job
+* show failure details and recovery-relevant diagnostics
+* provide clearer operator views for state-changing jobs
+* make printer behavior and job outcomes reviewable afterward
 
 Expected result:
 
 * the local runtime becomes easier to inspect after failures
 * dashboard and API become more useful for troubleshooting
 * printer behavior, operator actions, and job state changes become reviewable after the fact
+* controlled real-printer job actions become more operationally useful
+
 
 ---
 

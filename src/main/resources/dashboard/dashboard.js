@@ -20,7 +20,18 @@ const snapshotMinimumIntervalSecondsInput = document.getElementById("snapshotMin
 const temperatureDeltaThresholdInput = document.getElementById("temperatureDeltaThresholdInput");
 const eventDeduplicationWindowSecondsInput = document.getElementById("eventDeduplicationWindowSecondsInput");
 const errorPersistenceBehaviorInput = document.getElementById("errorPersistenceBehaviorInput");
+
+const jobForm = document.getElementById("jobForm");
+const jobNameInput = document.getElementById("jobNameInput");
+const jobTypeInput = document.getElementById("jobTypeInput");
+const jobPrinterIdInput = document.getElementById("jobPrinterIdInput");
+const jobTargetTemperatureInput = document.getElementById("jobTargetTemperatureInput");
+const jobFanSpeedInput = document.getElementById("jobFanSpeedInput");
+const clearJobFormButton = document.getElementById("clearJobFormButton");
+const jobList = document.getElementById("jobList");
+
 const adminMessage = document.getElementById("adminMessage");
+
 const printerEventState = new Map();
 const printerCommandResultState = new Map();
 
@@ -28,7 +39,8 @@ async function loadDashboard() {
   await Promise.all([
     loadPrinters(),
     loadConfiguredPrinters(),
-    loadMonitoringRules()
+    loadMonitoringRules(),
+    loadJobs()
   ]);
 }
 
@@ -52,6 +64,7 @@ async function loadPrinters() {
     lastRefresh.textContent = new Date().toLocaleTimeString();
 
     renderPrinters(printers);
+    populateJobPrinterSelect(printers);
   } catch (error) {
     printerGrid.innerHTML = `<p class="muted">Failed to load printer data: ${escapeHtml(error.message)}</p>`;
   }
@@ -94,15 +107,34 @@ async function loadMonitoringRules() {
   }
 }
 
+async function loadJobs() {
+  try {
+    const response = await fetch("/jobs");
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+
+    renderJobs(jobs);
+  } catch (error) {
+    jobList.innerHTML = `<p class="muted">Failed to load jobs: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
 async function savePrinter(event) {
   event.preventDefault();
+
+  const existingEnabledValue = await readExistingPrinterEnabledValue(printerIdInput.value.trim());
 
   const printer = {
     id: printerIdInput.value.trim(),
     displayName: printerNameInput.value.trim(),
     portName: printerPortInput.value.trim(),
     mode: printerModeInput.value.trim(),
-    enabled: true
+    enabled: existingEnabledValue ?? true
   };
 
   const response = await fetch("/printers");
@@ -125,8 +157,10 @@ async function savePrinter(event) {
       body: JSON.stringify(printer)
     });
 
+    const responseBody = await safeJson(saveResponse);
+
     if (!saveResponse.ok) {
-      throw new Error(`HTTP ${saveResponse.status}`);
+      throw new Error(responseBody.error || `HTTP ${saveResponse.status}`);
     }
 
     showAdminMessage(`Saved printer ${printer.id}.`);
@@ -161,14 +195,53 @@ async function saveMonitoringRules(event) {
       body: JSON.stringify(rules)
     });
 
+    const responseBody = await safeJson(response);
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(responseBody.error || `HTTP ${response.status}`);
     }
 
     await loadMonitoringRules();
     showAdminMessage("Saved monitoring rules.");
   } catch (error) {
     showAdminMessage(`Failed to save monitoring rules: ${error.message}`);
+  }
+}
+
+async function saveJob(event) {
+  event.preventDefault();
+
+  const payload = {
+    name: jobNameInput.value.trim(),
+    type: jobTypeInput.value.trim(),
+    printerId: emptyToNull(jobPrinterIdInput.value),
+    targetTemperature: readOptionalNumber(jobTargetTemperatureInput.value),
+    fanSpeed: readOptionalInteger(jobFanSpeedInput.value)
+  };
+
+  removeNullFields(payload);
+
+  try {
+    const response = await fetch("/jobs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const responseBody = await safeJson(response);
+
+    if (!response.ok) {
+      throw new Error(responseBody.error || `HTTP ${response.status}`);
+    }
+
+    showAdminMessage(`Created job ${responseBody.id}.`);
+    clearJobForm();
+
+    await loadJobs();
+  } catch (error) {
+    showAdminMessage(`Failed to create job: ${error.message}`);
   }
 }
 
@@ -222,7 +295,30 @@ async function handlePrinterGridClick(event) {
   }
 }
 
- 
+async function handleJobListClick(event) {
+  const button = event.target.closest("button[data-job-action]");
+
+  if (!button) {
+    return;
+  }
+
+  const action = button.dataset.jobAction;
+  const jobId = button.dataset.jobId;
+
+  if (!jobId) {
+    return;
+  }
+
+  if (action === "start") {
+    await startJob(jobId);
+    return;
+  }
+
+  if (action === "cancel") {
+    await cancelJob(jobId);
+  }
+}
+
 async function executePrinterCommand(printerId, command) {
   const resultElement = document.getElementById(`command-result-${cssSafeId(printerId)}`);
   const runningMessage = `Running ${command}...`;
@@ -235,7 +331,6 @@ async function executePrinterCommand(printerId, command) {
 
   const payload = { command };
 
-
   try {
     const response = await fetch(`/printers/${encodeURIComponent(printerId)}/commands`, {
       method: "POST",
@@ -245,7 +340,7 @@ async function executePrinterCommand(printerId, command) {
       body: JSON.stringify(payload)
     });
 
-    const responseBody = await response.json();
+    const responseBody = await safeJson(response);
 
     if (!response.ok) {
       throw new Error(responseBody.error || `HTTP ${response.status}`);
@@ -281,6 +376,53 @@ async function executePrinterCommand(printerId, command) {
       loadPrinters(),
       loadPrinterEvents(printerId)
     ]);
+  }
+}
+
+async function startJob(jobId) {
+  try {
+    const response = await fetch(`/jobs/${encodeURIComponent(jobId)}/start`, {
+      method: "POST"
+    });
+
+    const responseBody = await safeJson(response);
+
+    if (!response.ok) {
+      throw new Error(responseBody.error || `HTTP ${response.status}`);
+    }
+
+    const state = responseBody.job?.state || "UNKNOWN";
+    const wireCommand = responseBody.execution?.wireCommand || "n/a";
+
+    showAdminMessage(`Started job ${jobId}. Result state: ${state}. Command: ${wireCommand}`);
+
+    await Promise.all([
+      loadJobs(),
+      loadPrinters()
+    ]);
+  } catch (error) {
+    showAdminMessage(`Failed to start job ${jobId}: ${error.message}`);
+    await loadJobs();
+  }
+}
+
+async function cancelJob(jobId) {
+  try {
+    const response = await fetch(`/jobs/${encodeURIComponent(jobId)}/cancel`, {
+      method: "POST"
+    });
+
+    const responseBody = await safeJson(response);
+
+    if (!response.ok) {
+      throw new Error(responseBody.error || `HTTP ${response.status}`);
+    }
+
+    showAdminMessage(`Cancelled job ${jobId}.`);
+
+    await loadJobs();
+  } catch (error) {
+    showAdminMessage(`Failed to cancel job ${jobId}: ${error.message}`);
   }
 }
 
@@ -429,7 +571,6 @@ function renderPrinterCard(printer) {
           <button type="button" data-id="${escapeHtml(printer.id)}" data-command="M114" ${disabledAttribute}>Read position</button>
           <button type="button" data-id="${escapeHtml(printer.id)}" data-command="M115" ${disabledAttribute}>Read firmware</button>
         </div>
- 
 
         <div id="command-result-${safeId}" class="command-result muted">${escapeHtml(commandResult)}</div>
       </div>
@@ -485,6 +626,62 @@ function renderConfiguredPrinter(printer) {
   `;
 }
 
+function renderJobs(jobs) {
+  if (jobs.length === 0) {
+    jobList.innerHTML = `<p class="muted">No jobs created yet.</p>`;
+    return;
+  }
+
+  jobList.innerHTML = jobs.map(renderJobCard).join("");
+}
+
+function renderJobCard(job) {
+  const safeState = escapeHtml(job.state || "UNKNOWN");
+  const canStart = job.state === "ASSIGNED";
+  const canCancel = job.state !== "COMPLETED" && job.state !== "FAILED" && job.state !== "CANCELLED";
+
+  return `
+    <article class="config-card">
+      <div>
+        <h3>${escapeHtml(job.name || job.id)}</h3>
+        <p class="meta">
+          ${escapeHtml(job.id)} · ${escapeHtml(job.type || "n/a")} · ${escapeHtml(job.printerId || "unassigned")}
+        </p>
+        <div class="card-badges">
+          <span class="badge badge-real">${safeState}</span>
+        </div>
+        <div class="message-block">
+          <span class="message-label">Created</span>
+          <div class="message-value">${escapeHtml(job.createdAt || "n/a")}</div>
+        </div>
+        <div class="message-block">
+          <span class="message-label">Failure</span>
+          <div class="message-value">${escapeHtml(job.failureDetail || job.failureReason || "none")}</div>
+        </div>
+      </div>
+
+      <div class="config-actions">
+        <button
+          type="button"
+          class="secondary-button"
+          data-job-action="start"
+          data-job-id="${escapeHtml(job.id)}"
+          ${canStart ? "" : "disabled"}>
+          Start
+        </button>
+        <button
+          type="button"
+          class="secondary-button"
+          data-job-action="cancel"
+          data-job-id="${escapeHtml(job.id)}"
+          ${canCancel ? "" : "disabled"}>
+          Cancel
+        </button>
+      </div>
+    </article>
+  `;
+}
+
 async function fillPrinterForm(printerId) {
   const response = await fetch("/printers");
 
@@ -514,8 +711,10 @@ async function deletePrinter(printerId) {
       method: "DELETE"
     });
 
+    const responseBody = await safeJson(response);
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(responseBody.error || `HTTP ${response.status}`);
     }
 
     showAdminMessage(`Deleted printer ${printerId}.`);
@@ -535,8 +734,10 @@ async function updatePrinterEnabled(printerId, action) {
       method: "POST"
     });
 
+    const responseBody = await safeJson(response);
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(responseBody.error || `HTTP ${response.status}`);
     }
 
     showAdminMessage(`${action === "enable" ? "Enabled" : "Disabled"} printer ${printerId}.`);
@@ -547,6 +748,49 @@ async function updatePrinterEnabled(printerId, action) {
     ]);
   } catch (error) {
     showAdminMessage(`Failed to ${action} printer: ${error.message}`);
+  }
+}
+
+async function readExistingPrinterEnabledValue(printerId) {
+  if (!printerId) {
+    return null;
+  }
+
+  try {
+    const response = await fetch("/printers");
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    const printers = Array.isArray(data.printers) ? data.printers : [];
+    const existing = printers.find((printer) => printer.id === printerId);
+
+    if (!existing) {
+      return null;
+    }
+
+    return existing.enabled;
+  } catch {
+    return null;
+  }
+}
+
+function populateJobPrinterSelect(printers) {
+  const previousValue = jobPrinterIdInput.value;
+
+  const options = [
+    `<option value="">Select printer</option>`,
+    ...printers.map((printer) => (
+      `<option value="${escapeHtml(printer.id)}">${escapeHtml(printer.displayName || printer.id)}</option>`
+    ))
+  ];
+
+  jobPrinterIdInput.innerHTML = options.join("");
+
+  if (printers.some((printer) => printer.id === previousValue)) {
+    jobPrinterIdInput.value = previousValue;
   }
 }
 
@@ -598,6 +842,11 @@ function clearPrinterForm() {
   printerModeInput.value = "real";
 }
 
+function clearJobForm() {
+  jobForm.reset();
+  jobTypeInput.value = "READ_FIRMWARE_INFO";
+}
+
 function showAdminMessage(message) {
   adminMessage.textContent = message;
 }
@@ -608,6 +857,46 @@ function formatTemperature(value) {
   }
 
   return `${Number(value).toFixed(1)} °C`;
+}
+
+function readOptionalNumber(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+
+  return Number.parseFloat(value);
+}
+
+function readOptionalInteger(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+
+  return Number.parseInt(value, 10);
+}
+
+function emptyToNull(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+
+  return String(value).trim();
+}
+
+function removeNullFields(object) {
+  for (const key of Object.keys(object)) {
+    if (object[key] === null || object[key] === undefined || object[key] === "") {
+      delete object[key];
+    }
+  }
+}
+
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
 }
 
 function escapeHtml(value) {
@@ -622,9 +911,13 @@ function escapeHtml(value) {
 refreshButton.addEventListener("click", loadDashboard);
 printerConfigForm.addEventListener("submit", savePrinter);
 monitoringRulesForm.addEventListener("submit", saveMonitoringRules);
+jobForm.addEventListener("submit", saveJob);
 configuredPrinterList.addEventListener("click", handleConfiguredPrinterClick);
-printerGrid.addEventListener("click", handlePrinterGridClick); 
+printerGrid.addEventListener("click", handlePrinterGridClick);
+jobList.addEventListener("click", handleJobListClick);
 clearPrinterFormButton.addEventListener("click", clearPrinterForm);
+clearJobFormButton.addEventListener("click", clearJobForm);
 
 loadDashboard();
 setInterval(loadPrinters, 3000);
+setInterval(loadJobs, 5000);
