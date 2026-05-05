@@ -10,6 +10,11 @@ import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
+import printerhub.job.PrintJobExecutionService;
+import printerhub.job.PrintJobService;
+import printerhub.job.PrinterActionGuard;
+import printerhub.job.PrinterActionMapper;
+import printerhub.persistence.PrintJobStore;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -23,286 +28,330 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PrinterHubRuntimeTest {
 
-    @TempDir
-    Path tempDir;
+        @TempDir
+        Path tempDir;
 
-    @AfterEach
-    void clearDatabaseProperty() {
-        System.clearProperty("printerhub.databaseFile");
-    }
-
-    @Test
-    void constructorFailsWhenDatabaseInitializerIsNull() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new PrinterHubRuntime(
-                        null,
-                        new PrinterConfigurationStore(),
-                        new MonitoringRulesStore(),
-                        new PrinterRegistry(),
-                        new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
-                )
-        );
-
-        assertEquals("databaseInitializer must not be null", exception.getMessage());
-    }
-
-    @Test
-    void constructorFailsWhenPrinterConfigurationStoreIsNull() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new PrinterHubRuntime(
-                        new DatabaseInitializer(),
-                        null,
-                        new MonitoringRulesStore(),
-                        new PrinterRegistry(),
-                        new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
-                )
-        );
-
-        assertEquals("printerConfigurationStore must not be null", exception.getMessage());
-    }
-
-    @Test
-    void constructorFailsWhenMonitoringRulesStoreIsNull() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new PrinterHubRuntime(
-                        new DatabaseInitializer(),
-                        new PrinterConfigurationStore(),
-                        null,
-                        new PrinterRegistry(),
-                        new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
-                )
-        );
-
-        assertEquals("monitoringRulesStore must not be null", exception.getMessage());
-    }
-
-    @Test
-    void constructorFailsWhenPrinterRegistryIsNull() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new PrinterHubRuntime(
-                        new DatabaseInitializer(),
-                        new PrinterConfigurationStore(),
-                        new MonitoringRulesStore(),
-                        null,
-                        new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
-                )
-        );
-
-        assertEquals("printerRegistry must not be null", exception.getMessage());
-    }
-
-    @Test
-    void constructorFailsWhenStateCacheIsNull() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new PrinterHubRuntime(
-                        new DatabaseInitializer(),
-                        new PrinterConfigurationStore(),
-                        new MonitoringRulesStore(),
-                        new PrinterRegistry(),
-                        null,
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
-                )
-        );
-
-        assertEquals("stateCache must not be null", exception.getMessage());
-    }
-
-    @Test
-    void constructorFailsWhenMonitoringSchedulerIsNull() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new PrinterHubRuntime(
-                        new DatabaseInitializer(),
-                        new PrinterConfigurationStore(),
-                        new MonitoringRulesStore(),
-                        new PrinterRegistry(),
-                        new PrinterRuntimeStateCache(),
-                        null,
-                        createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(), new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()))
-                )
-        );
-
-        assertEquals("monitoringScheduler must not be null", exception.getMessage());
-    }
-
-    @Test
-    void constructorFailsWhenApiServerIsNull() {
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new PrinterHubRuntime(
-                        new DatabaseInitializer(),
-                        new PrinterConfigurationStore(),
-                        new MonitoringRulesStore(),
-                        new PrinterRegistry(),
-                        new PrinterRuntimeStateCache(),
-                        new PrinterMonitoringScheduler(new PrinterRegistry(), new PrinterRuntimeStateCache()),
-                        null
-                )
-        );
-
-        assertEquals("apiServer must not be null", exception.getMessage());
-    }
-
-    @Test
-    void startLoadsConfiguredPrintersAndStartsApi() throws Exception {
-        Path dbFile = tempDir.resolve("runtime-test.db");
-        System.setProperty("printerhub.databaseFile", dbFile.toString());
-
-        DatabaseInitializer databaseInitializer = new DatabaseInitializer();
-        databaseInitializer.initialize();
-
-        PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
-        MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
-        configurationStore.save(
-                PrinterRuntimeNodeFactory.create(
-                        "printer-1",
-                        "Printer 1",
-                        "SIM_PORT",
-                        "sim",
-                        false
-                )
-        );
-
-        PrinterRegistry printerRegistry = new PrinterRegistry();
-        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
-        PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
-                printerRegistry,
-                stateCache
-        );
-
-        int port = findFreePort();
-        RemoteApiServer apiServer = new RemoteApiServer(
-                port,
-                printerRegistry,
-                stateCache,
-                monitoringScheduler,
-                configurationStore,
-                monitoringRulesStore,
-                new PrinterEventStore(),
-                new PrinterCommandService(new PrinterEventStore())
-        );
-
-        PrinterHubRuntime runtime = new PrinterHubRuntime(
-                databaseInitializer,
-                configurationStore,
-                monitoringRulesStore,
-                printerRegistry,
-                stateCache,
-                monitoringScheduler,
-                apiServer
-        );
-
-        try {
-            runtime.start();
-
-            assertTrue(runtime.printerRegistry().findById("printer-1").isPresent());
-            assertSame(printerRegistry, runtime.printerRegistry());
-            assertSame(stateCache, runtime.stateCache());
-
-            HttpResponse<String> response = httpGet("http://localhost:" + port + "/health");
-            assertEquals(200, response.statusCode());
-            assertEquals("{\"status\":\"ok\"}", response.body());
-
-            assertTrue(runtime.stateCache().findByPrinterId("printer-1").isPresent());
-        } finally {
-            runtime.close();
+        @AfterEach
+        void clearDatabaseProperty() {
+                System.clearProperty("printerhub.databaseFile");
         }
-    }
 
-    @Test
-    void closeCanBeCalledAfterStartWithoutFailure() throws Exception {
-        Path dbFile = tempDir.resolve("runtime-close.db");
-        System.setProperty("printerhub.databaseFile", dbFile.toString());
+        @Test
+        void constructorFailsWhenDatabaseInitializerIsNull() {
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new PrinterHubRuntime(
+                                                null,
+                                                new PrinterConfigurationStore(),
+                                                new MonitoringRulesStore(),
+                                                new PrinterRegistry(),
+                                                new PrinterRuntimeStateCache(),
+                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                new PrinterRuntimeStateCache()),
+                                                createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(),
+                                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                                new PrinterRuntimeStateCache()))));
 
-        DatabaseInitializer databaseInitializer = new DatabaseInitializer();
-        PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
-        MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
-        PrinterRegistry printerRegistry = new PrinterRegistry();
-        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
-        PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
-                printerRegistry,
-                stateCache
-        );
-
-        int port = findFreePort();
-        RemoteApiServer apiServer = new RemoteApiServer(
-                port,
-                printerRegistry,
-                stateCache,
-                monitoringScheduler,
-                configurationStore,
-                monitoringRulesStore,
-                new PrinterEventStore(),
-                new PrinterCommandService(new PrinterEventStore())
-        );
-
-        PrinterHubRuntime runtime = new PrinterHubRuntime(
-                databaseInitializer,
-                configurationStore,
-                monitoringRulesStore,
-                printerRegistry,
-                stateCache,
-                monitoringScheduler,
-                apiServer
-        );
-
-        runtime.start();
-
-        assertDoesNotThrow(runtime::close);
-    }
-
-    private RemoteApiServer createApiServer(
-            PrinterRegistry printerRegistry,
-            PrinterRuntimeStateCache stateCache,
-            PrinterMonitoringScheduler monitoringScheduler
-    ) {
-        return new RemoteApiServer(
-                findFreePortUnchecked(),
-                printerRegistry,
-                stateCache,
-                monitoringScheduler,
-                new PrinterConfigurationStore(),
-                new MonitoringRulesStore(),
-                new PrinterEventStore(),
-                new PrinterCommandService(new PrinterEventStore())
-        );
-    }
-
-    private HttpResponse<String> httpGet(String url) throws Exception {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .GET()
-                .build();
-
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private int findFreePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
+                assertEquals("databaseInitializer must not be null", exception.getMessage());
         }
-    }
 
-    private int findFreePortUnchecked() {
-        try {
-            return findFreePort();
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to allocate free test port", exception);
+        @Test
+        void constructorFailsWhenPrinterConfigurationStoreIsNull() {
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new PrinterHubRuntime(
+                                                new DatabaseInitializer(),
+                                                null,
+                                                new MonitoringRulesStore(),
+                                                new PrinterRegistry(),
+                                                new PrinterRuntimeStateCache(),
+                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                new PrinterRuntimeStateCache()),
+                                                createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(),
+                                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                                new PrinterRuntimeStateCache()))));
+
+                assertEquals("printerConfigurationStore must not be null", exception.getMessage());
         }
-    }
+
+        @Test
+        void constructorFailsWhenMonitoringRulesStoreIsNull() {
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new PrinterHubRuntime(
+                                                new DatabaseInitializer(),
+                                                new PrinterConfigurationStore(),
+                                                null,
+                                                new PrinterRegistry(),
+                                                new PrinterRuntimeStateCache(),
+                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                new PrinterRuntimeStateCache()),
+                                                createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(),
+                                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                                new PrinterRuntimeStateCache()))));
+
+                assertEquals("monitoringRulesStore must not be null", exception.getMessage());
+        }
+
+        @Test
+        void constructorFailsWhenPrinterRegistryIsNull() {
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new PrinterHubRuntime(
+                                                new DatabaseInitializer(),
+                                                new PrinterConfigurationStore(),
+                                                new MonitoringRulesStore(),
+                                                null,
+                                                new PrinterRuntimeStateCache(),
+                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                new PrinterRuntimeStateCache()),
+                                                createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(),
+                                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                                new PrinterRuntimeStateCache()))));
+
+                assertEquals("printerRegistry must not be null", exception.getMessage());
+        }
+
+        @Test
+        void constructorFailsWhenStateCacheIsNull() {
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new PrinterHubRuntime(
+                                                new DatabaseInitializer(),
+                                                new PrinterConfigurationStore(),
+                                                new MonitoringRulesStore(),
+                                                new PrinterRegistry(),
+                                                null,
+                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                new PrinterRuntimeStateCache()),
+                                                createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(),
+                                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                                new PrinterRuntimeStateCache()))));
+
+                assertEquals("stateCache must not be null", exception.getMessage());
+        }
+
+        @Test
+        void constructorFailsWhenMonitoringSchedulerIsNull() {
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new PrinterHubRuntime(
+                                                new DatabaseInitializer(),
+                                                new PrinterConfigurationStore(),
+                                                new MonitoringRulesStore(),
+                                                new PrinterRegistry(),
+                                                new PrinterRuntimeStateCache(),
+                                                null,
+                                                createApiServer(new PrinterRegistry(), new PrinterRuntimeStateCache(),
+                                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                                new PrinterRuntimeStateCache()))));
+
+                assertEquals("monitoringScheduler must not be null", exception.getMessage());
+        }
+
+        @Test
+        void constructorFailsWhenApiServerIsNull() {
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new PrinterHubRuntime(
+                                                new DatabaseInitializer(),
+                                                new PrinterConfigurationStore(),
+                                                new MonitoringRulesStore(),
+                                                new PrinterRegistry(),
+                                                new PrinterRuntimeStateCache(),
+                                                new PrinterMonitoringScheduler(new PrinterRegistry(),
+                                                                new PrinterRuntimeStateCache()),
+                                                null));
+
+                assertEquals("apiServer must not be null", exception.getMessage());
+        }
+
+        @Test
+        void startLoadsConfiguredPrintersAndStartsApi() throws Exception {
+                Path dbFile = tempDir.resolve("runtime-test.db");
+                System.setProperty("printerhub.databaseFile", dbFile.toString());
+
+                DatabaseInitializer databaseInitializer = new DatabaseInitializer();
+                databaseInitializer.initialize();
+
+                PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
+                MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+                configurationStore.save(
+                                PrinterRuntimeNodeFactory.create(
+                                                "printer-1",
+                                                "Printer 1",
+                                                "SIM_PORT",
+                                                "sim",
+                                                false));
+
+                PrinterRegistry printerRegistry = new PrinterRegistry();
+                PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+                PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
+                                printerRegistry,
+                                stateCache);
+
+                int port = findFreePort();
+                PrinterEventStore printerEventStore = new PrinterEventStore();
+                PrintJobStore printJobStore = new PrintJobStore();
+
+                PrintJobService printJobService = new PrintJobService(
+                                printJobStore,
+                                printerEventStore);
+
+                PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                                printJobService,
+                                printerRegistry,
+                                monitoringScheduler,
+                                new PrinterActionGuard(),
+                                new PrinterActionMapper());
+
+                RemoteApiServer apiServer = new RemoteApiServer(
+                                port,
+                                printerRegistry,
+                                stateCache,
+                                monitoringScheduler,
+                                configurationStore,
+                                monitoringRulesStore,
+                                printerEventStore,
+                                new PrinterCommandService(printerEventStore),
+                                printJobService,
+                                printJobExecutionService);
+
+                PrinterHubRuntime runtime = new PrinterHubRuntime(
+                                databaseInitializer,
+                                configurationStore,
+                                monitoringRulesStore,
+                                printerRegistry,
+                                stateCache,
+                                monitoringScheduler,
+                                apiServer);
+
+                try {
+                        runtime.start();
+
+                        assertTrue(runtime.printerRegistry().findById("printer-1").isPresent());
+                        assertSame(printerRegistry, runtime.printerRegistry());
+                        assertSame(stateCache, runtime.stateCache());
+
+                        HttpResponse<String> response = httpGet("http://localhost:" + port + "/health");
+                        assertEquals(200, response.statusCode());
+                        assertEquals("{\"status\":\"ok\"}", response.body());
+
+                        assertTrue(runtime.stateCache().findByPrinterId("printer-1").isPresent());
+                } finally {
+                        runtime.close();
+                }
+        }
+
+        @Test
+        void closeCanBeCalledAfterStartWithoutFailure() throws Exception {
+                Path dbFile = tempDir.resolve("runtime-close.db");
+                System.setProperty("printerhub.databaseFile", dbFile.toString());
+
+                DatabaseInitializer databaseInitializer = new DatabaseInitializer();
+                PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
+                MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+                PrinterRegistry printerRegistry = new PrinterRegistry();
+                PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+                PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
+                                printerRegistry,
+                                stateCache);
+
+                int port = findFreePort();
+                PrinterEventStore printerEventStore = new PrinterEventStore();
+                PrintJobStore printJobStore = new PrintJobStore();
+
+                PrintJobService printJobService = new PrintJobService(
+                                printJobStore,
+                                printerEventStore);
+
+                PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                                printJobService,
+                                printerRegistry,
+                                monitoringScheduler,
+                                new PrinterActionGuard(),
+                                new PrinterActionMapper());
+
+                RemoteApiServer apiServer = new RemoteApiServer(
+                                port,
+                                printerRegistry,
+                                stateCache,
+                                monitoringScheduler,
+                                configurationStore,
+                                monitoringRulesStore,
+                                printerEventStore,
+                                new PrinterCommandService(printerEventStore),
+                                printJobService,
+                                printJobExecutionService);
+
+                PrinterHubRuntime runtime = new PrinterHubRuntime(
+                                databaseInitializer,
+                                configurationStore,
+                                monitoringRulesStore,
+                                printerRegistry,
+                                stateCache,
+                                monitoringScheduler,
+                                apiServer);
+
+                runtime.start();
+
+                assertDoesNotThrow(runtime::close);
+        }
+
+        private RemoteApiServer createApiServer(
+                        PrinterRegistry printerRegistry,
+                        PrinterRuntimeStateCache stateCache,
+                        PrinterMonitoringScheduler monitoringScheduler) {
+                PrinterEventStore printerEventStore = new PrinterEventStore();
+                PrintJobStore printJobStore = new PrintJobStore();
+
+                PrintJobService printJobService = new PrintJobService(
+                                printJobStore,
+                                printerEventStore);
+
+                PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                                printJobService,
+                                printerRegistry,
+                                monitoringScheduler,
+                                new PrinterActionGuard(),
+                                new PrinterActionMapper());
+
+                return new RemoteApiServer(
+                                findFreePortUnchecked(),
+                                printerRegistry,
+                                stateCache,
+                                monitoringScheduler,
+                                new PrinterConfigurationStore(),
+                                new MonitoringRulesStore(),
+                                printerEventStore,
+                                new PrinterCommandService(printerEventStore),
+                                printJobService,
+                                printJobExecutionService);
+        }
+
+        private HttpResponse<String> httpGet(String url) throws Exception {
+                HttpClient client = HttpClient.newHttpClient();
+                HttpRequest request = HttpRequest.newBuilder()
+                                .uri(URI.create(url))
+                                .GET()
+                                .build();
+
+                return client.send(request, HttpResponse.BodyHandlers.ofString());
+        }
+
+        private int findFreePort() throws IOException {
+                try (ServerSocket socket = new ServerSocket(0)) {
+                        return socket.getLocalPort();
+                }
+        }
+
+
+        
+        private int findFreePortUnchecked() {
+                try {
+                        return findFreePort();
+                } catch (IOException exception) {
+                        throw new IllegalStateException("Failed to allocate free test port", exception);
+                }
+        }
 }

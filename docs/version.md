@@ -10,6 +10,9 @@ see ROADMAP.md
 
 ## 0.2.x — Local Runtime Administration and Job Management
 
+- 0.2.3 — step B - New Dashboard UI and Controlled real-printer job workflows
+- 0.2.3 — step A - Dashboard Local Audit, History Views
+- 0.2.2 — Job Management over Runtime Architecture - step A and B
 - 0.2.1 — Manual Command Execution API
 - 0.2.0 — Monitoring Configuration and Dashboard Administration Basics
 

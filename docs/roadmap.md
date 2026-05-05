@@ -846,7 +846,7 @@ Expected result:
  
 ### 0.1.4 — Runtime Verification, Error Management, and Non-Regression
 
-status: planned
+status: done
 
 Purpose:
 
@@ -1239,9 +1239,14 @@ Expected result:
 
 ---
 
-### 0.2.2 — Job Management over Runtime Architecture
 
-status: planned
+### 0.2.2 — Job Management over Runtime Architecture
+ 
+- step A : Foundation
+- step B : Dashboard
+
+
+status: done
 
 Goals:
 
@@ -1251,6 +1256,10 @@ Goals:
 * track job lifecycle through persisted state
 * keep job logic out of HTTP handlers
 * prepare later execution orchestration without coupling it directly to the API layer
+* extend runtime nodes with execution ownership
+* coordinate job execution with monitoring to avoid concurrent printer access
+* expose basic job operations through the REST API
+* make basic job creation and execution available through the dashboard
 
 Expected lifecycle:
 
@@ -1264,39 +1273,44 @@ FAILED
 CANCELLED
 ```
 
-add to scope the commands :
+Initial semantic job scope:
 
 ```text
-G28   home printer
-M104  set hotend temperature
-M140  set bed temperature
-M106  fan on
-M107  fan off
-``` 
-
+READ_TEMPERATURE
+READ_POSITION
+READ_FIRMWARE_INFO
+HOME_AXES
+SET_NOZZLE_TEMPERATURE
+SET_BED_TEMPERATURE
+SET_FAN_SPEED
+TURN_FAN_OFF
+```
 
 Job model note:
 
 ```text
 A job is a first-class runtime object with its own lifecycle.
-A job may contain one or more printer commands executed in sequence.
-Individual commands are execution steps of the job, not separate lifecycle objects.
+In this first implementation, one job maps to one guarded semantic printer action.
 Manual commands from 0.2.1 remain operator-triggered actions outside the job lifecycle.
 ```
 
 Expected result:
 
 * jobs become a first-class runtime concept
-* printer administration and job management are connected
+* printer administration and job handling are connected
 * persistence is ready for later execution logic
-* the runtime architecture becomes ready for more realistic printer workload handling
+* basic job creation and execution are available through API and dashboard
+* the runtime architecture is ready for richer execution and audit features later
 
 ---
 
- 
-### 0.2.3 — Local Audit and History Views
+## 0.2.3 — Local Audit, History Views, and Controlled Job Actions
 
-status: planned
+status: in progress
+- step A,B : done 
+
+
+### step A — Audit and history visibility
 
 Goals:
 
@@ -1304,13 +1318,71 @@ Goals:
 * expose snapshot history
 * expose job history
 * expose error history
+* show job execution command and result details in dashboard and API
 * make local diagnostics easier through both API and dashboard views
+* make operator-triggered job outcomes reviewable after the fact
+
+### step B — New Dashboard UI and Controlled real-printer job workflows
+
+Goals:
+
+* Dashboard UI with menu, navigation, component to make it a 2 level UI
+* implement controlled job actions as predefined workflows, not just single raw command sends
+* support multi-step preparation, validation, execution, and result interpretation for real-printer actions
+* validate printer readiness before state-changing jobs are executed
+* allow required pre-sequences before the main action command is sent
+* make `HOME_AXES` a controlled workflow instead of only a direct `G28` send
+
+
+Dashboard as **two-level UI**, the menu is :
+
+```text 
+PrinterHub
+├── Farm Home
+├── Printers
+├── Jobs
+├── History
+└── Settings
+```
+
+But once a printer is selected, its internal navigation should follow the Ender logic very closely:
+
+```text  
+Selected Printer
+├── Home
+├── Print
+├── Prepare
+├── Control
+└── Info
+```
+
+### step C — Correct execution diagnostics and reviewability
+
+Goals:
+
+* persist the actual printer response that led to success or failure
+* distinguish between printer-reported failure, timeout/no response, and communication failure
+* ensure printer-reported failures are not rewritten as generic “no response” failures when a response exists
+* persist raw or normalized diagnostics in job history
+* show sent command, actual response, classified outcome, and failure detail in dashboard history
+
+Controlled job-action scope:
+
+```text
+HOME_AXES
+SET_NOZZLE_TEMPERATURE
+SET_BED_TEMPERATURE
+SET_FAN_SPEED
+TURN_FAN_OFF
+```
 
 Expected result:
 
 * the local runtime becomes easier to inspect after failures
 * dashboard and API become more useful for troubleshooting
 * printer behavior, operator actions, and job state changes become reviewable after the fact
+* controlled real-printer job actions become more operationally useful
+
 
 ---
 

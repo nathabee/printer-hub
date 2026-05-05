@@ -1,0 +1,705 @@
+import {
+  cancelJob,
+  createJob,
+  createPrinter,
+  deletePrinter,
+  executePrinterCommand,
+  getJobEvents,
+  getJobs,
+  getMonitoringRules,
+  getPrinterEvents,
+  getPrinters,
+  saveMonitoringRules,
+  setPrinterEnabled,
+  startJob,
+  updatePrinter
+} from "./api.js";
+import { renderNav } from "./components/nav.js";
+import { renderFarmHome } from "./views/farm-home.js";
+import { renderJobsPage } from "./views/jobs.js";
+import { renderPrinterControl } from "./views/printer-control.js";
+import { renderPrinterHistory } from "./views/printer-history.js";
+import { renderPrinterHome } from "./views/printer-home.js";
+import { renderPrinterInfo } from "./views/printer-info.js";
+import { renderPrinterPrepare } from "./views/printer-prepare.js";
+import { renderPrinterPrint } from "./views/printer-print.js";
+import { renderSettingsPage } from "./views/settings.js";
+import {
+  getJobsForSelectedPrinter,
+  getSelectedPrinter,
+  PRIMARY_VIEW_IDS,
+  PRINTER_VIEW_IDS,
+  setJobEvents,
+  setJobs,
+  setLastRefreshLabel,
+  setMessage,
+  setMonitoringRules,
+  setPrinterCommandResult,
+  setPrinterEvents,
+  setPrinters,
+  setPrimaryView,
+  setPrinterView,
+  setSelectedPrinter,
+  state
+} from "./state.js";
+
+const pageTitleElement = document.getElementById("pageTitle");
+const pageLeadElement = document.getElementById("pageLead");
+const pageContentElement = document.getElementById("pageContent");
+const globalMessageElement = document.getElementById("globalMessage");
+const refreshButton = document.getElementById("refreshButton");
+const lastRefreshElement = document.getElementById("lastRefresh");
+
+let printerRefreshInterval = null;
+let jobsRefreshInterval = null;
+
+async function boot() {
+  bindGlobalListeners();
+  await refreshAllData({ silent: false });
+  startAutoRefresh();
+}
+
+async function refreshAllData(options = {}) {
+  const silent = options.silent === true;
+
+  try {
+    const [printers, jobs, monitoringRules] = await Promise.all([
+      getPrinters(),
+      getJobs(),
+      getMonitoringRules()
+    ]);
+
+    setPrinters(printers);
+    setJobs(jobs);
+    setMonitoringRules(monitoringRules);
+    setLastRefreshLabel(new Date().toLocaleTimeString());
+
+    if (!silent) {
+      setMessage("Dashboard refreshed.");
+    }
+
+    renderApp();
+  } catch (error) {
+    setMessage(`Failed to refresh dashboard: ${error.message}`);
+    renderApp();
+  }
+}
+
+function renderApp() {
+  renderNav();
+  renderHeader();
+  renderPage();
+  renderGlobalMessage();
+  bindPageListeners();
+  lastRefreshElement.textContent = state.lastRefreshLabel;
+}
+
+function renderHeader() {
+  const selectedPrinter = getSelectedPrinter();
+
+  if (state.activePrimaryView === PRIMARY_VIEW_IDS.FARM_HOME) {
+    pageTitleElement.textContent = "Farm Home";
+    pageLeadElement.textContent = "Global fleet monitoring with quick navigation into printer work areas.";
+    return;
+  }
+
+  if (state.activePrimaryView === PRIMARY_VIEW_IDS.JOBS) {
+    pageTitleElement.textContent = "Jobs";
+    pageLeadElement.textContent = "Global job view aligned with the backend job domain model.";
+    return;
+  }
+
+  if (state.activePrimaryView === PRIMARY_VIEW_IDS.HISTORY) {
+    pageTitleElement.textContent = "History";
+    pageLeadElement.textContent = "Global history shell reserved for broader audit views as backend coverage grows.";
+    return;
+  }
+
+  if (state.activePrimaryView === PRIMARY_VIEW_IDS.SETTINGS) {
+    pageTitleElement.textContent = "Settings";
+    pageLeadElement.textContent = "Monitoring rules, printer administration, and future runtime settings.";
+    return;
+  }
+
+  const printerName = selectedPrinter ? getSelectedPrinterDisplayName() : "No printer selected";
+  const printerTitles = {
+    [PRINTER_VIEW_IDS.HOME]: ["Printer Home", `Live machine view for ${printerName}.`],
+    [PRINTER_VIEW_IDS.PRINT]: ["Print", `Jobs and future print workflow for ${printerName}.`],
+    [PRINTER_VIEW_IDS.PREPARE]: ["Prepare", `Preparation actions inspired by the printer display workflow for ${printerName}.`],
+    [PRINTER_VIEW_IDS.CONTROL]: ["Control", `Manual machine control and later tuning for ${printerName}.`],
+    [PRINTER_VIEW_IDS.INFO]: ["Info", `Technical read-only information for ${printerName}.`],
+    [PRINTER_VIEW_IDS.HISTORY]: ["Printer History", `Printer and job history for ${printerName}.`]
+  };
+
+  const [title, lead] = printerTitles[state.activePrinterView] || ["Printers", "Selected printer workspace."];
+  pageTitleElement.textContent = title;
+  pageLeadElement.textContent = lead;
+}
+
+function renderPage() {
+  if (state.activePrimaryView === PRIMARY_VIEW_IDS.FARM_HOME) {
+    pageContentElement.innerHTML = renderFarmHome();
+    return;
+  }
+
+  if (state.activePrimaryView === PRIMARY_VIEW_IDS.JOBS) {
+    pageContentElement.innerHTML = renderJobsPage();
+    return;
+  }
+
+  if (state.activePrimaryView === PRIMARY_VIEW_IDS.HISTORY) {
+    pageContentElement.innerHTML = `
+      <section class="two-column-grid">
+        <article class="placeholder-card">
+          <div class="section-header compact">
+            <div>
+              <h3>Global history</h3>
+              <p class="placeholder-caption">This page is reserved for aggregated history views across printers and jobs.</p>
+            </div>
+            <span class="badge badge-real">placeholder</span>
+          </div>
+          <ul class="placeholder-list">
+            <li>Cross-printer event stream</li>
+            <li>Cross-job event stream</li>
+            <li>Error history and filtering</li>
+            <li>Snapshot browsing</li>
+          </ul>
+        </article>
+      </section>
+    `;
+    return;
+  }
+
+  if (state.activePrimaryView === PRIMARY_VIEW_IDS.SETTINGS) {
+    pageContentElement.innerHTML = renderSettingsPage();
+    return;
+  }
+
+  const selectedPrinter = getSelectedPrinter();
+
+  if (!selectedPrinter) {
+    pageContentElement.innerHTML = `
+      <div class="empty-state">
+        <h3>No printer selected</h3>
+        <p class="muted">Open a printer from Farm Home or add a printer in Settings.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const jobsForPrinter = getJobsForSelectedPrinter();
+
+  if (state.activePrinterView === PRINTER_VIEW_IDS.HOME) {
+    pageContentElement.innerHTML = renderPrinterHome(selectedPrinter);
+    return;
+  }
+
+  if (state.activePrinterView === PRINTER_VIEW_IDS.PRINT) {
+    pageContentElement.innerHTML = renderPrinterPrint(selectedPrinter, jobsForPrinter);
+    return;
+  }
+
+  if (state.activePrinterView === PRINTER_VIEW_IDS.PREPARE) {
+    pageContentElement.innerHTML = renderPrinterPrepare(selectedPrinter);
+    return;
+  }
+
+  if (state.activePrinterView === PRINTER_VIEW_IDS.CONTROL) {
+    pageContentElement.innerHTML = renderPrinterControl(selectedPrinter);
+    return;
+  }
+
+  if (state.activePrinterView === PRINTER_VIEW_IDS.INFO) {
+    pageContentElement.innerHTML = renderPrinterInfo(selectedPrinter);
+    return;
+  }
+
+  pageContentElement.innerHTML = renderPrinterHistory(selectedPrinter, jobsForPrinter);
+}
+
+function renderGlobalMessage() {
+  globalMessageElement.textContent = state.message || "";
+}
+
+function bindGlobalListeners() {
+  refreshButton.addEventListener("click", () => refreshAllData({ silent: false }));
+
+  document.addEventListener("click", async (event) => {
+    const navButton = event.target.closest("[data-nav-target]");
+    if (navButton) {
+      setPrimaryView(navButton.dataset.navTarget);
+      renderApp();
+      return;
+    }
+
+    const printerNavButton = event.target.closest("[data-printer-nav-target]");
+    if (printerNavButton) {
+      setPrimaryView(PRIMARY_VIEW_IDS.PRINTERS);
+      setPrinterView(printerNavButton.dataset.printerNavTarget);
+      renderApp();
+      return;
+    }
+
+    const selectPrinterButton = event.target.closest("[data-select-printer]");
+    if (selectPrinterButton) {
+      setSelectedPrinter(selectPrinterButton.dataset.selectPrinter);
+      setPrimaryView(PRIMARY_VIEW_IDS.PRINTERS);
+      setPrinterView(PRINTER_VIEW_IDS.HOME);
+      renderApp();
+      return;
+    }
+
+    const loadPrinterEventsButton = event.target.closest("[data-load-printer-events]");
+    if (loadPrinterEventsButton) {
+      await loadPrinterEventsIntoState(loadPrinterEventsButton.dataset.loadPrinterEvents);
+      renderApp();
+      return;
+    }
+
+    const printerCommandButton = event.target.closest("[data-printer-command]");
+    if (printerCommandButton) {
+      await runPrinterCommand(printerCommandButton.dataset.printerId, printerCommandButton.dataset.printerCommand);
+      renderApp();
+      return;
+    }
+
+    const jobActionButton = event.target.closest("[data-job-action]");
+    if (jobActionButton) {
+      await handleJobAction(jobActionButton.dataset.jobAction, jobActionButton.dataset.jobId);
+      renderApp();
+      return;
+    }
+
+    const configActionButton = event.target.closest("[data-config-action]");
+    if (configActionButton) {
+      await handleConfigAction(configActionButton.dataset.configAction, configActionButton.dataset.printerId);
+      renderApp();
+    }
+  });
+
+  document.addEventListener("submit", async (event) => {
+    const form = event.target;
+
+    if (form.id === "printerConfigForm") {
+      event.preventDefault();
+      await handleSavePrinter(form);
+      renderApp();
+      return;
+    }
+
+    if (form.id === "monitoringRulesForm") {
+      event.preventDefault();
+      await handleSaveMonitoringRules(form);
+      renderApp();
+      return;
+    }
+
+    if (form.id === "jobForm") {
+      event.preventDefault();
+      await handleSaveJob(form);
+      renderApp();
+    }
+  });
+}
+
+function bindPageListeners() {
+  const clearPrinterFormButton = document.getElementById("clearPrinterFormButton");
+  if (clearPrinterFormButton) {
+    clearPrinterFormButton.addEventListener("click", clearPrinterForm);
+  }
+
+  const clearJobFormButton = document.getElementById("clearJobFormButton");
+  if (clearJobFormButton) {
+    clearJobFormButton.addEventListener("click", clearJobForm);
+  }
+
+  const sidebarPrinterSelect = document.getElementById("sidebarPrinterSelect");
+  if (sidebarPrinterSelect) {
+    sidebarPrinterSelect.addEventListener("change", (event) => {
+      const printerId = event.target.value;
+
+      if (!printerId) {
+        return;
+      }
+
+      setSelectedPrinter(printerId);
+      setPrimaryView(PRIMARY_VIEW_IDS.PRINTERS);
+      setPrinterView(PRINTER_VIEW_IDS.HOME);
+      renderApp();
+    });
+  }
+}
+
+async function handleSavePrinter(form) {
+  const printerIdInput = form.querySelector("#printerIdInput");
+  const printerNameInput = form.querySelector("#printerNameInput");
+  const printerPortInput = form.querySelector("#printerPortInput");
+  const printerModeInput = form.querySelector("#printerModeInput");
+
+  const printerId = printerIdInput.value.trim();
+  const existingPrinter = state.printers.find((printer) => printer.id === printerId);
+  const payload = {
+    id: printerId,
+    displayName: printerNameInput.value.trim(),
+    portName: printerPortInput.value.trim(),
+    mode: printerModeInput.value.trim(),
+    enabled: existingPrinter?.enabled ?? true
+  };
+
+  try {
+    if (existingPrinter) {
+      await updatePrinter(printerId, payload);
+      setMessage(`Saved printer ${printerId}.`);
+    } else {
+      await createPrinter(payload);
+      setMessage(`Created printer ${printerId}.`);
+    }
+
+    clearPrinterForm();
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to save printer: ${error.message}`);
+  }
+}
+
+async function handleSaveMonitoringRules(form) {
+  const payload = {
+    pollIntervalSeconds: Number.parseInt(form.querySelector("#pollIntervalSecondsInput").value, 10),
+    snapshotMinimumIntervalSeconds: Number.parseInt(form.querySelector("#snapshotMinimumIntervalSecondsInput").value, 10),
+    temperatureDeltaThreshold: Number.parseFloat(form.querySelector("#temperatureDeltaThresholdInput").value),
+    eventDeduplicationWindowSeconds: Number.parseInt(form.querySelector("#eventDeduplicationWindowSecondsInput").value, 10),
+    errorPersistenceBehavior: form.querySelector("#errorPersistenceBehaviorInput").value
+  };
+
+  try {
+    await saveMonitoringRules(payload);
+    setMessage("Saved monitoring rules.");
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to save monitoring rules: ${error.message}`);
+  }
+}
+
+async function handleSaveJob(form) {
+  const payload = {
+    name: form.querySelector("#jobNameInput").value.trim(),
+    type: form.querySelector("#jobTypeInput").value.trim(),
+    printerId: emptyToNull(form.querySelector("#jobPrinterIdInput").value),
+    targetTemperature: readOptionalNumber(form.querySelector("#jobTargetTemperatureInput").value),
+    fanSpeed: readOptionalInteger(form.querySelector("#jobFanSpeedInput").value)
+  };
+
+  removeNullFields(payload);
+
+  try {
+    const response = await createJob(payload);
+    setMessage(`Created job ${response.id}.`);
+    clearJobForm();
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to create job: ${error.message}`);
+  }
+}
+
+async function handleJobAction(action, jobId) {
+  if (!jobId) {
+    return;
+  }
+
+  try {
+    if (action === "start") {
+      const response = await startJob(jobId);
+      const stateLabel = response.job?.state || "UNKNOWN";
+      const wireCommand = response.execution?.wireCommand || "n/a";
+      const outcome = response.execution?.outcome || (response.execution?.success ? "SUCCESS" : "UNKNOWN");
+      const executionResponse = response.execution?.response || response.execution?.failureDetail || "n/a";
+      setMessage(`Started job ${jobId}. Result state: ${stateLabel}. Outcome: ${outcome}. Command: ${wireCommand}. Result: ${executionResponse}`);
+      await refreshAllData({ silent: true });
+      await loadJobEventsIntoState(jobId);
+      return;
+    }
+
+    if (action === "cancel") {
+      await cancelJob(jobId);
+      setMessage(`Cancelled job ${jobId}.`);
+      await refreshAllData({ silent: true });
+      await loadJobEventsIntoState(jobId);
+      return;
+    }
+
+    if (action === "load-events") {
+      await loadJobEventsIntoState(jobId);
+      setMessage(`Loaded history for job ${jobId}.`);
+    }
+  } catch (error) {
+    setMessage(`Failed to ${action} job ${jobId}: ${error.message}`);
+  }
+}
+
+async function handleConfigAction(action, printerId) {
+  const printer = state.printers.find((item) => item.id === printerId);
+  if (!printer) {
+    setMessage(`Printer not found: ${printerId}`);
+    return;
+  }
+
+  try {
+    if (action === "edit") {
+      setPrimaryView(PRIMARY_VIEW_IDS.SETTINGS);
+      fillPrinterForm(printer);
+      setMessage(`Loaded printer ${printerId} into the configuration form.`);
+      return;
+    }
+
+    if (action === "enable") {
+      await setPrinterEnabled(printerId, true);
+      setMessage(`Enabled printer ${printerId}.`);
+      await refreshAllData({ silent: true });
+      return;
+    }
+
+    if (action === "disable") {
+      await setPrinterEnabled(printerId, false);
+      setMessage(`Disabled printer ${printerId}.`);
+      await refreshAllData({ silent: true });
+      return;
+    }
+
+    if (action === "delete") {
+      await deletePrinter(printerId);
+      setMessage(`Deleted printer ${printerId}.`);
+      await refreshAllData({ silent: true });
+    }
+  } catch (error) {
+    setMessage(`Failed to ${action} printer ${printerId}: ${error.message}`);
+  }
+}
+
+async function loadPrinterEventsIntoState(printerId) {
+  try {
+    const events = await getPrinterEvents(printerId);
+    setPrinterEvents(printerId, events);
+  } catch (error) {
+    setMessage(`Failed to load printer events for ${printerId}: ${error.message}`);
+  }
+}
+
+async function loadJobEventsIntoState(jobId) {
+  try {
+    const events = await getJobEvents(jobId);
+    setJobEvents(jobId, events);
+  } catch (error) {
+    setMessage(`Failed to load job history for ${jobId}: ${error.message}`);
+  }
+}
+
+async function runPrinterCommand(printerId, command) {
+  setPrinterCommandResult(printerId, `Running ${command}...`);
+  renderApp();
+
+  try {
+    const response = await executePrinterCommand(printerId, command);
+    const printerResponse = response.response ?? "no response";
+    const successMessage = `${response.sentCommand}: ${printerResponse}`;
+
+    setPrinterCommandResult(printerId, successMessage);
+    setMessage(`Executed ${response.sentCommand} on ${printerId}.`);
+
+    await refreshAllData({ silent: true });
+    await loadPrinterEventsIntoState(printerId);
+  } catch (error) {
+    const failureMessage = `Command failed: ${error.message}`;
+    setPrinterCommandResult(printerId, failureMessage);
+    setMessage(`Failed to execute ${command} on ${printerId}: ${error.message}`);
+    await refreshAllData({ silent: true });
+  }
+}
+
+function fillPrinterForm(printer) {
+  const printerIdInput = document.getElementById("printerIdInput");
+  const printerNameInput = document.getElementById("printerNameInput");
+  const printerPortInput = document.getElementById("printerPortInput");
+  const printerModeInput = document.getElementById("printerModeInput");
+
+  if (!printerIdInput || !printerNameInput || !printerPortInput || !printerModeInput) {
+    return;
+  }
+
+  printerIdInput.value = printer.id || "";
+  printerNameInput.value = printer.displayName || printer.name || "";
+  printerPortInput.value = printer.portName || "";
+  printerModeInput.value = printer.mode || "real";
+}
+
+function clearPrinterForm() {
+  const form = document.getElementById("printerConfigForm");
+  const printerModeInput = document.getElementById("printerModeInput");
+
+  if (!form) {
+    return;
+  }
+
+  form.reset();
+
+  if (printerModeInput) {
+    printerModeInput.value = "real";
+  }
+}
+
+function clearJobForm() {
+  const form = document.getElementById("jobForm");
+  const jobTypeInput = document.getElementById("jobTypeInput");
+  const jobPrinterIdInput = document.getElementById("jobPrinterIdInput");
+
+  if (!form) {
+    return;
+  }
+
+  form.reset();
+
+  if (jobTypeInput) {
+    jobTypeInput.value = "READ_FIRMWARE_INFO";
+  }
+
+  if (jobPrinterIdInput && state.selectedPrinterId) {
+    jobPrinterIdInput.value = state.selectedPrinterId;
+  }
+}
+
+function startAutoRefresh() {
+  if (printerRefreshInterval) {
+    clearInterval(printerRefreshInterval);
+  }
+
+  if (jobsRefreshInterval) {
+    clearInterval(jobsRefreshInterval);
+  }
+
+  printerRefreshInterval = setInterval(async () => {
+    try {
+      const printers = await getPrinters();
+      setPrinters(printers);
+      setLastRefreshLabel(new Date().toLocaleTimeString());
+      renderApp();
+    } catch {
+      // keep current state visible
+    }
+  }, 3000);
+
+  jobsRefreshInterval = setInterval(async () => {
+    try {
+      const jobs = await getJobs();
+      setJobs(jobs);
+      renderApp();
+    } catch {
+      // keep current state visible
+    }
+  }, 5000);
+}
+
+export function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+export function formatTemperature(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "n/a";
+  }
+
+  return `${Number(value).toFixed(1)} °C`;
+}
+
+export function resolveStateClass(printer) {
+  if (!printer.enabled) {
+    return "status-disabled";
+  }
+
+  const stateLabel = String(printer.state || "UNKNOWN").toLowerCase();
+
+  if (stateLabel === "error" || stateLabel === "disconnected") {
+    return "status-error";
+  }
+
+  if (["connecting", "heating", "printing"].includes(stateLabel)) {
+    return "status-warn";
+  }
+
+  if (stateLabel === "idle") {
+    return "status-ok";
+  }
+
+  return "status-unknown";
+}
+
+export function renderStatusLabel(printer, stateLabel) {
+  if (!printer.enabled) {
+    return "DISABLED";
+  }
+
+  return String(stateLabel || "UNKNOWN");
+}
+
+export function isSimulatedMode(mode) {
+  const normalized = String(mode || "").toLowerCase();
+  return ["sim", "simulated", "sim-error", "sim-timeout", "sim-disconnected"].includes(normalized);
+}
+
+export function countEnabledPrinters() {
+  return state.printers.filter((printer) => printer.enabled).length;
+}
+
+export function countDisabledPrinters() {
+  return state.printers.filter((printer) => !printer.enabled).length;
+}
+
+export function getSelectedPrinterDisplayName() {
+  const printer = getSelectedPrinter();
+  return printer ? (printer.displayName || printer.name || printer.id) : "No printer selected";
+}
+
+export function getMostRecentUpdatedAt() {
+  const updatedValues = state.printers
+    .map((printer) => printer.updatedAt)
+    .filter((value) => typeof value === "string" && value.trim() !== "");
+
+  return updatedValues[0] || "n/a";
+}
+
+function readOptionalNumber(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+
+  return Number.parseFloat(value);
+}
+
+function readOptionalInteger(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+
+  return Number.parseInt(value, 10);
+}
+
+function emptyToNull(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+
+  return String(value).trim();
+}
+
+function removeNullFields(object) {
+  for (const key of Object.keys(object)) {
+    if (object[key] === null || object[key] === undefined || object[key] === "") {
+      delete object[key];
+    }
+  }
+}
+
+boot();

@@ -18,6 +18,8 @@ public final class DatabaseInitializer {
             createPrinterEventsTable(statement);
             createConfiguredPrintersTable(statement);
             createMonitoringRulesTable(statement);
+
+            migratePrintJobsTable(statement);
             migrateMonitoringRulesTable(statement);
 
             System.out.println(OperationMessages.databaseInitialized(DatabaseConfig.databaseFile()));
@@ -34,8 +36,14 @@ public final class DatabaseInitializer {
                     type TEXT NOT NULL,
                     state TEXT NOT NULL,
                     printer_id TEXT,
+                    target_temperature REAL,
+                    fan_speed INTEGER,
+                    failure_reason TEXT,
+                    failure_detail TEXT,
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    started_at TEXT,
+                    finished_at TEXT
                 );
                 """;
 
@@ -105,6 +113,33 @@ public final class DatabaseInitializer {
                 """;
 
         statement.execute(sql);
+    }
+
+    private void migratePrintJobsTable(Statement statement) throws SQLException {
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE print_jobs ADD COLUMN target_temperature REAL;"
+        );
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE print_jobs ADD COLUMN fan_speed INTEGER;"
+        );
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE print_jobs ADD COLUMN failure_reason TEXT;"
+        );
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE print_jobs ADD COLUMN failure_detail TEXT;"
+        );
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE print_jobs ADD COLUMN started_at TEXT;"
+        );
+        addColumnIfMissing(
+                statement,
+                "ALTER TABLE print_jobs ADD COLUMN finished_at TEXT;"
+        );
     }
 
     private void migrateMonitoringRulesTable(Statement statement) throws SQLException {

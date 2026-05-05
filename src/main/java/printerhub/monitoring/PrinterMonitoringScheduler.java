@@ -40,15 +40,13 @@ public final class PrinterMonitoringScheduler {
 
     public PrinterMonitoringScheduler(
             PrinterRegistry printerRegistry,
-            PrinterRuntimeStateCache stateCache
-    ) {
+            PrinterRuntimeStateCache stateCache) {
         this(
                 printerRegistry,
                 stateCache,
                 new PrinterSnapshotStore(MonitoringRules.defaults()),
                 new PrinterEventStore(),
-                MonitoringRules.defaults()
-        );
+                MonitoringRules.defaults());
     }
 
     public PrinterMonitoringScheduler(
@@ -56,8 +54,7 @@ public final class PrinterMonitoringScheduler {
             PrinterRuntimeStateCache stateCache,
             PrinterSnapshotStore snapshotStore,
             PrinterEventStore eventStore,
-            MonitoringRules monitoringRules
-    ) {
+            MonitoringRules monitoringRules) {
         if (printerRegistry == null) {
             throw new IllegalArgumentException(OperationMessages.PRINTER_REGISTRY_MUST_NOT_BE_NULL);
         }
@@ -82,8 +79,7 @@ public final class PrinterMonitoringScheduler {
         this.clock = Clock.systemUTC();
         this.eventPolicy = new MonitoringEventPolicy(
                 clock,
-                Duration.ofSeconds(monitoringRules.eventDeduplicationWindowSeconds())
-        );
+                Duration.ofSeconds(monitoringRules.eventDeduplicationWindowSeconds()));
     }
 
     public synchronized void updateMonitoringRules(MonitoringRules monitoringRules) {
@@ -95,8 +91,7 @@ public final class PrinterMonitoringScheduler {
         this.snapshotStore = new PrinterSnapshotStore(monitoringRules);
         this.eventPolicy = new MonitoringEventPolicy(
                 clock,
-                Duration.ofSeconds(monitoringRules.eventDeduplicationWindowSeconds())
-        );
+                Duration.ofSeconds(monitoringRules.eventDeduplicationWindowSeconds()));
 
         if (executorService == null || executorService.isShutdown()) {
             return;
@@ -123,8 +118,7 @@ public final class PrinterMonitoringScheduler {
 
         int poolSize = Math.max(
                 RuntimeDefaults.MIN_MONITORING_EXECUTOR_POOL_SIZE,
-                nodes.size() + RuntimeDefaults.MONITORING_EXECUTOR_EXTRA_THREADS
-        );
+                nodes.size() + RuntimeDefaults.MONITORING_EXECUTOR_EXTRA_THREADS);
         executorService = Executors.newScheduledThreadPool(poolSize);
 
         for (PrinterRuntimeNode node : nodes) {
@@ -162,12 +156,10 @@ public final class PrinterMonitoringScheduler {
                         PrinterProtocolDefaults.DEFAULT_STATUS_COMMAND,
                         shuttingDown::get,
                         eventPolicy,
-                        monitoringRules
-                ),
+                        monitoringRules),
                 0,
                 monitoringRules.pollIntervalSeconds(),
-                TimeUnit.SECONDS
-        );
+                TimeUnit.SECONDS);
 
         scheduledTasks.put(node.id(), future);
     }
@@ -208,8 +200,23 @@ public final class PrinterMonitoringScheduler {
             return;
         }
 
-        executorService.shutdownNow();
+        ScheduledExecutorService executorToStop = executorService;
         executorService = null;
+
+        executorToStop.shutdownNow();
+
+        try {
+            if (!executorToStop.awaitTermination(2, TimeUnit.SECONDS)) {
+                System.err.println(OperationMessages.apiOperationFailed(
+                        "Monitoring scheduler did not terminate cleanly within timeout."));
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            System.err.println(OperationMessages.apiOperationFailed(
+                    OperationMessages.safeDetail(
+                            exception.getMessage(),
+                            OperationMessages.UNKNOWN_API_ERROR)));
+        }
     }
 
     private void initializeDisabledPrinter(PrinterRuntimeNode node) {
@@ -221,9 +228,7 @@ public final class PrinterMonitoringScheduler {
                         null,
                         null,
                         OperationMessages.PRINTER_NODE_DISABLED,
-                        Instant.now(clock)
-                )
-        );
+                        Instant.now(clock)));
         eventPolicy.clearPrinter(node.id());
     }
 
@@ -231,8 +236,7 @@ public final class PrinterMonitoringScheduler {
         if (executorService == null || executorService.isShutdown()) {
             shuttingDown.set(false);
             executorService = Executors.newScheduledThreadPool(
-                    RuntimeDefaults.DEFAULT_MONITORING_EXECUTOR_POOL_SIZE
-            );
+                    RuntimeDefaults.DEFAULT_MONITORING_EXECUTOR_POOL_SIZE);
         }
     }
 }

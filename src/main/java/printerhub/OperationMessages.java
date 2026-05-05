@@ -39,18 +39,12 @@ public final class OperationMessages {
     public static final String MONITORING_RULES_MUST_NOT_BE_NULL = "monitoringRules must not be null";
     public static final String INTERVAL_SECONDS_MUST_BE_GREATER_THAN_ZERO = "intervalSeconds must be greater than zero";
 
-    public static final String POLL_INTERVAL_SECONDS_MUST_BE_GREATER_THAN_ZERO =
-            "pollIntervalSeconds must be greater than zero";
-    public static final String SNAPSHOT_MINIMUM_INTERVAL_SECONDS_MUST_NOT_BE_NEGATIVE =
-            "snapshotMinimumIntervalSeconds must not be negative";
-    public static final String TEMPERATURE_DELTA_THRESHOLD_MUST_NOT_BE_NEGATIVE =
-            "temperatureDeltaThreshold must not be negative";
-    public static final String EVENT_DEDUPLICATION_WINDOW_SECONDS_MUST_NOT_BE_NEGATIVE =
-            "eventDeduplicationWindowSeconds must not be negative";
-    public static final String ERROR_PERSISTENCE_BEHAVIOR_MUST_NOT_BE_NULL =
-            "errorPersistenceBehavior must not be null";
-    public static final String TARGET_TEMPERATURE_MUST_NOT_BE_NEGATIVE =
-            "targetTemperature must not be negative";
+    public static final String POLL_INTERVAL_SECONDS_MUST_BE_GREATER_THAN_ZERO = "pollIntervalSeconds must be greater than zero";
+    public static final String SNAPSHOT_MINIMUM_INTERVAL_SECONDS_MUST_NOT_BE_NEGATIVE = "snapshotMinimumIntervalSeconds must not be negative";
+    public static final String TEMPERATURE_DELTA_THRESHOLD_MUST_NOT_BE_NEGATIVE = "temperatureDeltaThreshold must not be negative";
+    public static final String EVENT_DEDUPLICATION_WINDOW_SECONDS_MUST_NOT_BE_NEGATIVE = "eventDeduplicationWindowSeconds must not be negative";
+    public static final String ERROR_PERSISTENCE_BEHAVIOR_MUST_NOT_BE_NULL = "errorPersistenceBehavior must not be null";
+    public static final String TARGET_TEMPERATURE_MUST_NOT_BE_NEGATIVE = "targetTemperature must not be negative";
 
     public static final String EVENT_PRINTER_POLLED = "PRINTER_POLLED";
     public static final String EVENT_PRINTER_DISABLED = "PRINTER_DISABLED";
@@ -115,6 +109,39 @@ public final class OperationMessages {
     public static final String DEDUP_WINDOW_MUST_NOT_BE_NEGATIVE = "dedupWindow must not be negative";
     public static final String EVENT_MESSAGE_MUST_NOT_BE_BLANK = "eventMessage must not be blank";
     public static final String MONITORING_EVENT_POLICY_MUST_NOT_BE_NULL = "monitoringEventPolicy must not be null";
+
+    public static final String PRINT_JOB_STORE_MUST_NOT_BE_NULL = "printJobStore must not be null";
+    public static final String PRINT_JOB_SERVICE_MUST_NOT_BE_NULL = "printJobService must not be null";
+    public static final String PRINT_JOB_EXECUTION_SERVICE_MUST_NOT_BE_NULL = "printJobExecutionService must not be null";
+    public static final String PRINTER_ACTION_GUARD_MUST_NOT_BE_NULL = "printerActionGuard must not be null";
+    public static final String PRINTER_ACTION_MAPPER_MUST_NOT_BE_NULL = "printerActionMapper must not be null";
+
+    public static final String JOB_ID_MUST_NOT_BE_BLANK = "jobId must not be blank";
+    public static final String JOB_NAME_MUST_NOT_BE_BLANK = "jobName must not be blank";
+    public static final String JOB_TYPE_MUST_NOT_BE_NULL = "jobType must not be null";
+    public static final String JOB_STATE_MUST_NOT_BE_NULL = "jobState must not be null";
+    public static final String ACTION_TYPE_MUST_NOT_BE_NULL = "actionType must not be null";
+
+    public static final String JOB_NOT_FOUND = "job_not_found";
+    public static final String JOB_ENDPOINT_NOT_FOUND = "job_endpoint_not_found";
+    public static final String INVALID_JOB_STATE = "invalid_job_state";
+    public static final String PRINTER_BUSY = "printer_busy";
+    public static final String PRECONDITION_FAILED = "precondition_failed";
+
+    public static final String FAILED_TO_SAVE_PRINT_JOB = "Failed to save print job";
+    public static final String FAILED_TO_LOAD_PRINT_JOB = "Failed to load print job";
+    public static final String FAILED_TO_LOAD_PRINT_JOBS = "Failed to load print jobs";
+    public static final String FAILED_TO_UPDATE_PRINT_JOB = "Failed to update print job";
+
+    public static final String EVENT_JOB_CREATED = "JOB_CREATED";
+    public static final String EVENT_JOB_ASSIGNED = "JOB_ASSIGNED";
+    public static final String EVENT_JOB_STARTED = "JOB_STARTED";
+    public static final String EVENT_JOB_EXECUTION_STARTED = "JOB_EXECUTION_STARTED";
+    public static final String EVENT_JOB_EXECUTION_SUCCEEDED = "JOB_EXECUTION_SUCCEEDED";
+    public static final String EVENT_JOB_EXECUTION_FAILED = "JOB_EXECUTION_FAILED";
+    public static final String EVENT_JOB_COMPLETED = "JOB_COMPLETED";
+    public static final String EVENT_JOB_FAILED = "JOB_FAILED";
+    public static final String EVENT_JOB_CANCELLED = "JOB_CANCELLED";
 
     public static String simulatedPrinterDisconnected(String portName) {
         return "Simulated printer is disconnected: " + portName;
