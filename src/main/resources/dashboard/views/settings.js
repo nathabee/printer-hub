@@ -1,0 +1,146 @@
+import { escapeHtml, isSimulatedMode } from "../app.js";
+import { renderPlaceholderCard } from "../components/placeholder-card.js";
+import { state } from "../state.js";
+
+export function renderSettingsPage() {
+  const monitoringRules = state.monitoringRules || {};
+  const printers = state.printers;
+
+  return `
+    <section class="two-column-grid">
+      <article class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Monitoring rules</h2>
+            <p class="lead">Runtime polling and persistence settings already available in the backend.</p>
+          </div>
+        </div>
+
+        <form id="monitoringRulesForm" class="form-grid">
+          <label>
+            Poll interval seconds
+            <input id="pollIntervalSecondsInput" name="pollIntervalSeconds" type="number" step="1" min="1" value="${escapeHtml(monitoringRules.pollIntervalSeconds ?? 5)}" required>
+          </label>
+
+          <label>
+            Snapshot minimum interval seconds
+            <input id="snapshotMinimumIntervalSecondsInput" name="snapshotMinimumIntervalSeconds" type="number" step="1" min="0" value="${escapeHtml(monitoringRules.snapshotMinimumIntervalSeconds ?? 30)}" required>
+          </label>
+
+          <label>
+            Temperature delta threshold
+            <input id="temperatureDeltaThresholdInput" name="temperatureDeltaThreshold" type="number" step="0.1" min="0" value="${escapeHtml(monitoringRules.temperatureDeltaThreshold ?? 1.0)}" required>
+          </label>
+
+          <label>
+            Event deduplication window seconds
+            <input id="eventDeduplicationWindowSecondsInput" name="eventDeduplicationWindowSeconds" type="number" step="1" min="0" value="${escapeHtml(monitoringRules.eventDeduplicationWindowSeconds ?? 60)}" required>
+          </label>
+
+          <label>
+            Error persistence behavior
+            <select id="errorPersistenceBehaviorInput" name="errorPersistenceBehavior" required>
+              <option value="DEDUPLICATED" ${(monitoringRules.errorPersistenceBehavior ?? "DEDUPLICATED") === "DEDUPLICATED" ? "selected" : ""}>DEDUPLICATED</option>
+              <option value="ALWAYS" ${(monitoringRules.errorPersistenceBehavior ?? "DEDUPLICATED") === "ALWAYS" ? "selected" : ""}>ALWAYS</option>
+            </select>
+          </label>
+
+          <div class="form-actions">
+            <button type="submit">Save monitoring rules</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Printer administration</h2>
+            <p class="lead">Create or update configured printer nodes.</p>
+          </div>
+        </div>
+
+        <form id="printerConfigForm" class="form-grid">
+          <label>
+            Printer ID
+            <input id="printerIdInput" name="id" type="text" placeholder="printer-1" required>
+          </label>
+
+          <label>
+            Name
+            <input id="printerNameInput" name="name" type="text" placeholder="Primary printer" required>
+          </label>
+
+          <label>
+            Port
+            <input id="printerPortInput" name="portName" type="text" placeholder="/dev/ttyUSB0 or SIM_PORT" required>
+          </label>
+
+          <label>
+            Mode
+            <select id="printerModeInput" name="mode" required>
+              <option value="real">real</option>
+              <option value="sim">sim</option>
+              <option value="simulated">simulated</option>
+              <option value="sim-disconnected">sim-disconnected</option>
+              <option value="sim-timeout">sim-timeout</option>
+              <option value="sim-error">sim-error</option>
+            </select>
+          </label>
+
+          <div class="form-actions">
+            <button type="submit">Save printer</button>
+            <button id="clearPrinterFormButton" type="button" class="secondary-button">Clear form</button>
+          </div>
+        </form>
+
+        <div class="list-block">
+          ${printers.length === 0 ? `<p class="muted">No configured printers found.</p>` : printers.map(renderConfiguredPrinter).join("")}
+        </div>
+      </article>
+    </section>
+
+    <section class="two-column-grid">
+      ${renderPlaceholderCard(
+        "General runtime settings",
+        "Reserved for later settings beyond monitoring rules and printer administration.",
+        [
+          "Retention policy",
+          "Runtime defaults",
+          "Notification settings"
+        ]
+      )}
+      ${renderPlaceholderCard(
+        "Capability and profile settings",
+        "Reserved for richer printer profiles and capability metadata.",
+        [
+          "Printer capability profile",
+          "Maintenance profile",
+          "Production job defaults"
+        ]
+      )}
+    </section>
+  `;
+}
+
+function renderConfiguredPrinter(printer) {
+  return `
+    <article class="config-card">
+      <div class="section-header compact">
+        <div>
+          <h3>${escapeHtml(printer.displayName || printer.name || printer.id)}</h3>
+          <p class="meta">${escapeHtml(printer.id)} · ${escapeHtml(printer.portName || "n/a")} · ${escapeHtml(printer.mode || "n/a")}</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge ${printer.enabled ? "badge-enabled" : "badge-disabled"}">${printer.enabled ? "enabled" : "disabled"}</span>
+          <span class="badge ${isSimulatedMode(printer.mode) ? "badge-simulated" : "badge-real"}">${isSimulatedMode(printer.mode) ? "simulated" : "real"}</span>
+        </div>
+      </div>
+      <div class="action-row">
+        <button type="button" class="secondary-button" data-config-action="edit" data-printer-id="${escapeHtml(printer.id)}">Edit</button>
+        <button type="button" class="secondary-button" data-config-action="enable" data-printer-id="${escapeHtml(printer.id)}">Enable</button>
+        <button type="button" class="secondary-button" data-config-action="disable" data-printer-id="${escapeHtml(printer.id)}">Disable</button>
+        <button type="button" class="danger-button" data-config-action="delete" data-printer-id="${escapeHtml(printer.id)}">Delete</button>
+      </div>
+    </article>
+  `;
+}

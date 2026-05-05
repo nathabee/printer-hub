@@ -305,25 +305,24 @@ public final class RemoteApiServer {
     }
 
     private void handleJobEvents(HttpExchange exchange, String jobId) throws IOException {
-    if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
-        return;
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintJob job = printJobService.findById(jobId).orElse(null);
+
+        if (job == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+            return;
+        }
+
+        List<PrinterEvent> events = printerEventStore.findRecentByJobId(
+                jobId,
+                RuntimeDefaults.DEFAULT_RECENT_JOB_LIMIT);
+
+        sendJson(exchange, 200, printerEventsJson(events));
     }
-
-    PrintJob job = printJobService.findById(jobId).orElse(null);
-
-    if (job == null) {
-        sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
-        return;
-    }
-
-    List<PrinterEvent> events = printerEventStore.findRecentByJobId(
-            jobId,
-            RuntimeDefaults.DEFAULT_RECENT_JOB_LIMIT
-    );
-
-    sendJson(exchange, 200, printerEventsJson(events));
-}
 
     private void handleJobResource(HttpExchange exchange, String jobId) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -741,6 +740,7 @@ public final class RemoteApiServer {
                 + "\"success\":" + result.success() + ","
                 + "\"wireCommand\":" + nullableString(result.wireCommand()) + ","
                 + "\"response\":" + nullableString(result.response()) + ","
+                + "\"outcome\":" + nullableString(result.outcome()) + ","
                 + "\"failureReason\":" + nullableString(
                         result.failureReason() == null ? null : result.failureReason().name())
                 + ","
@@ -1034,17 +1034,38 @@ public final class RemoteApiServer {
             return;
         }
 
-        if ("/dashboard/dashboard.css".equals(path)) {
-            sendResource(exchange, "/dashboard/dashboard.css", "text/css; charset=utf-8");
+        if (!path.startsWith("/dashboard/")) {
+            sendJson(exchange, 404, errorJson(OperationMessages.DASHBOARD_RESOURCE_NOT_FOUND));
             return;
         }
 
-        if ("/dashboard/dashboard.js".equals(path)) {
-            sendResource(exchange, "/dashboard/dashboard.js", "application/javascript; charset=utf-8");
+        String relativePath = path.substring("/dashboard/".length());
+
+        if (relativePath.isBlank() || relativePath.contains("..")) {
+            sendJson(exchange, 404, errorJson(OperationMessages.DASHBOARD_RESOURCE_NOT_FOUND));
             return;
         }
 
-        sendJson(exchange, 404, errorJson(OperationMessages.DASHBOARD_RESOURCE_NOT_FOUND));
+        String resourcePath = "/dashboard/" + relativePath;
+        String contentType = detectDashboardContentType(resourcePath);
+
+        sendResource(exchange, resourcePath, contentType);
+    }
+
+    private String detectDashboardContentType(String resourcePath) {
+        if (resourcePath.endsWith(".html")) {
+            return "text/html; charset=utf-8";
+        }
+
+        if (resourcePath.endsWith(".css")) {
+            return "text/css; charset=utf-8";
+        }
+
+        if (resourcePath.endsWith(".js")) {
+            return "application/javascript; charset=utf-8";
+        }
+
+        return "application/octet-stream";
     }
 
     private void sendResource(

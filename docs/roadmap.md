@@ -1307,7 +1307,7 @@ Expected result:
 ## 0.2.3 — Local Audit, History Views, and Controlled Job Actions
 
 status: in progress
-- step A : done 
+- step A,B : done 
 
 
 ### step A — Audit and history visibility
@@ -1322,15 +1322,39 @@ Goals:
 * make local diagnostics easier through both API and dashboard views
 * make operator-triggered job outcomes reviewable after the fact
 
-### step B — Controlled real-printer job workflows
+### step B — New Dashboard UI and Controlled real-printer job workflows
 
 Goals:
 
+* Dashboard UI with menu, navigation, component to make it a 2 level UI
 * implement controlled job actions as predefined workflows, not just single raw command sends
 * support multi-step preparation, validation, execution, and result interpretation for real-printer actions
 * validate printer readiness before state-changing jobs are executed
 * allow required pre-sequences before the main action command is sent
 * make `HOME_AXES` a controlled workflow instead of only a direct `G28` send
+
+
+Dashboard as **two-level UI**, the menu is :
+
+```text 
+PrinterHub
+├── Farm Home
+├── Printers
+├── Jobs
+├── History
+└── Settings
+```
+
+But once a printer is selected, its internal navigation should follow the Ender logic very closely:
+
+```text  
+Selected Printer
+├── Home
+├── Print
+├── Prepare
+├── Control
+└── Info
+```
 
 ### step C — Correct execution diagnostics and reviewability
 

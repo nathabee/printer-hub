@@ -1,0 +1,100 @@
+export const PRIMARY_VIEW_IDS = Object.freeze({
+  FARM_HOME: "farm-home",
+  PRINTERS: "printers",
+  JOBS: "jobs",
+  HISTORY: "history",
+  SETTINGS: "settings"
+});
+
+export const PRINTER_VIEW_IDS = Object.freeze({
+  HOME: "printer-home",
+  PRINT: "printer-print",
+  PREPARE: "printer-prepare",
+  CONTROL: "printer-control",
+  INFO: "printer-info",
+  HISTORY: "printer-history"
+});
+
+export const state = {
+  activePrimaryView: PRIMARY_VIEW_IDS.FARM_HOME,
+  activePrinterView: PRINTER_VIEW_IDS.HOME,
+  selectedPrinterId: null,
+  printers: [],
+  jobs: [],
+  monitoringRules: null,
+  printerEvents: new Map(),
+  jobEvents: new Map(),
+  printerCommandResults: new Map(),
+  message: "",
+  lastRefreshLabel: "never"
+};
+
+export function setPrinters(printers) {
+  state.printers = Array.isArray(printers) ? printers : [];
+
+  if (!state.selectedPrinterId && state.printers.length > 0) {
+    state.selectedPrinterId = state.printers[0].id;
+  }
+
+  if (state.selectedPrinterId && !state.printers.some((printer) => printer.id === state.selectedPrinterId)) {
+    state.selectedPrinterId = state.printers[0]?.id ?? null;
+  }
+}
+
+export function setJobs(jobs) {
+  state.jobs = Array.isArray(jobs) ? jobs : [];
+}
+
+export function setMonitoringRules(rules) {
+  state.monitoringRules = rules;
+}
+
+export function setPrimaryView(viewId) {
+  state.activePrimaryView = viewId;
+}
+
+export function setPrinterView(viewId) {
+  state.activePrinterView = viewId;
+}
+
+export function setSelectedPrinter(printerId) {
+  if (!printerId) {
+    state.selectedPrinterId = null;
+    return;
+  }
+
+  const exists = state.printers.some((printer) => printer.id === printerId);
+  state.selectedPrinterId = exists ? printerId : state.selectedPrinterId;
+}
+
+export function setMessage(message) {
+  state.message = message || "";
+}
+
+export function setLastRefreshLabel(label) {
+  state.lastRefreshLabel = label;
+}
+
+export function getSelectedPrinter() {
+  return state.printers.find((printer) => printer.id === state.selectedPrinterId) ?? null;
+}
+
+export function getJobsForSelectedPrinter() {
+  if (!state.selectedPrinterId) {
+    return [];
+  }
+
+  return state.jobs.filter((job) => job.printerId === state.selectedPrinterId);
+}
+
+export function setPrinterEvents(printerId, events) {
+  state.printerEvents.set(printerId, Array.isArray(events) ? events : []);
+}
+
+export function setJobEvents(jobId, events) {
+  state.jobEvents.set(jobId, Array.isArray(events) ? events : []);
+}
+
+export function setPrinterCommandResult(printerId, message) {
+  state.printerCommandResults.set(printerId, message);
+}

@@ -1,0 +1,77 @@
+import { renderEventList } from "../components/event-list.js";
+import { renderPlaceholderCard } from "../components/placeholder-card.js";
+import { state } from "../state.js";
+
+export function renderPrinterHistory(printer, jobsForPrinter) {
+  const printerEvents = state.printerEvents.get(printer.id) ?? [];
+
+  return `
+    <section class="two-column-grid">
+      <article class="panel-card">
+        <div class="section-header compact">
+          <div>
+            <div class="kicker">History</div>
+            <h3>Printer events</h3>
+            <p class="muted">Operational events recorded for this printer.</p>
+          </div>
+          <button type="button" class="secondary-button small-button" data-load-printer-events="${printer.id}">Load events</button>
+        </div>
+        <div class="events-list">
+          ${renderEventList(printerEvents, "Events not loaded yet.")}
+        </div>
+      </article>
+
+      <article class="panel-card">
+        <div class="section-header compact">
+          <div>
+            <h3>Job history for this printer</h3>
+            <p class="muted">Job records currently assigned to the selected printer.</p>
+          </div>
+        </div>
+        <div class="list-block">
+          ${renderJobHistorySummary(jobsForPrinter)}
+        </div>
+      </article>
+    </section>
+
+    <section class="two-column-grid">
+      ${renderPlaceholderCard(
+        "Snapshot history",
+        "Reserved for future snapshot browsing when the dashboard exposes it directly.",
+        [
+          "Snapshot timestamps",
+          "Temperature evolution",
+          "Status transition timeline"
+        ]
+      )}
+      ${renderPlaceholderCard(
+        "Command result history",
+        "Reserved for a later explicit command-result audit view.",
+        [
+          "Manual command log",
+          "Command outcome status",
+          "Structured execution response"
+        ]
+      )}
+    </section>
+  `;
+}
+
+function renderJobHistorySummary(jobsForPrinter) {
+  if (!jobsForPrinter || jobsForPrinter.length === 0) {
+    return `<p class="muted">No jobs assigned to this printer yet.</p>`;
+  }
+
+  return jobsForPrinter.map((job) => `
+    <div class="event-item">
+      <div class="event-header">
+        <strong>${job.name || job.id}</strong>
+        <span class="event-time">${job.state || "UNKNOWN"}</span>
+      </div>
+      <div class="event-message">${job.type || "n/a"} · created ${job.createdAt || "n/a"}</div>
+      <div class="inline-actions">
+        <button type="button" class="secondary-button small-button" data-job-action="load-events" data-job-id="${job.id}">Load job events</button>
+      </div>
+    </div>
+  `).join("");
+}

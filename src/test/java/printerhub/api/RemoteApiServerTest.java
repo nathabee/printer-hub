@@ -43,6 +43,50 @@ class RemoteApiServerTest {
     }
 
     @Test
+    void dashboardAppJsReturnsJavaScript() throws Exception {
+        TestContext context = createContext("dashboard-app-js.db");
+
+        try {
+            HttpResponse<String> response = context.get("/dashboard/app.js");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.headers().firstValue("content-type").orElse("").contains("application/javascript"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void dashboardViewModuleReturnsJavaScript() throws Exception {
+        TestContext context = createContext("dashboard-view-module.db");
+
+        try {
+            HttpResponse<String> response = context.get("/dashboard/views/farm-home.js");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.headers().firstValue("content-type").orElse("").contains("application/javascript"));
+        } finally {
+            context.close();
+        }
+    }
+
+
+  
+    @Test
+    void dashboardComponentModuleReturnsJavaScript() throws Exception {
+        TestContext context = createContext("dashboard-component-module.db");
+
+        try {
+            HttpResponse<String> response = context.get("/dashboard/components/nav.js");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.headers().firstValue("content-type").orElse("").contains("application/javascript"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
     void constructorFailsForInvalidPort() {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,

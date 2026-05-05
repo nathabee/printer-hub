@@ -14,10 +14,10 @@ jacoco-pretty.xml
 
 
 # db
-printerhub.db
 *.db
 
 # development files
 chat.txt
 chat.sh
 old_src
+**/to_ignore/**

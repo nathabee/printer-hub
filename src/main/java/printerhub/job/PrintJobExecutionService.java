@@ -12,6 +12,8 @@ public final class PrintJobExecutionService {
     private final PrinterMonitoringScheduler monitoringScheduler;
     private final PrinterActionGuard printerActionGuard;
     private final PrinterActionMapper printerActionMapper;
+    private final PrinterWorkflowPlanner printerWorkflowPlanner;
+    private final PrinterResponseClassifier printerResponseClassifier;
 
     public PrintJobExecutionService(
             PrintJobService printJobService,
@@ -41,6 +43,8 @@ public final class PrintJobExecutionService {
         this.monitoringScheduler = monitoringScheduler;
         this.printerActionGuard = printerActionGuard;
         this.printerActionMapper = printerActionMapper;
+        this.printerWorkflowPlanner = new PrinterWorkflowPlanner();
+        this.printerResponseClassifier = new PrinterResponseClassifier();
     }
 
     public PrinterActionExecutionResult execute(String jobId) {
@@ -69,57 +73,126 @@ public final class PrintJobExecutionService {
 
             return PrinterActionExecutionResult.failure(
                     null,
+                    null,
                     decision.failureReason(),
                     decision.detail()
             );
         }
 
         PrinterActionRequest request = PrinterActionRequest.fromJob(job);
-        String wireCommand = printerActionMapper.toWireCommand(request);
+        PrinterWorkflowPlan workflowPlan = printerWorkflowPlanner.plan(request, printerActionMapper);
 
         node.beginJobExecution(job.id());
         monitoringScheduler.stopMonitoring(node.id());
+
+        String currentCommand = null;
+        String lastResponse = null;
 
         try {
             printJobService.markRunning(job.id());
             printJobService.recordJobAuditEvent(
                     job.id(),
                     OperationMessages.EVENT_JOB_EXECUTION_STARTED,
-                    "Job execution started: " + wireCommand
+                    "Job execution started: " + describePlan(workflowPlan)
             );
 
             node.printerPort().connect();
-            String response = node.printerPort().sendCommand(wireCommand);
+
+            for (PrinterWorkflowStep step : workflowPlan.steps()) {
+                currentCommand = step.wireCommand();
+
+                printJobService.recordJobAuditEvent(
+                        job.id(),
+                        OperationMessages.EVENT_JOB_EXECUTION_STARTED,
+                        "Workflow step started: " + step.name() + " -> " + currentCommand
+                );
+
+                String response = node.printerPort().sendCommand(currentCommand);
+                lastResponse = response;
+
+                PrinterResponseClassifier.ResponseClassification classification =
+                        printerResponseClassifier.classifyResponse(currentCommand, response);
+
+                if (!classification.success()) {
+                    String failureDetail = classification.detail();
+
+                    printJobService.recordJobAuditEvent(
+                            job.id(),
+                            OperationMessages.EVENT_JOB_EXECUTION_FAILED,
+                            "Workflow step failed: "
+                                    + step.name()
+                                    + " -> "
+                                    + currentCommand
+                                    + " | outcome="
+                                    + classification.failureReason().name()
+                                    + " | response="
+                                    + OperationMessages.safeDetail(classification.response(), "no response")
+                    );
+
+                    printJobService.markFailed(
+                            job.id(),
+                            classification.failureReason(),
+                            failureDetail
+                    );
+
+                    return PrinterActionExecutionResult.failure(
+                            currentCommand,
+                            classification.response(),
+                            classification.failureReason(),
+                            failureDetail
+                    );
+                }
+
+                printJobService.recordJobAuditEvent(
+                        job.id(),
+                        OperationMessages.EVENT_JOB_EXECUTION_SUCCEEDED,
+                        "Workflow step succeeded: "
+                                + step.name()
+                                + " -> "
+                                + currentCommand
+                                + " | response="
+                                + OperationMessages.safeDetail(classification.response(), "no response")
+                );
+            }
+
+            printJobService.markCompleted(job.id());
 
             printJobService.recordJobAuditEvent(
                     job.id(),
                     OperationMessages.EVENT_JOB_EXECUTION_SUCCEEDED,
-                    "Job execution succeeded: " + wireCommand + " -> "
-                            + OperationMessages.safeDetail(response, "no response")
+                    "Job execution completed: "
+                            + OperationMessages.safeDetail(currentCommand, "n/a")
+                            + " -> "
+                            + OperationMessages.safeDetail(lastResponse, "no response")
             );
 
-            printJobService.markCompleted(job.id());
-
-            return PrinterActionExecutionResult.success(wireCommand, response);
+            return PrinterActionExecutionResult.success(currentCommand, lastResponse);
         } catch (Exception exception) {
-            JobFailureReason failureReason = classifyFailure(exception);
-            String failureDetail = OperationMessages.safeDetail(
-                    exception.getMessage(),
-                    JobFailureReason.UNKNOWN.name()
-            );
+            PrinterResponseClassifier.ResponseClassification classification =
+                    printerResponseClassifier.classifyException(currentCommand, exception);
 
             printJobService.recordJobAuditEvent(
                     job.id(),
                     OperationMessages.EVENT_JOB_EXECUTION_FAILED,
-                    "Job execution failed: " + wireCommand + " -> " + failureDetail
+                    "Job execution failed: "
+                            + OperationMessages.safeDetail(currentCommand, "n/a")
+                            + " | outcome="
+                            + classification.failureReason().name()
+                            + " | detail="
+                            + OperationMessages.safeDetail(classification.detail(), JobFailureReason.UNKNOWN.name())
             );
 
-            printJobService.markFailed(job.id(), failureReason, failureDetail);
+            printJobService.markFailed(
+                    job.id(),
+                    classification.failureReason(),
+                    classification.detail()
+            );
 
             return PrinterActionExecutionResult.failure(
-                    wireCommand,
-                    failureReason,
-                    failureDetail
+                    currentCommand,
+                    classification.response(),
+                    classification.failureReason(),
+                    classification.detail()
             );
         } finally {
             try {
@@ -151,31 +224,22 @@ public final class PrintJobExecutionService {
         }
     }
 
-    private JobFailureReason classifyFailure(Exception exception) {
-        String message = OperationMessages.safeDetail(
-                exception == null ? null : exception.getMessage(),
-                JobFailureReason.UNKNOWN.name()
-        ).toLowerCase();
+    private String describePlan(PrinterWorkflowPlan workflowPlan) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(workflowPlan.actionType().name()).append(" [");
 
-        if (message.contains("timeout") || message.contains("no response")) {
-            return JobFailureReason.TIMEOUT;
+        boolean first = true;
+
+        for (PrinterWorkflowStep step : workflowPlan.steps()) {
+            if (!first) {
+                builder.append(" | ");
+            }
+
+            builder.append(step.name()).append(": ").append(step.wireCommand());
+            first = false;
         }
 
-        if (message.contains("disconnected")
-                || message.contains("not connected")
-                || message.contains("not open")
-                || message.contains("failed to open serial port")) {
-            return JobFailureReason.PRINTER_DISCONNECTED;
-        }
-
-        if (message.contains("busy")) {
-            return JobFailureReason.PRINTER_BUSY;
-        }
-
-        if (message.contains("parameter")) {
-            return JobFailureReason.INVALID_PARAMETER;
-        }
-
-        return JobFailureReason.COMMUNICATION_FAILURE;
+        builder.append("]");
+        return builder.toString();
     }
 }

@@ -1,3 +1,5 @@
+# `README.md`
+
 <p align="center">
   <img src="docs/assets/media/banner-1544x500.png" alt="PrinterHub banner">
 </p>
@@ -6,7 +8,7 @@
 
 **PrinterHub** is a Java-based system integration project for monitoring and controlling 3D printers in a structured runtime environment.
 
-It started with direct serial communication to a real **Creality Ender-3 V2 Neo** and is evolving into a **local multi-printer runtime architecture** with background monitoring, persistence, REST API access, dashboard administration, and controlled operator actions.
+It started with direct serial communication to a real **Creality Ender-3 V2 Neo** and is evolving into a **local multi-printer runtime architecture** with background monitoring, persistence, REST API access, dashboard administration, audit visibility, and controlled operator actions.
 
 Roadmap:
 
@@ -19,21 +21,23 @@ Roadmap:
 Current focus:
 
 ```text
-0.2.x — local runtime administration and job management
-````
+0.2.x — local runtime administration, audit visibility, dashboard UI, and job management
+```
 
 The current implementation provides:
 
 * local multi-printer runtime
 * background monitoring per configured printer
 * runtime state cache
-* REST API for printer administration and controlled manual commands
-* SQLite persistence for configuration, monitoring rules, snapshots, and events
-* embedded dashboard for printer administration and diagnostic actions
+* REST API for printer administration, monitoring settings, event visibility, and controlled job execution
+* SQLite persistence for printer configuration, monitoring rules, snapshots, events, and jobs
+* embedded dashboard with two-level navigation
+* selected-printer workspace inspired by the printer display logic
+* controlled job-oriented actions instead of only raw direct command sending
 * simulation modes for normal and failing printer behavior
 * Jenkins CI verification and runtime smoke tests
 
-The implementation is intentionally still local-runtime oriented.
+The implementation is intentionally still focused on the **local runtime** and its operational visibility.
 
 ---
 
@@ -55,7 +59,7 @@ flowchart TB
     monitor --> px["..."]
 
     cache --> latest["Latest known state per printer"]
-    persistence --> data["Configuration, monitoring rules, snapshots, events"]
+    persistence --> data["Configuration, monitoring rules, snapshots, events, jobs"]
     serial --> ports["USB ports or simulated ports"]
 ```
 
@@ -89,13 +93,110 @@ These rules are currently global to the runtime and not yet printer-specific.
 
 ## Dashboard
 
-Current runtime state can be viewed through the embedded dashboard.
+PrinterHub includes an embedded dashboard as part of the local runtime.
 
-<p align="center">
-  <img src="docs/assets/media-src/printerhub-screenshot-dashboard.png" alt="PrinterHub dashboard screenshot">
-</p>
+The dashboard now uses a **two-level UI**:
 
-The dashboard is part of the local runtime architecture and reads only from the API layer.
+### Primary navigation
+
+```text
+PrinterHub
+├── Farm Home
+├── Printers
+├── Jobs
+├── History
+└── Settings
+```
+
+### Selected printer navigation
+
+```text
+Selected Printer
+├── Home
+├── Print
+├── Prepare
+├── Control
+└── Info
+```
+
+This structure is designed to stay aligned with the practical logic of operating a printer, while still supporting local runtime administration and diagnostics.
+
+### Dashboard screenshots
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/assets/media-src/screenshot-printerhub-dashboard-01.png" alt="PrinterHub dashboard farm home" width="100%">
+      <br>
+      <sub>Farm Home</sub>
+    </td>
+    <td align="center">
+      <img src="docs/assets/media-src/screenshot-printerhub-dashboard-02.png" alt="PrinterHub dashboard jobs view" width="100%">
+      <br>
+      <sub>Jobs</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/assets/media-src/screenshot-printerhub-dashboard-03.png" alt="PrinterHub dashboard settings view" width="100%">
+      <br>
+      <sub>Settings</sub>
+    </td>
+    <td align="center">
+      <img src="docs/assets/media-src/screenshot-printerhub-dashboard-04.png" alt="PrinterHub dashboard selected printer prepare view" width="100%">
+      <br>
+      <sub>Selected Printer → Prepare</sub>
+    </td>
+  </tr>
+</table>
+
+The dashboard is part of the local runtime architecture and reads through the API layer.
+
+---
+
+## Jobs and controlled actions
+
+PrinterHub already uses the backend term **job** and keeps that terminology consistently across API, persistence, and dashboard.
+
+At the current stage, jobs are still an early operational form and do not yet represent the full future production workflow of printing a piece from start to finish.
+
+What is already available:
+
+* job creation and listing
+* printer assignment
+* controlled job start and cancellation
+* job event visibility
+* job execution result visibility
+* controlled real-printer action workflows for selected action types
+
+Current controlled action scope:
+
+```text
+HOME_AXES
+SET_NOZZLE_TEMPERATURE
+SET_BED_TEMPERATURE
+SET_FAN_SPEED
+TURN_FAN_OFF
+```
+
+The direction is to evolve these backend jobs further into richer, piece-oriented production workflows.
+
+---
+
+## Audit and diagnostics
+
+PrinterHub already exposes and persists operational information that makes local troubleshooting easier.
+
+Available diagnostic visibility includes:
+
+* printer event history
+* job history
+* job event history
+* monitoring-related runtime events
+* execution command and result details
+* dashboard and API review of operator-triggered actions
+
+This makes local runtime behavior easier to inspect after failures and during test or operator use.
 
 ---
 
@@ -139,29 +240,6 @@ UNKNOWN
 
 ---
 
-## Target architecture direction
-
-The longer-term direction goes beyond a local runtime and moves toward centralized orchestration.
-
-```mermaid
-flowchart TB
-    ui["Central web UI"]
-    api["Backend API"]
-    db["Database"]
-    runtime["Printer runtime services"]
-    device["Device communication layer"]
-    printers["Printer devices / printer farms"]
-
-    ui <--> api
-    api <--> db
-    api <--> runtime
-    runtime <--> db
-    runtime --> device
-    device --> printers
-```
-
----
-
 ## Industrial context
 
 PrinterHub is not just a single-printer control exercise.
@@ -190,6 +268,29 @@ Related background:
 
 ---
 
+## Target architecture direction
+
+The longer-term direction goes beyond a local runtime and moves toward centralized orchestration.
+
+```mermaid
+flowchart TB
+    ui["Central web UI"]
+    api["Backend API"]
+    db["Database"]
+    runtime["Printer runtime services"]
+    device["Device communication layer"]
+    printers["Printer devices / printer farms"]
+
+    ui <--> api
+    api <--> db
+    api <--> runtime
+    runtime <--> db
+    runtime --> device
+    device --> printers
+```
+
+---
+
 ## DevOps and verification
 
 PrinterHub uses Jenkins-based CI.
@@ -197,7 +298,7 @@ PrinterHub uses Jenkins-based CI.
 The current pipeline verifies:
 
 * Maven build and test execution
-* runtime/API smoke lifecycle
+* runtime and API smoke lifecycle
 * robustness scenarios with mixed healthy and failing printers
 * JaCoCo coverage reporting
 * release bundle preparation
@@ -211,29 +312,40 @@ Details:
 ## Repository structure
 
 ```text
+## Repository structure
+
+```text
 printer-hub/
 ├── README.md
 ├── Jenkinsfile
 ├── docs/
 │   ├── roadmap.md
-│   ├── developer.md
-│   ├── install.md
 │   ├── quickstart.md
+│   ├── install.md
+│   ├── developer.md
 │   ├── devops.md
-│   ├── industrial-bio-printer-simulation.md
-│   └── version.md
+│   ├── version.md
+│   └── ...
 ├── src/
-│   ├── main/java/printerhub/
-│   │   ├── api/
-│   │   ├── command/
-│   │   ├── config/
-│   │   ├── job/
-│   │   ├── monitoring/
-│   │   ├── persistence/
-│   │   ├── runtime/
-│   │   └── serial/
-│   ├── main/resources/dashboard/
-│   └── test/java/
+│   ├── main/
+│   │   ├── java/printerhub/
+│   │   │   ├── api/
+│   │   │   ├── command/
+│   │   │   ├── config/
+│   │   │   ├── job/
+│   │   │   ├── monitoring/
+│   │   │   ├── persistence/
+│   │   │   ├── runtime/
+│   │   │   ├── serial/
+│   │   │   └── ...
+│   │   └── resources/
+│   │       └── dashboard/
+│   │           ├── components/
+│   │           ├── views/
+│   │           └── ...
+│   └── test/
+│       └── java/printerhub/
+│           └── ...
 └── pom.xml
 ```
 
