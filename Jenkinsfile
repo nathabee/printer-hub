@@ -302,10 +302,16 @@ PY
                     curl -fsS "http://localhost:${API_PORT}/dashboard" > target/dashboard.html
                     curl -fsS "http://localhost:${API_PORT}/dashboard/dashboard.css" > target/dashboard.css
                     curl -fsS "http://localhost:${API_PORT}/dashboard/dashboard.js" > target/dashboard.js
+                    curl -fsS "http://localhost:${API_PORT}/dashboard/app.js" > target/dashboard-app.js
+                    curl -fsS "http://localhost:${API_PORT}/dashboard/views/farm-home.js" > target/dashboard-view-farm-home.js
+                    curl -fsS "http://localhost:${API_PORT}/dashboard/components/nav.js" > target/dashboard-component-nav.js
 
-                    grep -q 'PrinterHub Dashboard' target/dashboard.html
-                    grep -q 'printer-grid' target/dashboard.css
-                    grep -q 'loadDashboard' target/dashboard.js
+                    grep -q 'PrinterHub' target/dashboard.html
+                    grep -q 'app-shell' target/dashboard.css
+                    grep -q 'import "./app.js"' target/dashboard.js
+                    grep -q 'renderFarmHome' target/dashboard-app.js
+                    grep -q 'export function renderFarmHome' target/dashboard-view-farm-home.js
+                    grep -q 'export function renderNav' target/dashboard-component-nav.js
 
                     stop_runtime
 
@@ -576,10 +582,19 @@ PY
                       > target/robust-dashboard.css
                     curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/dashboard.js" \
                       > target/robust-dashboard.js
+                    curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/app.js" \
+                      > target/robust-dashboard-app.js
+                    curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/views/farm-home.js" \
+                      > target/robust-dashboard-view-farm-home.js
+                    curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/components/nav.js" \
+                      > target/robust-dashboard-component-nav.js
 
-                    grep -q 'PrinterHub Dashboard' target/robust-dashboard.html
-                    grep -q 'printer-grid' target/robust-dashboard.css
-                    grep -q 'loadDashboard' target/robust-dashboard.js
+                    grep -q 'PrinterHub' target/robust-dashboard.html
+                    grep -q 'app-shell' target/robust-dashboard.css
+                    grep -q 'import "./app.js"' target/robust-dashboard.js
+                    grep -q 'renderFarmHome' target/robust-dashboard-app.js
+                    grep -q 'export function renderFarmHome' target/robust-dashboard-view-farm-home.js
+                    grep -q 'export function renderNav' target/robust-dashboard-component-nav.js
 
                     HTTP_400_BODY=$(mktemp)
                     HTTP_404_BODY=$(mktemp)
@@ -914,6 +929,10 @@ PY
             archiveArtifacts artifacts: 'target/dashboard.html', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard.css', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard.js', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/dashboard-app.js', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/dashboard-view-farm-home.js', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/dashboard-component-nav.js', allowEmptyArchive: true
+
 
             archiveArtifacts artifacts: 'target/db-tables.txt', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/configured-printers.txt', allowEmptyArchive: true
@@ -924,7 +943,7 @@ PY
             archiveArtifacts artifacts: '*.tar.gz', allowEmptyArchive: true
             archiveArtifacts artifacts: 'github-release-response.json', allowEmptyArchive: true
 
-                        archiveArtifacts artifacts: 'target/runtime-robustness.log', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/runtime-robustness.log', allowEmptyArchive: true
 
             archiveArtifacts artifacts: 'target/robust-health-initial.json', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/robust-health-after-failures.json', allowEmptyArchive: true
@@ -947,6 +966,9 @@ PY
             archiveArtifacts artifacts: 'target/robust-dashboard.html', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/robust-dashboard.css', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/robust-dashboard.js', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-dashboard-app.js', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-dashboard-view-farm-home.js', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-dashboard-component-nav.js', allowEmptyArchive: true
 
             archiveArtifacts artifacts: 'target/robust-http-400-status.txt', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/robust-http-404-status.txt', allowEmptyArchive: true
