@@ -14,13 +14,11 @@ public final class DatabaseInitializer {
                 Statement statement = connection.createStatement()
         ) {
             createPrintJobsTable(statement);
+            createPrintJobExecutionStepsTable(statement);
             createPrinterSnapshotsTable(statement);
             createPrinterEventsTable(statement);
             createConfiguredPrintersTable(statement);
             createMonitoringRulesTable(statement);
-
-            migratePrintJobsTable(statement);
-            migrateMonitoringRulesTable(statement);
 
             System.out.println(OperationMessages.databaseInitialized(DatabaseConfig.databaseFile()));
         } catch (SQLException exception) {
@@ -44,6 +42,26 @@ public final class DatabaseInitializer {
                     updated_at TEXT NOT NULL,
                     started_at TEXT,
                     finished_at TEXT
+                );
+                """;
+
+        statement.execute(sql);
+    }
+
+    private void createPrintJobExecutionStepsTable(Statement statement) throws SQLException {
+        String sql = """
+                CREATE TABLE IF NOT EXISTS print_job_execution_steps (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL,
+                    step_index INTEGER NOT NULL,
+                    step_name TEXT NOT NULL,
+                    wire_command TEXT,
+                    response TEXT,
+                    outcome TEXT NOT NULL,
+                    success INTEGER NOT NULL,
+                    failure_reason TEXT,
+                    failure_detail TEXT,
+                    created_at TEXT NOT NULL
                 );
                 """;
 
@@ -113,61 +131,5 @@ public final class DatabaseInitializer {
                 """;
 
         statement.execute(sql);
-    }
-
-    private void migratePrintJobsTable(Statement statement) throws SQLException {
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE print_jobs ADD COLUMN target_temperature REAL;"
-        );
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE print_jobs ADD COLUMN fan_speed INTEGER;"
-        );
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE print_jobs ADD COLUMN failure_reason TEXT;"
-        );
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE print_jobs ADD COLUMN failure_detail TEXT;"
-        );
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE print_jobs ADD COLUMN started_at TEXT;"
-        );
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE print_jobs ADD COLUMN finished_at TEXT;"
-        );
-    }
-
-    private void migrateMonitoringRulesTable(Statement statement) throws SQLException {
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE monitoring_rules ADD COLUMN poll_interval_seconds INTEGER NOT NULL DEFAULT 5;"
-        );
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE monitoring_rules ADD COLUMN event_dedup_window_seconds INTEGER NOT NULL DEFAULT 60;"
-        );
-        addColumnIfMissing(
-                statement,
-                "ALTER TABLE monitoring_rules ADD COLUMN error_persistence_behavior TEXT NOT NULL DEFAULT 'DEDUPLICATED';"
-        );
-    }
-
-    private void addColumnIfMissing(Statement statement, String sql) throws SQLException {
-        try {
-            statement.execute(sql);
-        } catch (SQLException exception) {
-            String message = exception.getMessage();
-
-            if (message != null && message.toLowerCase().contains("duplicate column name")) {
-                return;
-            }
-
-            throw exception;
-        }
     }
 }

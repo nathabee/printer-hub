@@ -208,6 +208,28 @@ class PrintJobServiceTest {
         assertEquals(Instant.parse("2026-05-04T08:04:00Z"), cancelled.finishedAt());
     }
 
+    @Test
+    void deleteRemovesExistingJob() {
+        initializeDatabase("job-service-delete.db");
+
+        PrintJobStore store = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        Clock clock = Clock.fixed(Instant.parse("2026-05-04T08:05:00Z"), ZoneOffset.UTC);
+        PrintJobService service = new PrintJobService(store, eventStore, clock);
+
+        PrintJob job = service.create(
+                "Read position",
+                JobType.READ_POSITION,
+                "printer-1",
+                null,
+                null
+        );
+
+        service.delete(job.id());
+
+        assertTrue(store.findById(job.id()).isEmpty());
+    }
+
     private void initializeDatabase(String fileName) {
         String databaseFile = tempDir.resolve(fileName).toString();
         System.setProperty(RuntimeDefaults.DATABASE_FILE_PROPERTY, databaseFile);

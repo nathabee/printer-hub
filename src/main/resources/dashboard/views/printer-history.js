@@ -1,4 +1,4 @@
-import { renderEventList } from "../components/event-list.js";
+import { renderEventList, renderExecutionStepList } from "../components/event-list.js";
 import { renderPlaceholderCard } from "../components/placeholder-card.js";
 import { state } from "../state.js";
 
@@ -32,6 +32,18 @@ export function renderPrinterHistory(printer, jobsForPrinter) {
           ${renderJobHistorySummary(jobsForPrinter)}
         </div>
       </article>
+    </section>
+
+    <section class="section-card">
+      <div class="section-header compact">
+        <div>
+          <h3>Execution diagnostics for printer jobs</h3>
+          <p class="muted">Structured workflow-step results for jobs assigned to this printer.</p>
+        </div>
+      </div>
+      <div class="list-block">
+        ${renderPrinterJobExecutionDiagnostics(jobsForPrinter)}
+      </div>
     </section>
 
     <section class="two-column-grid">
@@ -71,7 +83,31 @@ function renderJobHistorySummary(jobsForPrinter) {
       <div class="event-message">${job.type || "n/a"} · created ${job.createdAt || "n/a"}</div>
       <div class="inline-actions">
         <button type="button" class="secondary-button small-button" data-job-action="load-events" data-job-id="${job.id}">Load job events</button>
+        <button type="button" class="secondary-button small-button" data-job-action="load-execution-steps" data-job-id="${job.id}">Load diagnostics</button>
       </div>
     </div>
   `).join("");
+}
+
+function renderPrinterJobExecutionDiagnostics(jobsForPrinter) {
+  if (!jobsForPrinter || jobsForPrinter.length === 0) {
+    return `<p class="muted">No jobs assigned to this printer yet.</p>`;
+  }
+
+  return jobsForPrinter.map((job) => {
+    const steps = state.jobExecutionSteps.get(job.id) ?? [];
+
+    return `
+      <div class="event-item">
+        <div class="event-header">
+          <strong>${job.name || job.id}</strong>
+          <span class="event-time">${job.state || "UNKNOWN"}</span>
+        </div>
+        <div class="event-message">${job.type || "n/a"}</div>
+        <div class="events-list">
+          ${renderExecutionStepList(steps, "Execution diagnostics not loaded yet.")}
+        </div>
+      </div>
+    `;
+  }).join("");
 }

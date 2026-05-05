@@ -1,5 +1,5 @@
-async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
+async function requestJson(path, options = {}) {
+  const response = await fetch(path, options);
   const body = await safeJson(response);
 
   if (!response.ok) {
@@ -110,7 +110,18 @@ export async function cancelJob(jobId) {
   });
 }
 
+export async function deleteJob(jobId) {
+  return requestJson(`/jobs/${encodeURIComponent(jobId)}`, {
+    method: "DELETE"
+  });
+}
+
 export async function getJobEvents(jobId) {
   const data = await requestJson(`/jobs/${encodeURIComponent(jobId)}/events`);
   return Array.isArray(data.events) ? data.events : [];
+}
+
+export async function getJobExecutionSteps(jobId) {
+  const data = await requestJson(`/jobs/${encodeURIComponent(jobId)}/execution-steps`);
+  return Array.isArray(data.executionSteps) ? data.executionSteps : [];
 }

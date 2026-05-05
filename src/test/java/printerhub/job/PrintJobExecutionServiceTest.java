@@ -13,6 +13,7 @@ import printerhub.persistence.PrinterEventStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
 import printerhub.runtime.PrinterRuntimeStateCache;
+import printerhub.persistence.PrintJobExecutionStepStore;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -53,8 +54,7 @@ class PrintJobExecutionServiceTest {
                     "SIM_PORT",
                     "sim",
                     new SingleResponsePrinterPort("ok FIRMWARE_NAME:Marlin"),
-                    true
-            );
+                    true);
             registry.register(node);
 
             PrintJob job = jobService.create(
@@ -62,16 +62,15 @@ class PrintJobExecutionServiceTest {
                     JobType.READ_FIRMWARE_INFO,
                     "printer-1",
                     null,
-                    null
-            );
+                    null);
 
             PrintJobExecutionService executionService = new PrintJobExecutionService(
                     jobService,
                     registry,
                     scheduler,
                     new PrinterActionGuard(),
-                    new PrinterActionMapper()
-            );
+                    new PrinterActionMapper(),
+                    new PrintJobExecutionStepStore());
 
             PrinterActionExecutionResult result = executionService.execute(job.id());
 
@@ -88,8 +87,8 @@ class PrintJobExecutionServiceTest {
             assertNull(node.activeJobId());
 
             List<PrinterEvent> events = eventStore.findRecentByJobId(job.id(), 20);
-            assertTrue(events.stream().anyMatch(event ->
-                    event.message() != null && event.message().contains("read-firmware-info")));
+            assertTrue(events.stream()
+                    .anyMatch(event -> event.message() != null && event.message().contains("read-firmware-info")));
         } finally {
             scheduler.stop();
         }
@@ -116,8 +115,7 @@ class PrintJobExecutionServiceTest {
                     "SIM_PORT",
                     "sim",
                     new SingleResponsePrinterPort("ok"),
-                    false
-            );
+                    false);
             registry.register(node);
 
             PrintJob job = jobService.create(
@@ -125,17 +123,15 @@ class PrintJobExecutionServiceTest {
                     JobType.HOME_AXES,
                     "printer-1",
                     null,
-                    null
-            );
+                    null);
 
             PrintJobExecutionService executionService = new PrintJobExecutionService(
                     jobService,
                     registry,
                     scheduler,
                     new PrinterActionGuard(),
-                    new PrinterActionMapper()
-            );
-
+                    new PrinterActionMapper(),
+                    new PrintJobExecutionStepStore());
             PrinterActionExecutionResult result = executionService.execute(job.id());
 
             assertFalse(result.success());
@@ -173,8 +169,7 @@ class PrintJobExecutionServiceTest {
                     "SIM_PORT",
                     "sim",
                     new ExceptionOnSecondCommandPrinterPort("ok X:0.00 Y:0.00 Z:0.00", "communication failure"),
-                    true
-            );
+                    true);
             registry.register(node);
 
             PrintJob job = jobService.create(
@@ -182,16 +177,15 @@ class PrintJobExecutionServiceTest {
                     JobType.HOME_AXES,
                     "printer-1",
                     null,
-                    null
-            );
+                    null);
 
             PrintJobExecutionService executionService = new PrintJobExecutionService(
                     jobService,
                     registry,
                     scheduler,
                     new PrinterActionGuard(),
-                    new PrinterActionMapper()
-            );
+                    new PrinterActionMapper(),
+                    new PrintJobExecutionStepStore());
 
             PrinterActionExecutionResult result = executionService.execute(job.id());
 
@@ -234,10 +228,8 @@ class PrintJobExecutionServiceTest {
                     "real",
                     new SequencePrinterPort(
                             "ok X:0.00 Y:0.00 Z:0.00",
-                            "echo:busy: processing echo:Homing Failed Error:Printer halted. kill() called!"
-                    ),
-                    true
-            );
+                            "echo:busy: processing echo:Homing Failed Error:Printer halted. kill() called!"),
+                    true);
             registry.register(node);
 
             PrintJob job = jobService.create(
@@ -245,16 +237,14 @@ class PrintJobExecutionServiceTest {
                     JobType.HOME_AXES,
                     "printer-1",
                     null,
-                    null
-            );
-
+                    null);
             PrintJobExecutionService executionService = new PrintJobExecutionService(
                     jobService,
                     registry,
                     scheduler,
                     new PrinterActionGuard(),
-                    new PrinterActionMapper()
-            );
+                    new PrinterActionMapper(),
+                    new PrintJobExecutionStepStore());
 
             PrinterActionExecutionResult result = executionService.execute(job.id());
 
@@ -262,8 +252,7 @@ class PrintJobExecutionServiceTest {
             assertEquals("G28", result.wireCommand());
             assertEquals(
                     "echo:busy: processing echo:Homing Failed Error:Printer halted. kill() called!",
-                    result.response()
-            );
+                    result.response());
             assertEquals("PRINTER_REPORTED_FAILURE", result.outcome());
             assertEquals(JobFailureReason.PRINTER_REPORTED_FAILURE, result.failureReason());
             assertNotNull(result.failureDetail());
@@ -278,21 +267,156 @@ class PrintJobExecutionServiceTest {
             assertTrue(loaded.failureDetail().contains("Printer halted"));
 
             List<PrinterEvent> events = eventStore.findRecentByJobId(job.id(), 20);
-            assertTrue(events.stream().anyMatch(event ->
-                    event.message() != null
-                            && event.message().contains("Workflow step started: validate-position-before-home -> M114")));
-            assertTrue(events.stream().anyMatch(event ->
-                    event.message() != null
-                            && event.message().contains("Workflow step started: home-axes -> G28")));
-            assertTrue(events.stream().anyMatch(event ->
-                    event.message() != null
-                            && event.message().contains("outcome=PRINTER_REPORTED_FAILURE")));
-            assertTrue(events.stream().anyMatch(event ->
-                    event.message() != null
-                            && event.message().contains("Homing Failed Error:Printer halted. kill() called!")));
+            assertTrue(events.stream().anyMatch(event -> event.message() != null
+                    && event.message().contains("Workflow step started: validate-position-before-home -> M114")));
+            assertTrue(events.stream().anyMatch(event -> event.message() != null
+                    && event.message().contains("Workflow step started: home-axes -> G28")));
+            assertTrue(events.stream().anyMatch(event -> event.message() != null
+                    && event.message().contains("outcome=PRINTER_REPORTED_FAILURE")));
+            assertTrue(events.stream().anyMatch(event -> event.message() != null
+                    && event.message().contains("Homing Failed Error:Printer halted. kill() called!")));
 
             assertFalse(node.executionInProgress());
             assertNull(node.activeJobId());
+        } finally {
+            scheduler.stop();
+        }
+    }
+
+    @Test
+    void executeAssignedReadFirmwareJobPersistsStructuredExecutionStep() {
+        initializeDatabase("job-execution-step-success.db");
+
+        PrintJobStore store = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        PrintJobExecutionStepStore stepStore = new PrintJobExecutionStepStore();
+        Clock clock = Clock.fixed(Instant.parse("2026-05-04T08:00:00Z"), ZoneOffset.UTC);
+
+        PrintJobService jobService = new PrintJobService(store, eventStore, clock);
+
+        PrinterRegistry registry = new PrinterRegistry();
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+        PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(registry, stateCache);
+
+        try {
+            PrinterRuntimeNode node = new PrinterRuntimeNode(
+                    "printer-1",
+                    "Printer 1",
+                    "SIM_PORT",
+                    "sim",
+                    new SingleResponsePrinterPort("ok FIRMWARE_NAME:Marlin"),
+                    true);
+            registry.register(node);
+
+            PrintJob job = jobService.create(
+                    "Read firmware",
+                    JobType.READ_FIRMWARE_INFO,
+                    "printer-1",
+                    null,
+                    null);
+
+            PrintJobExecutionService executionService = new PrintJobExecutionService(
+                    jobService,
+                    registry,
+                    scheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper(),
+                    stepStore);
+
+            PrinterActionExecutionResult result = executionService.execute(job.id());
+
+            assertTrue(result.success());
+
+            List<PrintJobExecutionStep> steps = stepStore.findByJobId(job.id());
+            assertEquals(1, steps.size());
+
+            PrintJobExecutionStep step = steps.get(0);
+            assertEquals(job.id(), step.jobId());
+            assertEquals(0, step.stepIndex());
+            assertEquals("read-firmware-info", step.stepName());
+            assertEquals("M115", step.wireCommand());
+            assertEquals("ok FIRMWARE_NAME:Marlin", step.response());
+            assertEquals("SUCCESS", step.outcome());
+            assertTrue(step.success());
+            assertNull(step.failureReason());
+            assertNull(step.failureDetail());
+        } finally {
+            scheduler.stop();
+        }
+    }
+
+    @Test
+    void executeHomeAxesWithPrinterReportedFailurePersistsStructuredFailureStep() {
+        initializeDatabase("job-execution-step-printer-failure.db");
+
+        PrintJobStore store = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        PrintJobExecutionStepStore stepStore = new PrintJobExecutionStepStore();
+        Clock clock = Clock.fixed(Instant.parse("2026-05-04T08:00:00Z"), ZoneOffset.UTC);
+
+        PrintJobService jobService = new PrintJobService(store, eventStore, clock);
+
+        PrinterRegistry registry = new PrinterRegistry();
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+        PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(registry, stateCache);
+
+        try {
+            PrinterRuntimeNode node = new PrinterRuntimeNode(
+                    "printer-1",
+                    "Printer 1",
+                    "/dev/ttyUSB0",
+                    "real",
+                    new SequencePrinterPort(
+                            "ok X:0.00 Y:0.00 Z:0.00",
+                            "echo:busy: processing echo:Homing Failed Error:Printer halted. kill() called!"),
+                    true);
+            registry.register(node);
+
+            PrintJob job = jobService.create(
+                    "Home axes",
+                    JobType.HOME_AXES,
+                    "printer-1",
+                    null,
+                    null);
+
+            PrintJobExecutionService executionService = new PrintJobExecutionService(
+                    jobService,
+                    registry,
+                    scheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper(),
+                    stepStore);
+
+            PrinterActionExecutionResult result = executionService.execute(job.id());
+
+            assertFalse(result.success());
+
+            List<PrintJobExecutionStep> steps = stepStore.findByJobId(job.id());
+            assertEquals(2, steps.size());
+
+            PrintJobExecutionStep validationStep = steps.get(0);
+            assertEquals(0, validationStep.stepIndex());
+            assertEquals("validate-position-before-home", validationStep.stepName());
+            assertEquals("M114", validationStep.wireCommand());
+            assertEquals("ok X:0.00 Y:0.00 Z:0.00", validationStep.response());
+            assertEquals("SUCCESS", validationStep.outcome());
+            assertTrue(validationStep.success());
+            assertNull(validationStep.failureReason());
+            assertNull(validationStep.failureDetail());
+
+            PrintJobExecutionStep failedStep = steps.get(1);
+            assertEquals(1, failedStep.stepIndex());
+            assertEquals("home-axes", failedStep.stepName());
+            assertEquals("G28", failedStep.wireCommand());
+            assertEquals(
+                    "echo:busy: processing echo:Homing Failed Error:Printer halted. kill() called!",
+                    failedStep.response());
+            assertEquals("PRINTER_REPORTED_FAILURE", failedStep.outcome());
+            assertFalse(failedStep.success());
+            assertEquals(JobFailureReason.PRINTER_REPORTED_FAILURE.name(), failedStep.failureReason());
+            assertNotNull(failedStep.failureDetail());
+            assertTrue(failedStep.failureDetail().contains("Homing Failed"));
+            assertTrue(failedStep.failureDetail().contains("Printer halted"));
         } finally {
             scheduler.stop();
         }
@@ -363,8 +487,7 @@ class PrintJobExecutionServiceTest {
 
         private ExceptionOnSecondCommandPrinterPort(
                 String firstResponse,
-                String exceptionMessage
-        ) {
+                String exceptionMessage) {
             this.firstResponse = firstResponse;
             this.exceptionMessage = exceptionMessage;
         }

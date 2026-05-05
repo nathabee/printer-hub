@@ -1,6 +1,6 @@
 import { renderPrinterCard } from "../components/printer-card.js";
 import { renderPlaceholderCard } from "../components/placeholder-card.js";
-import { countDisabledPrinters, countEnabledPrinters, escapeHtml, getMostRecentUpdatedAt } from "../app.js";
+import { countDisabledPrinters, countEnabledPrinters, escapeHtml, getMostRecentUpdatedAt } from "../dashboard.js";
 import { state } from "../state.js";
 
 export function renderFarmHome() {

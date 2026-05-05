@@ -8,6 +8,7 @@ import printerhub.command.PrinterCommandService;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.job.PrintJobExecutionService;
@@ -203,7 +204,8 @@ class PrinterHubRuntimeTest {
                                 printerRegistry,
                                 monitoringScheduler,
                                 new PrinterActionGuard(),
-                                new PrinterActionMapper());
+                                new PrinterActionMapper(),
+                                new PrintJobExecutionStepStore());
 
                 RemoteApiServer apiServer = new RemoteApiServer(
                                 port,
@@ -215,7 +217,8 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 printJobService,
-                                printJobExecutionService);
+                                printJobExecutionService,
+                                new PrintJobExecutionStepStore());
 
                 PrinterHubRuntime runtime = new PrinterHubRuntime(
                                 databaseInitializer,
@@ -270,7 +273,8 @@ class PrinterHubRuntimeTest {
                                 printerRegistry,
                                 monitoringScheduler,
                                 new PrinterActionGuard(),
-                                new PrinterActionMapper());
+                                new PrinterActionMapper(),
+                                new PrintJobExecutionStepStore());
 
                 RemoteApiServer apiServer = new RemoteApiServer(
                                 port,
@@ -282,7 +286,8 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 printJobService,
-                                printJobExecutionService);
+                                printJobExecutionService,
+                                new PrintJobExecutionStepStore());
 
                 PrinterHubRuntime runtime = new PrinterHubRuntime(
                                 databaseInitializer,
@@ -314,7 +319,8 @@ class PrinterHubRuntimeTest {
                                 printerRegistry,
                                 monitoringScheduler,
                                 new PrinterActionGuard(),
-                                new PrinterActionMapper());
+                                new PrinterActionMapper(),
+                                new PrintJobExecutionStepStore());
 
                 return new RemoteApiServer(
                                 findFreePortUnchecked(),
@@ -326,7 +332,8 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 printJobService,
-                                printJobExecutionService);
+                                printJobExecutionService,
+                                new PrintJobExecutionStepStore());
         }
 
         private HttpResponse<String> httpGet(String url) throws Exception {
@@ -345,8 +352,6 @@ class PrinterHubRuntimeTest {
                 }
         }
 
-
-        
         private int findFreePortUnchecked() {
                 try {
                         return findFreePort();

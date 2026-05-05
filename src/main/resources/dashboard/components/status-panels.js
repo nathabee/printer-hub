@@ -1,4 +1,4 @@
-import { escapeHtml, formatTemperature, isSimulatedMode, renderStatusLabel } from "../app.js";
+import { escapeHtml, formatTemperature, isSimulatedMode, renderStatusLabel } from "../dashboard.js";
 
 export function renderPrinterStatusPanel(printer) {
   return `

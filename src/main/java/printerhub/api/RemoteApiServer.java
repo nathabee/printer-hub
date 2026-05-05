@@ -9,6 +9,8 @@ import printerhub.PrinterState;
 import printerhub.command.PrinterCommandService;
 import printerhub.config.RuntimeDefaults;
 import printerhub.job.JobFailureReason;
+import printerhub.job.PrintJobExecutionStep;
+import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.job.JobType;
 import printerhub.job.PrintJob;
 import printerhub.job.PrintJobExecutionService;
@@ -50,6 +52,7 @@ public final class RemoteApiServer {
     private final PrinterCommandService printerCommandService;
     private final PrintJobService printJobService;
     private final PrintJobExecutionService printJobExecutionService;
+    private final PrintJobExecutionStepStore printJobExecutionStepStore;
 
     private HttpServer server;
 
@@ -63,7 +66,8 @@ public final class RemoteApiServer {
             PrinterEventStore printerEventStore,
             PrinterCommandService printerCommandService,
             PrintJobService printJobService,
-            PrintJobExecutionService printJobExecutionService) {
+            PrintJobExecutionService printJobExecutionService,
+            PrintJobExecutionStepStore printJobExecutionStepStore) {
         if (port < RuntimeDefaults.MIN_PORT || port > RuntimeDefaults.MAX_PORT) {
             throw new IllegalArgumentException(OperationMessages.PORT_MUST_BE_IN_VALID_RANGE);
         }
@@ -94,6 +98,9 @@ public final class RemoteApiServer {
         if (printJobExecutionService == null) {
             throw new IllegalArgumentException(OperationMessages.PRINT_JOB_EXECUTION_SERVICE_MUST_NOT_BE_NULL);
         }
+        if (printJobExecutionStepStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printJobExecutionStepStore"));
+        }
 
         this.port = port;
         this.printerRegistry = printerRegistry;
@@ -105,6 +112,7 @@ public final class RemoteApiServer {
         this.printerCommandService = printerCommandService;
         this.printJobService = printJobService;
         this.printJobExecutionService = printJobExecutionService;
+        this.printJobExecutionStepStore = printJobExecutionStepStore;
     }
 
     public void start() {
@@ -139,6 +147,13 @@ public final class RemoteApiServer {
     }
 
     private void safeHandle(HttpExchange exchange, ExchangeHandler handler) throws IOException {
+        addCorsHeaders(exchange);
+
+        if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
         try {
             handler.handle(exchange);
         } catch (IllegalArgumentException exception) {
@@ -158,6 +173,13 @@ public final class RemoteApiServer {
             System.err.println(OperationMessages.unexpectedApiError(safeMessage(exception)));
             sendJson(exchange, 500, errorJson(OperationMessages.INTERNAL_SERVER_ERROR));
         }
+    }
+
+    private void addCorsHeaders(HttpExchange exchange) {
+        Headers headers = exchange.getResponseHeaders();
+        headers.set("Access-Control-Allow-Origin", "*");
+        headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        headers.set("Access-Control-Allow-Headers", "Content-Type");
     }
 
     private void handleHealth(HttpExchange exchange) throws IOException {
@@ -301,7 +323,29 @@ public final class RemoteApiServer {
             return;
         }
 
+        if (parts.length == 2 && "execution-steps".equals(parts[1])) {
+            handleJobExecutionSteps(exchange, jobId);
+            return;
+        }
+
         sendJson(exchange, 404, errorJson(OperationMessages.JOB_ENDPOINT_NOT_FOUND));
+    }
+
+    private void handleJobExecutionSteps(HttpExchange exchange, String jobId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintJob job = printJobService.findById(jobId).orElse(null);
+
+        if (job == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+            return;
+        }
+
+        List<PrintJobExecutionStep> steps = printJobExecutionStepStore.findByJobId(jobId);
+        sendJson(exchange, 200, printJobExecutionStepsJson(steps));
     }
 
     private void handleJobEvents(HttpExchange exchange, String jobId) throws IOException {
@@ -325,19 +369,35 @@ public final class RemoteApiServer {
     }
 
     private void handleJobResource(HttpExchange exchange, String jobId) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrintJob job = printJobService.findById(jobId).orElse(null);
+
+            if (job == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+                return;
+            }
+
+            sendJson(exchange, 200, printJobJson(job));
+            return;
+        }
+
+        if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrintJob job = printJobService.findById(jobId).orElse(null);
+
+            if (job == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+                return;
+            }
+
+            printJobService.delete(jobId);
+            sendJson(exchange, 200, "{\"deleted\":\"" + escapeJson(jobId) + "\"}");
+            return;
+        }
+
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
             return;
         }
-
-        PrintJob job = printJobService.findById(jobId).orElse(null);
-
-        if (job == null) {
-            sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
-            return;
-        }
-
-        sendJson(exchange, 200, printJobJson(job));
     }
 
     private void handleJobStart(HttpExchange exchange, String jobId) throws IOException {
@@ -1087,6 +1147,40 @@ public final class RemoteApiServer {
                 outputStream.write(bytes);
             }
         }
+    }
+
+    private String printJobExecutionStepsJson(List<PrintJobExecutionStep> steps) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"executionSteps\":[");
+
+        boolean first = true;
+
+        for (PrintJobExecutionStep step : steps) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append(printJobExecutionStepJson(step));
+            first = false;
+        }
+
+        json.append("]}");
+        return json.toString();
+    }
+
+    private String printJobExecutionStepJson(PrintJobExecutionStep step) {
+        return "{"
+                + "\"id\":" + step.id() + ","
+                + "\"jobId\":\"" + escapeJson(step.jobId()) + "\","
+                + "\"stepIndex\":" + step.stepIndex() + ","
+                + "\"stepName\":\"" + escapeJson(step.stepName()) + "\","
+                + "\"wireCommand\":" + nullableString(step.wireCommand()) + ","
+                + "\"response\":" + nullableString(step.response()) + ","
+                + "\"outcome\":\"" + escapeJson(step.outcome()) + "\","
+                + "\"success\":" + step.success() + ","
+                + "\"failureReason\":" + nullableString(step.failureReason()) + ","
+                + "\"failureDetail\":" + nullableString(step.failureDetail()) + ","
+                + "\"createdAt\":\"" + escapeJson(step.createdAt().toString()) + "\""
+                + "}";
     }
 
     private void rollbackRegister(String printerId) {

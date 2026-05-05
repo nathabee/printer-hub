@@ -1,5 +1,5 @@
 import { PRIMARY_VIEW_IDS, PRINTER_VIEW_IDS, state } from "../state.js";
-import { escapeHtml, countEnabledPrinters, countDisabledPrinters, getSelectedPrinterDisplayName } from "../app.js";
+import { escapeHtml, countEnabledPrinters, countDisabledPrinters, getSelectedPrinterDisplayName } from "../dashboard.js";
 
 const PRIMARY_ITEMS = [
   { id: PRIMARY_VIEW_IDS.FARM_HOME, label: "Farm Home", meta: () => `${state.printers.length} printers` },

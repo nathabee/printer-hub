@@ -24,6 +24,8 @@ export const state = {
   monitoringRules: null,
   printerEvents: new Map(),
   jobEvents: new Map(),
+  jobExecutionSteps: new Map(),
+  jobCardSections: new Map(),
   printerCommandResults: new Map(),
   message: "",
   lastRefreshLabel: "never"
@@ -73,6 +75,26 @@ export function setMessage(message) {
 
 export function setLastRefreshLabel(label) {
   state.lastRefreshLabel = label;
+}
+
+export function setJobExecutionSteps(jobId, steps) {
+  state.jobExecutionSteps.set(jobId, Array.isArray(steps) ? steps : []);
+}
+
+export function setJobCardSectionOpen(jobId, sectionId, open) {
+  if (!jobId || !sectionId) {
+    return;
+  }
+
+  state.jobCardSections.set(`${jobId}:${sectionId}`, open === true);
+}
+
+export function isJobCardSectionOpen(jobId, sectionId) {
+  if (!jobId || !sectionId) {
+    return false;
+  }
+
+  return state.jobCardSections.get(`${jobId}:${sectionId}`) === true;
 }
 
 export function getSelectedPrinter() {

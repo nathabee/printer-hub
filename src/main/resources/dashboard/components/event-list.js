@@ -1,4 +1,4 @@
-import { escapeHtml } from "../app.js";
+import { escapeHtml } from "../dashboard.js";
 
 export function renderEventList(events, emptyMessage) {
   if (!events || events.length === 0) {
@@ -16,6 +16,33 @@ export function renderEventItem(event) {
         <span class="event-time">${escapeHtml(event.createdAt || "n/a")}</span>
       </div>
       <div class="event-message">${escapeHtml(event.message || "none")}</div>
+    </div>
+  `;
+}
+
+
+export function renderExecutionStepList(steps, emptyMessage) {
+  if (!steps || steps.length === 0) {
+    return `<p class="muted">${escapeHtml(emptyMessage)}</p>`;
+  }
+
+  return steps.map((step) => renderExecutionStepItem(step)).join("");
+}
+
+export function renderExecutionStepItem(step) {
+  const outcome = step.outcome || (step.success ? "SUCCESS" : "FAILED");
+  const detail = step.failureDetail || step.failureReason || "none";
+
+  return `
+    <div class="event-item">
+      <div class="event-header">
+        <strong>${escapeHtml(step.stepName || "unknown-step")}</strong>
+        <span class="event-time">${escapeHtml(step.createdAt || "n/a")}</span>
+      </div>
+      <div class="event-message"><strong>Command:</strong> ${escapeHtml(step.wireCommand || "n/a")}</div>
+      <div class="event-message"><strong>Response:</strong> ${escapeHtml(step.response || "none")}</div>
+      <div class="event-message"><strong>Outcome:</strong> ${escapeHtml(outcome)}</div>
+      <div class="event-message"><strong>Failure detail:</strong> ${escapeHtml(detail)}</div>
     </div>
   `;
 }
