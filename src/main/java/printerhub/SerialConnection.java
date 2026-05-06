@@ -89,12 +89,13 @@ public final class SerialConnection implements PrinterPort {
         }
 
         String trimmedCommand = command.trim();
+        int readTimeoutMs = readTimeoutMsForCommand(trimmedCommand);
 
         try {
             out.write((trimmedCommand + SerialDefaults.DEFAULT_COMMAND_TERMINATOR)
                     .getBytes(StandardCharsets.UTF_8));
             out.flush();
-            return readLine();
+            return readLine(readTimeoutMs);
         } catch (IOException exception) {
             disconnect();
             throw new IllegalStateException(
@@ -151,12 +152,26 @@ public final class SerialConnection implements PrinterPort {
         return port != null && port.isOpen() && in != null && out != null;
     }
 
-    private String readLine() throws IOException, TimeoutException, InterruptedException {
+    static int readTimeoutMsForCommand(String command) {
+        if (command == null) {
+            return SerialDefaults.READ_TIMEOUT_MS;
+        }
+
+        String normalizedCommand = command.trim().toUpperCase(java.util.Locale.ROOT);
+
+        if ("G28".equals(normalizedCommand) || normalizedCommand.startsWith("G28 ")) {
+            return SerialDefaults.LONG_RUNNING_COMMAND_READ_TIMEOUT_MS;
+        }
+
+        return SerialDefaults.READ_TIMEOUT_MS;
+    }
+
+    private String readLine(int readTimeoutMs) throws IOException, TimeoutException, InterruptedException {
         StringBuilder response = new StringBuilder();
         long start = System.currentTimeMillis();
         long lastDataTime = start;
 
-        while (System.currentTimeMillis() - start < SerialDefaults.READ_TIMEOUT_MS) {
+        while (System.currentTimeMillis() - start < readTimeoutMs) {
             boolean readSomething = false;
 
             while (in.available() > 0) {
@@ -172,6 +187,7 @@ public final class SerialConnection implements PrinterPort {
                 Thread.sleep(SerialDefaults.READ_ACTIVITY_SLEEP_MS);
             } else {
                 if (response.length() > 0
+                        && hasCommandCompletionSignal(response.toString())
                         && System.currentTimeMillis() - lastDataTime > SerialDefaults.QUIET_PERIOD_MS) {
                     break;
                 }
@@ -183,11 +199,25 @@ public final class SerialConnection implements PrinterPort {
 
         if (cleaned.isEmpty()) {
             throw new TimeoutException(
-                    OperationMessages.noResponseWithinTimeout(SerialDefaults.READ_TIMEOUT_MS)
+                    OperationMessages.noResponseWithinTimeout(readTimeoutMs)
             );
         }
 
         return cleaned;
+    }
+
+    private boolean hasCommandCompletionSignal(String response) {
+        if (response == null || response.isBlank()) {
+            return false;
+        }
+
+        String normalizedResponse = response.toLowerCase(java.util.Locale.ROOT);
+
+        return normalizedResponse.contains("ok")
+                || normalizedResponse.contains("error:")
+                || normalizedResponse.contains("failed")
+                || normalizedResponse.contains("halted")
+                || normalizedResponse.contains("kill() called");
     }
 
     private void ensureConnected() {

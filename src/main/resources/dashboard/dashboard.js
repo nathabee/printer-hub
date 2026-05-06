@@ -55,7 +55,6 @@ const refreshButton = document.getElementById("refreshButton");
 const lastRefreshElement = document.getElementById("lastRefresh");
 
 let printerRefreshInterval = null;
-let jobsRefreshInterval = null;
 let pendingPrinterFormFill = null;
 
 async function boot() {
@@ -647,38 +646,63 @@ function startAutoRefresh() {
     clearInterval(printerRefreshInterval);
   }
 
-  if (jobsRefreshInterval) {
-    clearInterval(jobsRefreshInterval);
-  }
-
   printerRefreshInterval = setInterval(async () => {
     try {
       const printers = await getPrinters();
       setPrinters(printers);
       setLastRefreshLabel(new Date().toLocaleTimeString());
-
-      if (!shouldPauseAutoRefreshRender()) {
-        renderApp();
-      } else {
-        lastRefreshElement.textContent = state.lastRefreshLabel;
-      }
+      renderLivePrinterRefresh(printers);
+      lastRefreshElement.textContent = state.lastRefreshLabel;
     } catch {
       // keep current state visible
     }
   }, 3000);
+}
 
-  jobsRefreshInterval = setInterval(async () => {
-    try {
-      const jobs = await getJobs();
-      setJobs(jobs);
+function renderLivePrinterRefresh(printers) {
+  for (const printer of printers) {
+    updateLivePrinterFields(
+      document.querySelector(`[data-printer-card-id="${cssEscape(printer.id)}"]`),
+      printer);
+    updateLivePrinterFields(
+      document.querySelector(`[data-printer-status-panel-id="${cssEscape(printer.id)}"]`),
+      printer);
+  }
+}
 
-      if (!shouldPauseAutoRefreshRender()) {
-        renderApp();
-      }
-    } catch {
-      // keep current state visible
-    }
-  }, 5000);
+function cssEscape(value) {
+  if (window.CSS && typeof window.CSS.escape === "function") {
+    return window.CSS.escape(String(value));
+  }
+
+  return String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+function updateLivePrinterFields(container, printer) {
+  if (!container) {
+    return;
+  }
+
+  const fieldValues = {
+    status: renderStatusLabel(printer, printer.state || "UNKNOWN"),
+    hotendTemperature: formatTemperature(printer.hotendTemperature),
+    bedTemperature: formatTemperature(printer.bedTemperature),
+    updatedAt: printer.updatedAt || "n/a",
+    lastResponse: printer.lastResponse || "n/a",
+    errorMessage: printer.errorMessage || "none"
+  };
+
+  for (const [fieldName, value] of Object.entries(fieldValues)) {
+    container
+      .querySelectorAll(`[data-live-printer-field="${fieldName}"]`)
+      .forEach((element) => {
+        element.textContent = value;
+
+        if (fieldName === "status" && element.classList.contains("badge")) {
+          element.className = `badge ${resolveStateClass(printer)}`;
+        }
+      });
+  }
 }
 
 export function escapeHtml(value) {
@@ -786,17 +810,4 @@ function removeNullFields(object) {
   }
 }
 
-function shouldPauseAutoRefreshRender() {
-  if (state.activePrimaryView === PRIMARY_VIEW_IDS.SETTINGS) {
-    return true;
-  }
-
-  const activeElement = document.activeElement;
-  if (!activeElement) {
-    return false;
-  }
-
-  const tagName = String(activeElement.tagName || "").toLowerCase();
-  return tagName === "input" || tagName === "select" || tagName === "textarea";
-}
 boot();

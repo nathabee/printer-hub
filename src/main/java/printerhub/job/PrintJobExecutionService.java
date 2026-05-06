@@ -121,6 +121,19 @@ public final class PrintJobExecutionService {
                 PrinterResponseClassifier.ResponseClassification classification =
                         printerResponseClassifier.classifyResponse(currentCommand, response);
 
+                if (responseContainsBusy(response)) {
+                    printJobService.recordJobAuditEvent(
+                            job.id(),
+                            OperationMessages.EVENT_JOB_EXECUTION_IN_PROGRESS,
+                            "Workflow step reported in progress before completion: "
+                                    + step.name()
+                                    + " -> "
+                                    + currentCommand
+                                    + " | response="
+                                    + OperationMessages.safeDetail(response, "no response")
+                    );
+                }
+
                 if (!classification.success()) {
                     String failureDetail = classification.detail();
 
@@ -279,6 +292,10 @@ public final class PrintJobExecutionService {
                         "SUCCESS"
                 )
         );
+    }
+
+    private boolean responseContainsBusy(String response) {
+        return response != null && response.toLowerCase(java.util.Locale.ROOT).contains("busy");
     }
 
     private void persistStepFailure(

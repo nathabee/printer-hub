@@ -3,6 +3,7 @@ package printerhub.job;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import printerhub.OperationMessages;
 import printerhub.PrinterPort;
 import printerhub.config.RuntimeDefaults;
 import printerhub.monitoring.PrinterMonitoringScheduler;
@@ -278,6 +279,71 @@ class PrintJobExecutionServiceTest {
 
             assertFalse(node.executionInProgress());
             assertNull(node.activeJobId());
+        } finally {
+            scheduler.stop();
+        }
+    }
+
+    @Test
+    void executeHomeAxesTreatsBusyThenOkAsInProgressThenSuccess() {
+        initializeDatabase("job-execution-home-axes-busy-ok.db");
+
+        PrintJobStore store = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        PrintJobExecutionStepStore stepStore = new PrintJobExecutionStepStore();
+        Clock clock = Clock.fixed(Instant.parse("2026-05-04T08:00:00Z"), ZoneOffset.UTC);
+
+        PrintJobService jobService = new PrintJobService(store, eventStore, clock);
+
+        PrinterRegistry registry = new PrinterRegistry();
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+        PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(registry, stateCache);
+
+        try {
+            PrinterRuntimeNode node = new PrinterRuntimeNode(
+                    "printer-1",
+                    "Printer 1",
+                    "/dev/ttyUSB0",
+                    "real",
+                    new SequencePrinterPort(
+                            "ok X:0.00 Y:0.00 Z:0.00",
+                            "echo:busy: processing\nok"),
+                    true);
+            registry.register(node);
+
+            PrintJob job = jobService.create(
+                    "Home axes",
+                    JobType.HOME_AXES,
+                    "printer-1",
+                    null,
+                    null);
+
+            PrintJobExecutionService executionService = new PrintJobExecutionService(
+                    jobService,
+                    registry,
+                    scheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper(),
+                    stepStore);
+
+            PrinterActionExecutionResult result = executionService.execute(job.id());
+
+            assertTrue(result.success());
+            assertEquals("G28", result.wireCommand());
+            assertEquals("echo:busy: processing\nok", result.response());
+
+            PrintJob loaded = store.findById(job.id()).orElseThrow();
+            assertEquals(JobState.COMPLETED, loaded.state());
+
+            List<PrinterEvent> events = eventStore.findRecentByJobId(job.id(), 20);
+            assertTrue(events.stream().anyMatch(event ->
+                    OperationMessages.EVENT_JOB_EXECUTION_IN_PROGRESS.equals(event.eventType())
+                            && event.message() != null
+                            && event.message().contains("echo:busy: processing")));
+            assertTrue(events.stream().anyMatch(event ->
+                    OperationMessages.EVENT_JOB_EXECUTION_SUCCEEDED.equals(event.eventType())
+                            && event.message() != null
+                            && event.message().contains("Job execution completed: G28")));
         } finally {
             scheduler.stop();
         }

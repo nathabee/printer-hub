@@ -421,3 +421,36 @@ That is the cleanest way to stay aligned with:
 * Ender display logic,
 * future job evolution.
  
+
+
+ ## refresh
+
+we put refresh into 3 categories:
+
+### Manual Refresh Now
+
+User clicked the top-right button.
+It can refresh everything and rerender the whole dashboard.
+This is explicit, so it is okay if panels collapse or the page redraws.
+
+### Automatic Background Refresh
+
+Should be narrow and quiet.
+It should update only live monitoring fields:
+printer state
+temperatures
+last response
+updatedAt
+maybe sidebar printer count/status
+It should not rerender whole pages like Jobs, Print, History, Settings.
+It should not reset <details>, forms, selected tabs, scroll, etc.
+
+###  Action-Based Refresh
+
+After creating/deleting/updating a printer or job, starting/cancelling/deleting a job, running a command, loading history/diagnostics.
+Refresh only the data needed for that action.
+Example:
+create printer -> refresh printers, rerender current page
+create job -> refresh jobs, rerender current page
+start job -> refresh that job/jobs + execution steps/events
+load diagnostics -> fetch execution steps only, keep the panel open

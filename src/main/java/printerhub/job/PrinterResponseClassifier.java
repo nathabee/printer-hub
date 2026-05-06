@@ -36,8 +36,12 @@ public final class PrinterResponseClassifier {
             );
         }
 
-        if (lower.contains("busy")) {
-            return ResponseClassification.success(response);
+        if (lower.contains("busy") && !lower.contains("ok")) {
+            return ResponseClassification.failure(
+                    JobFailureReason.PRINTER_BUSY,
+                    "Printer still processing command '" + normalizedCommand + "': " + normalizedResponse,
+                    response
+            );
         }
 
         if (lower.contains("ok")

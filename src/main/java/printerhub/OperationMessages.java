@@ -138,6 +138,7 @@ public final class OperationMessages {
     public static final String EVENT_JOB_ASSIGNED = "JOB_ASSIGNED";
     public static final String EVENT_JOB_STARTED = "JOB_STARTED";
     public static final String EVENT_JOB_EXECUTION_STARTED = "JOB_EXECUTION_STARTED";
+    public static final String EVENT_JOB_EXECUTION_IN_PROGRESS = "JOB_EXECUTION_IN_PROGRESS";
     public static final String EVENT_JOB_EXECUTION_SUCCEEDED = "JOB_EXECUTION_SUCCEEDED";
     public static final String EVENT_JOB_EXECUTION_FAILED = "JOB_EXECUTION_FAILED";
     public static final String EVENT_JOB_COMPLETED = "JOB_COMPLETED";
