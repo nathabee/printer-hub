@@ -3,6 +3,7 @@ package printerhub;
 import printerhub.api.RemoteApiServer;
 import printerhub.command.PrinterCommandService;
 import printerhub.config.RuntimeDefaults;
+import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
 import printerhub.job.PrinterActionGuard;
@@ -49,13 +50,21 @@ public final class Main {
                                         printJobStore,
                                         printerEventStore);
 
+                        PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
                         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                         printJobService,
                                         printerRegistry,
                                         monitoringScheduler,
-                                        new PrinterActionGuard(),
+                                        printerActionGuard,
                                         new PrinterActionMapper(),
                                         new PrintJobExecutionStepStore());
+
+                        AsyncPrintJobExecutor asyncPrintJobExecutor = new AsyncPrintJobExecutor(
+                                        printJobService,
+                                        printerRegistry,
+                                        printerActionGuard,
+                                        printJobExecutionService);
 
                         RemoteApiServer apiServer = new RemoteApiServer(
                                         apiPort,
@@ -67,7 +76,7 @@ public final class Main {
                                         printerEventStore,
                                         printerCommandService,
                                         printJobService,
-                                        printJobExecutionService,
+                                        asyncPrintJobExecutor,
                                         new PrintJobExecutionStepStore());
 
                         PrinterHubRuntime runtime = new PrinterHubRuntime(

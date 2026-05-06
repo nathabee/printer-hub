@@ -11,6 +11,7 @@ import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
+import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
 import printerhub.job.PrinterActionGuard;
@@ -199,13 +200,20 @@ class PrinterHubRuntimeTest {
                                 printJobStore,
                                 printerEventStore);
 
+                PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
                 PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                 printJobService,
                                 printerRegistry,
                                 monitoringScheduler,
-                                new PrinterActionGuard(),
+                                printerActionGuard,
                                 new PrinterActionMapper(),
                                 new PrintJobExecutionStepStore());
+                AsyncPrintJobExecutor asyncPrintJobExecutor = new AsyncPrintJobExecutor(
+                                printJobService,
+                                printerRegistry,
+                                printerActionGuard,
+                                printJobExecutionService);
 
                 RemoteApiServer apiServer = new RemoteApiServer(
                                 port,
@@ -217,7 +225,7 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 printJobService,
-                                printJobExecutionService,
+                                asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());
 
                 PrinterHubRuntime runtime = new PrinterHubRuntime(
@@ -268,13 +276,20 @@ class PrinterHubRuntimeTest {
                                 printJobStore,
                                 printerEventStore);
 
+                PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
                 PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                 printJobService,
                                 printerRegistry,
                                 monitoringScheduler,
-                                new PrinterActionGuard(),
+                                printerActionGuard,
                                 new PrinterActionMapper(),
                                 new PrintJobExecutionStepStore());
+                AsyncPrintJobExecutor asyncPrintJobExecutor = new AsyncPrintJobExecutor(
+                                printJobService,
+                                printerRegistry,
+                                printerActionGuard,
+                                printJobExecutionService);
 
                 RemoteApiServer apiServer = new RemoteApiServer(
                                 port,
@@ -286,7 +301,7 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 printJobService,
-                                printJobExecutionService,
+                                asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());
 
                 PrinterHubRuntime runtime = new PrinterHubRuntime(
@@ -314,13 +329,20 @@ class PrinterHubRuntimeTest {
                                 printJobStore,
                                 printerEventStore);
 
+                PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
                 PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                 printJobService,
                                 printerRegistry,
                                 monitoringScheduler,
-                                new PrinterActionGuard(),
+                                printerActionGuard,
                                 new PrinterActionMapper(),
                                 new PrintJobExecutionStepStore());
+                AsyncPrintJobExecutor asyncPrintJobExecutor = new AsyncPrintJobExecutor(
+                                printJobService,
+                                printerRegistry,
+                                printerActionGuard,
+                                printJobExecutionService);
 
                 return new RemoteApiServer(
                                 findFreePortUnchecked(),
@@ -332,7 +354,7 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 printJobService,
-                                printJobExecutionService,
+                                asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());
         }
 

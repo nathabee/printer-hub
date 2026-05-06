@@ -1362,7 +1362,7 @@ Selected Printer
 
 status: in progress
 
-* step A, B : done
+* step A, B, C, D : done
 
 ### step A — Audit and history visibility
 
@@ -1462,9 +1462,27 @@ Expected result:
 
 ---
 
+### step D — Asynchronous job execution
+
+status : done
+
+Goals: 
+
+make POST /jobs/{id}/start return quickly, while the job runs in a background executor.
+
+That step would include:
+
+* add a bounded job executor pool
+* keep one active job per printer
+* return quickly from job start API
+* use job state/events/diagnostics for progress
+* keep dashboard behavior based on polling job state
+* add tests for async start, busy printer rejection, and completed/failed background jobs
 
 
-### step D — File-backed print jobs and richer preparation/verification workflows
+---
+
+### step E — File-backed print jobs and richer preparation/verification workflows
 
 status: planned
 
@@ -1484,6 +1502,19 @@ Goals:
 * prepare richer controlled workflows where command acceptance and physical-effect verification are distinct concerns
 * allow later workflow variants to include optional follow-up verification steps after state-changing commands
 
+
+It will be done in this order:
+
+- Add file metadata persistence.
+- Add `.gcode` validation and storage/registration logic.
+- Extend PrintJob so it can reference a print file.
+- Add backend API for printable files.
+- Add dashboard UI to select a file and create a file-backed job.
+- Refactor workflow model to support richer step types.
+- Keep actual G-code execution minimal or stubbed as “represented/prepared,” unless we decide Step E should really send the file to the printer.
+- Add tests around file validation, persistence, job creation, and unsupported file rejection.
+
+
 Job model note:
 
 ```text
@@ -1492,22 +1523,7 @@ PrinterHub does not generate or edit slice data in 0.2.x.
 PrinterHub accepts an existing printable file, associates it with a job,
 and later transfers or makes it available to the printer when execution starts.
 ```
-
-Workflow note:
-
-```text
-Step C verifies and classifies guarded command/workflow execution.
-Step D prepares richer workflow structures so later actions may include
-optional follow-up checks after command submission.
-
-Example:
-SET_BED_TEMPERATURE
-├── validate firmware / readiness
-├── send M140 S60
-├── optional poll M105
-├── verify target trend or actual target reached
-└── only then classify as fully achieved
-```
+ 
 
 Expected result:
 
@@ -1518,7 +1534,7 @@ Expected result:
 
 ---
 
-### step E — Controlled real-printer print-start workflow
+### step F — Controlled real-printer print-start workflow
 
 status: planned
 
@@ -1552,7 +1568,7 @@ Expected result:
 * file-backed print jobs are no longer just metadata
 * print activation becomes coordinated, reviewable, and safer for real hardware use
 
-### step F — Running print supervision and operator controls
+### step G — Running print supervision and operator controls
 
 status: planned
 

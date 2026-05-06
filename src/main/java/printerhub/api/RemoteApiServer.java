@@ -8,14 +8,13 @@ import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.command.PrinterCommandService;
 import printerhub.config.RuntimeDefaults;
+import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.JobFailureReason;
 import printerhub.job.PrintJobExecutionStep;
 import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.job.JobType;
 import printerhub.job.PrintJob;
-import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
-import printerhub.job.PrinterActionExecutionResult;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.MonitoringRules;
 import printerhub.persistence.MonitoringRulesStore;
@@ -51,7 +50,7 @@ public final class RemoteApiServer {
     private final PrinterEventStore printerEventStore;
     private final PrinterCommandService printerCommandService;
     private final PrintJobService printJobService;
-    private final PrintJobExecutionService printJobExecutionService;
+    private final AsyncPrintJobExecutor asyncPrintJobExecutor;
     private final PrintJobExecutionStepStore printJobExecutionStepStore;
 
     private HttpServer server;
@@ -66,7 +65,7 @@ public final class RemoteApiServer {
             PrinterEventStore printerEventStore,
             PrinterCommandService printerCommandService,
             PrintJobService printJobService,
-            PrintJobExecutionService printJobExecutionService,
+            AsyncPrintJobExecutor asyncPrintJobExecutor,
             PrintJobExecutionStepStore printJobExecutionStepStore) {
         if (port < RuntimeDefaults.MIN_PORT || port > RuntimeDefaults.MAX_PORT) {
             throw new IllegalArgumentException(OperationMessages.PORT_MUST_BE_IN_VALID_RANGE);
@@ -95,7 +94,7 @@ public final class RemoteApiServer {
         if (printJobService == null) {
             throw new IllegalArgumentException(OperationMessages.PRINT_JOB_SERVICE_MUST_NOT_BE_NULL);
         }
-        if (printJobExecutionService == null) {
+        if (asyncPrintJobExecutor == null) {
             throw new IllegalArgumentException(OperationMessages.PRINT_JOB_EXECUTION_SERVICE_MUST_NOT_BE_NULL);
         }
         if (printJobExecutionStepStore == null) {
@@ -111,7 +110,7 @@ public final class RemoteApiServer {
         this.printerEventStore = printerEventStore;
         this.printerCommandService = printerCommandService;
         this.printJobService = printJobService;
-        this.printJobExecutionService = printJobExecutionService;
+        this.asyncPrintJobExecutor = asyncPrintJobExecutor;
         this.printJobExecutionStepStore = printJobExecutionStepStore;
     }
 
@@ -142,6 +141,7 @@ public final class RemoteApiServer {
         if (server != null) {
             server.stop(0);
             server = null;
+            asyncPrintJobExecutor.close();
             System.out.println(OperationMessages.apiServerStopped());
         }
     }
@@ -406,11 +406,8 @@ public final class RemoteApiServer {
             return;
         }
 
-        PrinterActionExecutionResult result = printJobExecutionService.execute(jobId);
-        PrintJob updatedJob = printJobService.findById(jobId)
-                .orElseThrow(() -> new IllegalStateException(OperationMessages.JOB_NOT_FOUND));
-
-        sendJson(exchange, 200, jobExecutionJson(updatedJob, result));
+        AsyncPrintJobExecutor.StartResult result = asyncPrintJobExecutor.start(jobId);
+        sendJson(exchange, 200, jobStartJson(result));
     }
 
     private void handleJobCancel(HttpExchange exchange, String jobId) throws IOException {
@@ -791,20 +788,19 @@ public final class RemoteApiServer {
                 + "}";
     }
 
-    private String jobExecutionJson(
-            PrintJob job,
-            PrinterActionExecutionResult result) {
+    private String jobStartJson(AsyncPrintJobExecutor.StartResult result) {
         return "{"
-                + "\"job\":" + printJobJson(job) + ","
+                + "\"job\":" + printJobJson(result.job()) + ","
                 + "\"execution\":{"
-                + "\"success\":" + result.success() + ","
-                + "\"wireCommand\":" + nullableString(result.wireCommand()) + ","
-                + "\"response\":" + nullableString(result.response()) + ","
-                + "\"outcome\":" + nullableString(result.outcome()) + ","
+                + "\"accepted\":" + result.accepted() + ","
+                + "\"success\":" + result.accepted() + ","
+                + "\"wireCommand\":null,"
+                + "\"response\":null,"
+                + "\"outcome\":" + nullableString(result.accepted() ? "QUEUED" : "REJECTED") + ","
                 + "\"failureReason\":" + nullableString(
                         result.failureReason() == null ? null : result.failureReason().name())
                 + ","
-                + "\"failureDetail\":" + nullableString(result.failureDetail())
+                + "\"failureDetail\":" + nullableString(result.detail())
                 + "}"
                 + "}";
     }
