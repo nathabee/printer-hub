@@ -9,6 +9,7 @@ public final class RuntimeDefaults {
     public static final int MIN_PORT = 1;
     public static final int MAX_PORT = 65535;
     public static final int DEFAULT_API_THREAD_POOL_SIZE = 8;
+    public static final int DEFAULT_JOB_EXECUTOR_POOL_SIZE = 8;
     public static final int MIN_MONITORING_EXECUTOR_POOL_SIZE = 1;
     public static final int MONITORING_EXECUTOR_EXTRA_THREADS = 4;
     public static final int DEFAULT_MONITORING_EXECUTOR_POOL_SIZE = 8;

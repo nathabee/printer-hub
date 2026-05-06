@@ -7,6 +7,7 @@ import printerhub.OperatorMessageReportWriter;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.command.PrinterCommandService;
+import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
 import printerhub.job.PrinterActionGuard;
@@ -728,13 +729,21 @@ class RemoteApiServerTest {
                 printJobStore,
                 printerEventStore);
 
+        PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                 printJobService,
                 printerRegistry,
                 monitoringScheduler,
-                new PrinterActionGuard(),
+                printerActionGuard,
                 new PrinterActionMapper(),
                 new PrintJobExecutionStepStore());
+
+        AsyncPrintJobExecutor asyncPrintJobExecutor = new AsyncPrintJobExecutor(
+                printJobService,
+                printerRegistry,
+                printerActionGuard,
+                printJobExecutionService);
 
         RemoteApiServer server = new RemoteApiServer(
                 port,
@@ -746,7 +755,7 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 printJobService,
-                printJobExecutionService,
+                asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());
 
         server.start();
@@ -849,7 +858,7 @@ class RemoteApiServerTest {
     }
 
     @Test
-    void postJobStartExecutesAssignedJob() throws Exception {
+    void postJobStartStartsAssignedJobAsynchronously() throws Exception {
         TestContext context = createContext("job-start.db");
 
         try {
@@ -874,8 +883,12 @@ class RemoteApiServerTest {
 
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"success\":true"));
-            assertTrue(response.body().contains("\"wireCommand\":\"M115\""));
-            assertTrue(response.body().contains("\"state\":\"COMPLETED\""));
+            assertTrue(response.body().contains("\"accepted\":true"));
+            assertTrue(response.body().contains("\"outcome\":\"QUEUED\""));
+            assertTrue(response.body().contains("\"state\":\"RUNNING\""));
+
+            String completedJob = waitForJobState(context, jobId, "COMPLETED");
+            assertTrue(completedJob.contains("\"state\":\"COMPLETED\""));
         } finally {
             context.close();
         }
@@ -1028,6 +1041,7 @@ class RemoteApiServerTest {
                     null);
 
             assertEquals(200, startResponse.statusCode());
+            waitForJobState(context, jobId, "COMPLETED");
 
             HttpResponse<String> response = context.get("/jobs/" + jobId + "/execution-steps");
 
@@ -1081,13 +1095,21 @@ class RemoteApiServerTest {
                 printJobStore,
                 printerEventStore);
 
+        PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                 printJobService,
                 printerRegistry,
                 monitoringScheduler,
-                new PrinterActionGuard(),
+                printerActionGuard,
                 new PrinterActionMapper(),
                 new PrintJobExecutionStepStore());
+
+        AsyncPrintJobExecutor asyncPrintJobExecutor = new AsyncPrintJobExecutor(
+                printJobService,
+                printerRegistry,
+                printerActionGuard,
+                printJobExecutionService);
 
         int port = findFreePort();
 
@@ -1101,7 +1123,7 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 printJobService,
-                printJobExecutionService,
+                asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());
         server.start();
 
@@ -1132,6 +1154,25 @@ class RemoteApiServerTest {
         return matcher.group(1);
     }
 
+    private String waitForJobState(TestContext context, String jobId, String expectedState) throws Exception {
+        long deadline = System.currentTimeMillis() + 5_000L;
+        String body = "";
+
+        while (System.currentTimeMillis() < deadline) {
+            HttpResponse<String> response = context.get("/jobs/" + jobId);
+            body = response.body();
+
+            if (body.contains("\"state\":\"" + expectedState + "\"")) {
+                return body;
+            }
+
+            Thread.sleep(50L);
+        }
+
+        fail("Timed out waiting for job " + jobId + " to reach state " + expectedState + ". Last body: " + body);
+        return body;
+    }
+
     private RemoteApiServer createApiServerForConstructorTest(int port) {
         PrinterRegistry printerRegistry = new PrinterRegistry();
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
@@ -1147,13 +1188,21 @@ class RemoteApiServerTest {
                 printJobStore,
                 printerEventStore);
 
+        PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                 printJobService,
                 printerRegistry,
                 monitoringScheduler,
-                new PrinterActionGuard(),
+                printerActionGuard,
                 new PrinterActionMapper(),
                 new PrintJobExecutionStepStore());
+
+        AsyncPrintJobExecutor asyncPrintJobExecutor = new AsyncPrintJobExecutor(
+                printJobService,
+                printerRegistry,
+                printerActionGuard,
+                printJobExecutionService);
 
         return new RemoteApiServer(
                 port,
@@ -1165,7 +1214,7 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 printJobService,
-                printJobExecutionService,
+                asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());
     }
 

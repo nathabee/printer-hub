@@ -55,10 +55,20 @@ public final class PrintJobExecutionService {
     }
 
     public PrinterActionExecutionResult execute(String jobId) {
+        return execute(jobId, true);
+    }
+
+    public PrinterActionExecutionResult executeStartedJob(String jobId) {
+        return execute(jobId, false);
+    }
+
+    private PrinterActionExecutionResult execute(String jobId, boolean markJobRunning) {
         PrintJob job = printJobService.findById(jobId)
                 .orElseThrow(() -> new IllegalArgumentException(OperationMessages.JOB_NOT_FOUND));
 
-        if (job.state() != JobState.ASSIGNED) {
+        JobState expectedState = markJobRunning ? JobState.ASSIGNED : JobState.RUNNING;
+
+        if (job.state() != expectedState) {
             throw new IllegalStateException(OperationMessages.INVALID_JOB_STATE);
         }
 
@@ -97,7 +107,10 @@ public final class PrintJobExecutionService {
         int stepIndex = 0;
 
         try {
-            printJobService.markRunning(job.id());
+            if (markJobRunning) {
+                printJobService.markRunning(job.id());
+            }
+
             printJobService.recordJobAuditEvent(
                     job.id(),
                     OperationMessages.EVENT_JOB_EXECUTION_STARTED,

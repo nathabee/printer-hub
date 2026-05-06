@@ -6,7 +6,9 @@
 
 **PrinterHub** is a Java-based system integration project for monitoring and controlling 3D printers in a structured runtime environment.
 
-It started with direct serial communication to a real **Creality Ender-3 V2 Neo** and is evolving into a **local multi-printer runtime architecture** with background monitoring, persistence, REST API access, dashboard administration, audit visibility, and controlled operator actions.
+It started with direct serial communication to a real **Creality Ender-3 V2 Neo** and is evolving into a **local multi-printer runtime architecture** with background monitoring, persistence, REST API access, dashboard administration, audit visibility, asynchronous job execution, and controlled operator actions.
+
+PrinterHub currently targets printers that speak a **Marlin-compatible G-code serial protocol**. The real-printer development reference is a **Creality Ender-3 V2 Neo**, but the runtime is intended to generalize to other Marlin-compatible printers rather than being tied to that one model.
 
 Roadmap:
 
@@ -28,10 +30,12 @@ The current implementation provides:
 * background monitoring per configured printer
 * runtime state cache
 * REST API for printer administration, monitoring settings, event visibility, and controlled job execution
-* SQLite persistence for printer configuration, monitoring rules, snapshots, events, and jobs
+* SQLite persistence for printer configuration, monitoring rules, snapshots, events, jobs, and execution diagnostics
 * embedded dashboard with two-level navigation
 * selected-printer workspace inspired by the printer display logic
 * controlled job-oriented actions instead of only raw direct command sending
+* asynchronous job start with bounded background execution
+* job history, printer history, execution events, and structured workflow-step diagnostics
 * simulation modes for normal and failing printer behavior
 * Jenkins CI verification and runtime smoke tests
 
@@ -47,6 +51,7 @@ flowchart TB
 
     runtime --> api["REST API and dashboard server"]
     runtime --> monitor["Background monitoring scheduler"]
+    runtime --> jobs["Asynchronous job executor"]
     runtime --> cache["Runtime state cache"]
     runtime --> persistence["SQLite persistence layer"]
     runtime --> serial["Serial / simulation communication"]
@@ -57,7 +62,8 @@ flowchart TB
     monitor --> px["..."]
 
     cache --> latest["Latest known state per printer"]
-    persistence --> data["Configuration, monitoring rules, snapshots, events, jobs"]
+    jobs --> serial
+    persistence --> data["Configuration, monitoring rules, snapshots, events, jobs, diagnostics"]
     serial --> ports["USB ports or simulated ports"]
 ```
 
@@ -67,7 +73,45 @@ Operational rule:
 The API reads runtime state from the cache.
 Background monitoring performs the polling.
 Normal status and dashboard reads must not poll printers directly.
+Job start requests return quickly; long-running printer workflows continue in the background.
 ```
+
+Default runtime limits:
+
+```text
+API request thread pool: 8
+Job executor pool:      8
+Monitoring pool:        runtime-sized, with an 8-thread lazy default
+```
+
+Each printer still accepts only one active job at a time.
+
+---
+
+## Running locally
+
+Build and verify:
+
+```bash
+mvn clean verify
+```
+
+Start the local runtime with an explicit database file and API port:
+
+```bash
+mvn exec:java \
+  -Dprinterhub.databaseFile="printerhub-real.db" \
+  -Dprinterhub.api.port=18080 \
+  -Dexec.mainClass="printerhub.Main"
+```
+
+Then open:
+
+```text
+http://localhost:18080/dashboard
+```
+
+The dashboard uses relative API requests, so it follows the port used to serve the dashboard. Port `8080` is only the backend default when no `printerhub.api.port` property is provided.
 
 ---
 
@@ -86,6 +130,8 @@ error persistence behavior
 ```
 
 These rules are currently global to the runtime and not yet printer-specific.
+
+The dashboard auto-refresh is intentionally limited to live printer status fields. Full dashboard reloads happen on user action, such as the **Refresh now** button, or after create/update/delete actions that change the data model.
 
 ---
 
@@ -162,9 +208,11 @@ What is already available:
 
 * job creation and listing
 * printer assignment
-* controlled job start and cancellation
+* asynchronous controlled job start
+* job cancellation and deletion
 * job event visibility
 * job execution result visibility
+* structured execution-step diagnostics
 * controlled real-printer action workflows for selected action types
 
 Current controlled action scope:
@@ -179,6 +227,24 @@ TURN_FAN_OFF
 
 The direction is to evolve these backend jobs further into richer, piece-oriented production workflows.
 
+Job start behavior:
+
+```text
+POST /jobs/{id}/start
+├── validates the job and printer state
+├── marks the job RUNNING
+├── submits execution to the background job executor
+└── returns immediately with execution outcome QUEUED
+```
+
+The dashboard and API then use job state, events, and execution steps to observe progress:
+
+```text
+GET /jobs/{id}
+GET /jobs/{id}/events
+GET /jobs/{id}/execution-steps
+```
+
 ---
 
 ## Audit and diagnostics
@@ -192,6 +258,7 @@ Available diagnostic visibility includes:
 * job event history
 * monitoring-related runtime events
 * execution command and result details
+* workflow-step response, outcome, and failure detail records
 * dashboard and API review of operator-triggered actions
 
 This makes local runtime behavior easier to inspect after failures and during test or operator use.
@@ -305,11 +372,17 @@ Details:
 
 * [`docs/devops.md`](docs/devops.md)
 
+Useful local verification commands:
+
+```bash
+mvn test
+mvn clean verify
+mvn -Dtest=AsyncPrintJobExecutorTest,PrintJobExecutionServiceTest test
+mvn -Dtest=RemoteApiServerTest test
+```
+
 ---
 
-## Repository structure
-
-```text
 ## Repository structure
 
 ```text
