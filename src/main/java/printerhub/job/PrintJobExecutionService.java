@@ -96,6 +96,10 @@ public final class PrintJobExecutionService {
             );
         }
 
+        if (job.type() == JobType.PRINT_FILE) {
+            return executePrintFileJob(job, node, markJobRunning);
+        }
+
         PrinterActionRequest request = PrinterActionRequest.fromJob(job);
         PrinterWorkflowPlan workflowPlan = printerWorkflowPlanner.plan(request, printerActionMapper);
 
@@ -271,6 +275,83 @@ public final class PrintJobExecutionService {
                 ));
             }
 
+            node.endJobExecution();
+
+            try {
+                if (node.enabled()) {
+                    monitoringScheduler.startMonitoring(node);
+                }
+            } catch (Exception exception) {
+                System.err.println(OperationMessages.apiOperationFailed(
+                        OperationMessages.safeDetail(
+                                exception.getMessage(),
+                                OperationMessages.UNKNOWN_API_ERROR
+                        )
+                ));
+            }
+        }
+    }
+
+    private PrinterActionExecutionResult executePrintFileJob(
+            PrintJob job,
+            PrinterRuntimeNode node,
+            boolean markJobRunning
+    ) {
+        node.beginJobExecution(job.id());
+        monitoringScheduler.stopMonitoring(node.id());
+
+        try {
+            if (markJobRunning) {
+                printJobService.markRunning(job.id());
+            }
+
+            printJobService.recordJobAuditEvent(
+                    job.id(),
+                    OperationMessages.EVENT_JOB_EXECUTION_STARTED,
+                    "File-backed print job prepared: "
+                            + OperationMessages.safeDetail(job.printFileId(), "no print file"));
+
+            persistStepSuccess(
+                    job.id(),
+                    0,
+                    "file-backed-print-prepared",
+                    null,
+                    "Print file reference prepared: " + OperationMessages.safeDetail(job.printFileId(), "no print file")
+            );
+
+            printJobService.markCompleted(job.id());
+            printJobService.recordJobAuditEvent(
+                    job.id(),
+                    OperationMessages.EVENT_JOB_EXECUTION_SUCCEEDED,
+                    "File-backed print job represented as prepared metadata. No G-code was sent to the printer.");
+
+            return PrinterActionExecutionResult.success(
+                    null,
+                    "File-backed print job prepared: " + OperationMessages.safeDetail(job.printFileId(), "no print file"));
+        } catch (Exception exception) {
+            PrinterResponseClassifier.ResponseClassification classification =
+                    printerResponseClassifier.classifyException(null, exception);
+
+            persistStepFailure(
+                    job.id(),
+                    0,
+                    "file-backed-print-preparation",
+                    null,
+                    classification.response(),
+                    classification.failureReason(),
+                    classification.detail());
+
+            printJobService.markFailed(
+                    job.id(),
+                    classification.failureReason(),
+                    classification.detail());
+
+            return PrinterActionExecutionResult.failure(
+                    null,
+                    classification.response(),
+                    classification.failureReason(),
+                    classification.detail());
+        } finally {
             node.endJobExecution();
 
             try {

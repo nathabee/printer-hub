@@ -17,7 +17,5 @@ jacoco-pretty.xml
 *.db
 
 # development files
-chat.txt
-chat.sh
-old_src
+scripts/**
 **/to_ignore/**

@@ -3,6 +3,7 @@ package printerhub.persistence;
 import printerhub.OperationMessages;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -13,17 +14,35 @@ public final class DatabaseInitializer {
                 Connection connection = Database.getConnection();
                 Statement statement = connection.createStatement()
         ) {
+            createPrintFilesTable(statement);
             createPrintJobsTable(statement);
             createPrintJobExecutionStepsTable(statement);
             createPrinterSnapshotsTable(statement);
             createPrinterEventsTable(statement);
             createConfiguredPrintersTable(statement);
             createMonitoringRulesTable(statement);
+            createPrintFileSettingsTable(statement);
+            ensureColumn(connection, "print_jobs", "print_file_id", "TEXT");
 
             System.out.println(OperationMessages.databaseInitialized(DatabaseConfig.databaseFile()));
         } catch (SQLException exception) {
             throw new IllegalStateException(OperationMessages.FAILED_TO_INITIALIZE_DATABASE_SCHEMA, exception);
         }
+    }
+
+    private void createPrintFilesTable(Statement statement) throws SQLException {
+        String sql = """
+                CREATE TABLE IF NOT EXISTS print_files (
+                    id TEXT PRIMARY KEY,
+                    original_filename TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    media_type TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                """;
+
+        statement.execute(sql);
     }
 
     private void createPrintJobsTable(Statement statement) throws SQLException {
@@ -34,6 +53,7 @@ public final class DatabaseInitializer {
                     type TEXT NOT NULL,
                     state TEXT NOT NULL,
                     printer_id TEXT,
+                    print_file_id TEXT,
                     target_temperature REAL,
                     fan_speed INTEGER,
                     failure_reason TEXT,
@@ -46,6 +66,23 @@ public final class DatabaseInitializer {
                 """;
 
         statement.execute(sql);
+    }
+
+    private void ensureColumn(
+            Connection connection,
+            String tableName,
+            String columnName,
+            String definition
+    ) throws SQLException {
+        try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, tableName, columnName)) {
+            if (resultSet.next()) {
+                return;
+            }
+        }
+
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + definition);
+        }
     }
 
     private void createPrintJobExecutionStepsTable(Statement statement) throws SQLException {
@@ -126,6 +163,18 @@ public final class DatabaseInitializer {
                     poll_interval_seconds INTEGER NOT NULL DEFAULT 5,
                     event_dedup_window_seconds INTEGER NOT NULL DEFAULT 60,
                     error_persistence_behavior TEXT NOT NULL DEFAULT 'DEDUPLICATED',
+                    updated_at TEXT NOT NULL
+                );
+                """;
+
+        statement.execute(sql);
+    }
+
+    private void createPrintFileSettingsTable(Statement statement) throws SQLException {
+        String sql = """
+                CREATE TABLE IF NOT EXISTS print_file_settings (
+                    id TEXT PRIMARY KEY,
+                    storage_directory TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
                 """;

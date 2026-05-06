@@ -10,6 +10,8 @@ import printerhub.command.PrinterCommandService;
 import printerhub.config.RuntimeDefaults;
 import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.JobFailureReason;
+import printerhub.job.PrintFile;
+import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionStep;
 import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.job.JobType;
@@ -18,6 +20,8 @@ import printerhub.job.PrintJobService;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.MonitoringRules;
 import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintFileSettings;
+import printerhub.persistence.PrintFileSettingsStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEvent;
 import printerhub.persistence.PrinterEventStore;
@@ -30,6 +34,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -47,8 +52,10 @@ public final class RemoteApiServer {
     private final PrinterMonitoringScheduler monitoringScheduler;
     private final PrinterConfigurationStore printerConfigurationStore;
     private final MonitoringRulesStore monitoringRulesStore;
+    private final PrintFileSettingsStore printFileSettingsStore;
     private final PrinterEventStore printerEventStore;
     private final PrinterCommandService printerCommandService;
+    private final PrintFileService printFileService;
     private final PrintJobService printJobService;
     private final AsyncPrintJobExecutor asyncPrintJobExecutor;
     private final PrintJobExecutionStepStore printJobExecutionStepStore;
@@ -62,8 +69,10 @@ public final class RemoteApiServer {
             PrinterMonitoringScheduler monitoringScheduler,
             PrinterConfigurationStore printerConfigurationStore,
             MonitoringRulesStore monitoringRulesStore,
+            PrintFileSettingsStore printFileSettingsStore,
             PrinterEventStore printerEventStore,
             PrinterCommandService printerCommandService,
+            PrintFileService printFileService,
             PrintJobService printJobService,
             AsyncPrintJobExecutor asyncPrintJobExecutor,
             PrintJobExecutionStepStore printJobExecutionStepStore) {
@@ -85,11 +94,17 @@ public final class RemoteApiServer {
         if (monitoringRulesStore == null) {
             throw new IllegalArgumentException(OperationMessages.MONITORING_RULES_STORE_MUST_NOT_BE_NULL);
         }
+        if (printFileSettingsStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileSettingsStore"));
+        }
         if (printerEventStore == null) {
             throw new IllegalArgumentException(OperationMessages.EVENT_STORE_MUST_NOT_BE_NULL);
         }
         if (printerCommandService == null) {
             throw new IllegalArgumentException(OperationMessages.COMMAND_SERVICE_MUST_NOT_BE_NULL);
+        }
+        if (printFileService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileService"));
         }
         if (printJobService == null) {
             throw new IllegalArgumentException(OperationMessages.PRINT_JOB_SERVICE_MUST_NOT_BE_NULL);
@@ -107,8 +122,10 @@ public final class RemoteApiServer {
         this.monitoringScheduler = monitoringScheduler;
         this.printerConfigurationStore = printerConfigurationStore;
         this.monitoringRulesStore = monitoringRulesStore;
+        this.printFileSettingsStore = printFileSettingsStore;
         this.printerEventStore = printerEventStore;
         this.printerCommandService = printerCommandService;
+        this.printFileService = printFileService;
         this.printJobService = printJobService;
         this.asyncPrintJobExecutor = asyncPrintJobExecutor;
         this.printJobExecutionStepStore = printJobExecutionStepStore;
@@ -125,9 +142,12 @@ public final class RemoteApiServer {
 
             server.createContext("/health", exchange -> safeHandle(exchange, this::handleHealth));
             server.createContext("/printers", exchange -> safeHandle(exchange, this::handlePrinters));
+            server.createContext("/print-files", exchange -> safeHandle(exchange, this::handlePrintFiles));
             server.createContext("/jobs", exchange -> safeHandle(exchange, this::handleJobs));
             server.createContext("/settings/monitoring",
                     exchange -> safeHandle(exchange, this::handleMonitoringSettings));
+            server.createContext("/settings/print-files",
+                    exchange -> safeHandle(exchange, this::handlePrintFileSettings));
             server.createContext("/dashboard", exchange -> safeHandle(exchange, this::handleDashboard));
             server.start();
 
@@ -230,6 +250,22 @@ public final class RemoteApiServer {
         sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
     }
 
+    private void handlePrintFileSettings(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 200, printFileSettingsJson(printFileSettingsStore.load()));
+            return;
+        }
+
+        if ("PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+            PrintFileSettings settings = new PrintFileSettings(requiredJsonString(body, "storageDirectory"));
+            sendJson(exchange, 200, printFileSettingsJson(printFileSettingsStore.save(settings)));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
     private void handlePrinters(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
 
@@ -262,6 +298,108 @@ public final class RemoteApiServer {
         sendJson(exchange, 404, errorJson(OperationMessages.JOB_ENDPOINT_NOT_FOUND));
     }
 
+    private void handlePrintFiles(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/print-files".equals(path)) {
+            handlePrintFilesRoot(exchange);
+            return;
+        }
+
+        if ("/print-files/uploads".equals(path)) {
+            handlePrintFileUpload(exchange);
+            return;
+        }
+
+        if (path.startsWith("/print-files/")) {
+            String remaining = path.substring("/print-files/".length());
+
+            if (remaining.endsWith("/content")) {
+                String printFileId = remaining.substring(0, remaining.length() - "/content".length());
+
+                if (printFileId.isBlank()) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+                    return;
+                }
+
+                handlePrintFileContent(exchange, printFileId);
+                return;
+            }
+
+            String printFileId = remaining;
+
+            if (printFileId.isBlank()) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+                return;
+            }
+
+            handlePrintFileResource(exchange, printFileId);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+    }
+
+    private void handlePrintFileUpload(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        String filename = queryParameter(exchange.getRequestURI().getRawQuery(), "filename");
+        PrintFile printFile = printFileService.storeUploadedFile(filename, readBodyBytes(exchange));
+        sendJson(exchange, 201, printFileJson(printFile));
+    }
+
+    private void handlePrintFilesRoot(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 200, printFilesJson(printFileService.findAll()));
+            return;
+        }
+
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+            PrintFile printFile = printFileService.registerHostFile(requiredJsonString(body, "path"));
+            sendJson(exchange, 201, printFileJson(printFile));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handlePrintFileResource(HttpExchange exchange, String printFileId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintFile printFile = printFileService.findById(printFileId).orElse(null);
+
+        if (printFile == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+            return;
+        }
+
+        sendJson(exchange, 200, printFileJson(printFile));
+    }
+
+    private void handlePrintFileContent(HttpExchange exchange, String printFileId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintFile printFile = printFileService.findById(printFileId).orElse(null);
+
+        if (printFile == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+            return;
+        }
+
+        sendJson(exchange, 200, "{\"printFile\":" + printFileJson(printFile)
+                + ",\"content\":\"" + escapeJson(printFileService.readContent(printFileId)) + "\"}");
+    }
+
     private void handleJobsRoot(HttpExchange exchange) throws IOException {
         if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             List<PrintJob> jobs = printJobService.findRecent(RuntimeDefaults.DEFAULT_RECENT_JOB_LIMIT);
@@ -272,16 +410,32 @@ public final class RemoteApiServer {
         if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             String body = readBody(exchange);
 
-            String name = requiredJsonString(body, "name");
             JobType type = parseJobType(requiredJsonString(body, "type"));
             String printerId = optionalJsonString(body, "printerId", null);
+            String printFileId = optionalJsonString(body, "printFileId", null);
             Double targetTemperature = optionalJsonDoubleObject(body, "targetTemperature");
             Integer fanSpeed = optionalJsonIntegerObject(body, "fanSpeed");
+            PrintFile printFile = null;
+
+            if (type == JobType.PRINT_FILE) {
+                if (printFileId == null || printFileId.isBlank()) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+                    return;
+                }
+
+                printFile = printFileService.findById(printFileId).orElse(null);
+
+                if (printFile == null) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+                    return;
+                }
+            }
 
             PrintJob job = printJobService.create(
-                    name,
+                    resolveJobName(optionalJsonString(body, "name", null), type, printFile),
                     type,
                     printerId,
+                    printFileId,
                     targetTemperature,
                     fanSpeed);
 
@@ -743,6 +897,12 @@ public final class RemoteApiServer {
                 + "}";
     }
 
+    private String printFileSettingsJson(PrintFileSettings settings) {
+        return "{"
+                + "\"storageDirectory\":\"" + escapeJson(settings.storageDirectory()) + "\""
+                + "}";
+    }
+
     private String commandExecutionJson(PrinterCommandService.CommandExecutionResult result) {
         return "{"
                 + "\"printerId\":\"" + escapeJson(result.printerId()) + "\","
@@ -770,6 +930,35 @@ public final class RemoteApiServer {
         return json.toString();
     }
 
+    private String printFilesJson(List<PrintFile> printFiles) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"printFiles\":[");
+
+        boolean first = true;
+
+        for (PrintFile printFile : printFiles) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append(printFileJson(printFile));
+            first = false;
+        }
+
+        json.append("]}");
+        return json.toString();
+    }
+
+    private String printFileJson(PrintFile printFile) {
+        return "{"
+                + "\"id\":\"" + escapeJson(printFile.id()) + "\","
+                + "\"originalFilename\":\"" + escapeJson(printFile.originalFilename()) + "\","
+                + "\"path\":\"" + escapeJson(printFile.path()) + "\","
+                + "\"sizeBytes\":" + printFile.sizeBytes() + ","
+                + "\"mediaType\":\"" + escapeJson(printFile.mediaType()) + "\","
+                + "\"createdAt\":\"" + escapeJson(printFile.createdAt().toString()) + "\""
+                + "}";
+    }
+
     private String printJobJson(PrintJob job) {
         return "{"
                 + "\"id\":\"" + escapeJson(job.id()) + "\","
@@ -777,6 +966,7 @@ public final class RemoteApiServer {
                 + "\"type\":\"" + escapeJson(job.type().name()) + "\","
                 + "\"state\":\"" + escapeJson(job.state().name()) + "\","
                 + "\"printerId\":" + nullableString(job.printerId()) + ","
+                + "\"printFileId\":" + nullableString(job.printFileId()) + ","
                 + "\"targetTemperature\":" + nullableNumber(job.targetTemperature()) + ","
                 + "\"fanSpeed\":" + nullableInteger(job.fanSpeed()) + ","
                 + "\"failureReason\":" + nullableString(job.failureReason()) + ","
@@ -911,6 +1101,10 @@ public final class RemoteApiServer {
         return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
     }
 
+    private byte[] readBodyBytes(HttpExchange exchange) throws IOException {
+        return exchange.getRequestBody().readAllBytes();
+    }
+
     private String errorJson(String message) {
         return "{\"error\":" + nullableString(message) + "}";
     }
@@ -953,6 +1147,18 @@ public final class RemoteApiServer {
         return value.trim();
     }
 
+    private String resolveJobName(String requestedName, JobType type, PrintFile printFile) {
+        if (requestedName != null && !requestedName.isBlank()) {
+            return requestedName.trim();
+        }
+
+        if (type == JobType.PRINT_FILE && printFile != null) {
+            return "Print " + printFile.originalFilename();
+        }
+
+        throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("name"));
+    }
+
     private String optionalJsonString(String body, String fieldName, String fallback) {
         Pattern pattern = Pattern.compile(
                 "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*\"([^\"]*)\"");
@@ -964,6 +1170,23 @@ public final class RemoteApiServer {
         }
 
         return matcher.group(1);
+    }
+
+    private String queryParameter(String rawQuery, String name) {
+        if (rawQuery == null || rawQuery.isBlank()) {
+            return null;
+        }
+
+        String prefix = name + "=";
+        String[] parts = rawQuery.split("&");
+
+        for (String part : parts) {
+            if (part.startsWith(prefix)) {
+                return URLDecoder.decode(part.substring(prefix.length()), StandardCharsets.UTF_8);
+            }
+        }
+
+        return null;
     }
 
     private boolean optionalJsonBoolean(String body, String fieldName, boolean fallback) {

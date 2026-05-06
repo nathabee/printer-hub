@@ -244,8 +244,9 @@ It shows jobs assigned to the selected printer and provides the same job actions
 * delete
 * load job history
 * load execution diagnostics
+* show read-only `.gcode` file content for file-backed jobs
 
-The current job model is still controlled-command oriented. Step E in the roadmap will evolve this area toward file-backed print jobs using already prepared `.gcode` files.
+The Print page also supports registering an already prepared host-side `.gcode` file, uploading a `.gcode` file into the configured PrinterHub print-file storage directory, and creating a `PRINT_FILE` job that references that file. In this version, the job is represented and prepared as metadata; the dashboard does not stream G-code to the printer.
 
 ---
 
@@ -440,8 +441,6 @@ Important notes:
 
 The dashboard does not yet provide:
 
-* file-backed print job selection
-* `.gcode` upload/registration
 * real print-file transfer or streaming
 * slicer integration
 * model slicing
@@ -449,4 +448,4 @@ The dashboard does not yet provide:
 * printer-specific monitoring rules
 * a dedicated firmware profile endpoint
 
-These belong to later roadmap work, especially Step E and the controlled print-start workflow that follows it.
+These belong to later roadmap work, especially the controlled print-start workflow that follows file-backed job representation.

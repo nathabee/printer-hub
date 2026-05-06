@@ -21,7 +21,9 @@ export const state = {
   selectedPrinterId: null,
   printers: [],
   jobs: [],
+  printFiles: [],
   monitoringRules: null,
+  printFileSettings: null,
   printerEvents: new Map(),
   jobEvents: new Map(),
   jobExecutionSteps: new Map(),
@@ -47,8 +49,16 @@ export function setJobs(jobs) {
   state.jobs = Array.isArray(jobs) ? jobs : [];
 }
 
+export function setPrintFiles(printFiles) {
+  state.printFiles = Array.isArray(printFiles) ? printFiles : [];
+}
+
 export function setMonitoringRules(rules) {
   state.monitoringRules = rules;
+}
+
+export function setPrintFileSettings(settings) {
+  state.printFileSettings = settings;
 }
 
 export function setPrimaryView(viewId) {

@@ -73,6 +73,10 @@ export async function getMonitoringRules() {
   return requestJson("/settings/monitoring");
 }
 
+export async function getPrintFileSettings() {
+  return requestJson("/settings/print-files");
+}
+
 export async function saveMonitoringRules(rules) {
   return requestJson("/settings/monitoring", {
     method: "PUT",
@@ -83,9 +87,48 @@ export async function saveMonitoringRules(rules) {
   });
 }
 
+export async function savePrintFileSettings(settings) {
+  return requestJson("/settings/print-files", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(settings)
+  });
+}
+
 export async function getJobs() {
   const data = await requestJson("/jobs");
   return Array.isArray(data.jobs) ? data.jobs : [];
+}
+
+export async function getPrintFiles() {
+  const data = await requestJson("/print-files");
+  return Array.isArray(data.printFiles) ? data.printFiles : [];
+}
+
+export async function registerPrintFile(path) {
+  return requestJson("/print-files", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ path })
+  });
+}
+
+export async function uploadPrintFile(file) {
+  return requestJson(`/print-files/uploads?filename=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream"
+    },
+    body: file
+  });
+}
+
+export async function getPrintFileContent(printFileId) {
+  return requestJson(`/print-files/${encodeURIComponent(printFileId)}/content`);
 }
 
 export async function createJob(job) {

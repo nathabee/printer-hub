@@ -26,6 +26,8 @@ public final class RuntimeDefaults {
     public static final String DATABASE_FILE_PROPERTY = "printerhub.databaseFile";
     public static final String DEFAULT_DATABASE_FILE = "printerhub.db";
     public static final String SQLITE_JDBC_PREFIX = "jdbc:sqlite:";
+    public static final String PRINT_FILE_STORAGE_DIRECTORY_PROPERTY = "printerhub.printFileStorageDirectory";
+    public static final String DEFAULT_PRINT_FILE_STORAGE_DIRECTORY = "printerhub-print-files";
 
     public static final boolean DEFAULT_SNAPSHOT_ON_STATE_CHANGE = true;
     public static final double DEFAULT_TEMPERATURE_THRESHOLD = 1.0;

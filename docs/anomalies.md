@@ -49,3 +49,4 @@ real printer => print => create a job "READ_FIRMWARE_INFO"
 - if i go in the "history" menu, then i see the result : in the executon diagnostics for printer jobs (response is shown, commandm outxome and failure : exactly what i wanted to se in the job card of the print menu) # in the history i see in the history/printer events : events no loaded yet, so i click on load event=> and there the correct question to the backend is done and i see the events associated with the job (good)###
  so i go back to the print menu visualize the job again, and load history and oad diagnostic still not working####### 
  si oi go back in the printer history, go on job hostory for this printer , select the job and click on load history and load events for the job (what is should do???)
+ * delete does not work

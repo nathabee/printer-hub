@@ -8,10 +8,13 @@ import printerhub.command.PrinterCommandService;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintFileSettingsStore;
+import printerhub.persistence.PrintFileStore;
 import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.job.AsyncPrintJobExecutor;
+import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
 import printerhub.job.PrinterActionGuard;
@@ -194,6 +197,7 @@ class PrinterHubRuntimeTest {
 
                 int port = findFreePort();
                 PrinterEventStore printerEventStore = new PrinterEventStore();
+                PrintFileService printFileService = new PrintFileService(new PrintFileStore());
                 PrintJobStore printJobStore = new PrintJobStore();
 
                 PrintJobService printJobService = new PrintJobService(
@@ -222,8 +226,10 @@ class PrinterHubRuntimeTest {
                                 monitoringScheduler,
                                 configurationStore,
                                 monitoringRulesStore,
+                                new PrintFileSettingsStore(),
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
+                                printFileService,
                                 printJobService,
                                 asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());
@@ -270,6 +276,7 @@ class PrinterHubRuntimeTest {
 
                 int port = findFreePort();
                 PrinterEventStore printerEventStore = new PrinterEventStore();
+                PrintFileService printFileService = new PrintFileService(new PrintFileStore());
                 PrintJobStore printJobStore = new PrintJobStore();
 
                 PrintJobService printJobService = new PrintJobService(
@@ -298,8 +305,10 @@ class PrinterHubRuntimeTest {
                                 monitoringScheduler,
                                 configurationStore,
                                 monitoringRulesStore,
+                                new PrintFileSettingsStore(),
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
+                                printFileService,
                                 printJobService,
                                 asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());
@@ -323,6 +332,7 @@ class PrinterHubRuntimeTest {
                         PrinterRuntimeStateCache stateCache,
                         PrinterMonitoringScheduler monitoringScheduler) {
                 PrinterEventStore printerEventStore = new PrinterEventStore();
+                PrintFileService printFileService = new PrintFileService(new PrintFileStore());
                 PrintJobStore printJobStore = new PrintJobStore();
 
                 PrintJobService printJobService = new PrintJobService(
@@ -351,8 +361,10 @@ class PrinterHubRuntimeTest {
                                 monitoringScheduler,
                                 new PrinterConfigurationStore(),
                                 new MonitoringRulesStore(),
+                                new PrintFileSettingsStore(),
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
+                                printFileService,
                                 printJobService,
                                 asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());

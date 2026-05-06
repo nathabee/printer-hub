@@ -9,12 +9,18 @@ import {
   getJobExecutionSteps,
   getJobs,
   getMonitoringRules,
+  getPrintFileContent,
+  getPrintFileSettings,
+  getPrintFiles,
   getPrinterEvents,
   getPrinters,
+  registerPrintFile,
   saveMonitoringRules,
+  savePrintFileSettings,
   setPrinterEnabled,
   startJob,
-  updatePrinter
+  updatePrinter,
+  uploadPrintFile
 } from "./api.js";
 import { renderNav } from "./components/nav.js";
 import { renderFarmHome } from "./views/farm-home.js";
@@ -38,6 +44,8 @@ import {
   setLastRefreshLabel,
   setMessage,
   setMonitoringRules,
+  setPrintFileSettings,
+  setPrintFiles,
   setPrinterCommandResult,
   setPrinterEvents,
   setPrinters,
@@ -67,15 +75,19 @@ async function refreshAllData(options = {}) {
   const silent = options.silent === true;
 
   try {
-    const [printers, jobs, monitoringRules] = await Promise.all([
+    const [printers, jobs, printFiles, monitoringRules, printFileSettings] = await Promise.all([
       getPrinters(),
       getJobs(),
-      getMonitoringRules()
+      getPrintFiles(),
+      getMonitoringRules(),
+      getPrintFileSettings()
     ]);
 
     setPrinters(printers);
     setJobs(jobs);
+    setPrintFiles(printFiles);
     setMonitoringRules(monitoringRules);
+    setPrintFileSettings(printFileSettings);
     setLastRefreshLabel(new Date().toLocaleTimeString());
 
     if (!silent) {
@@ -332,11 +344,29 @@ function bindPageListeners() {
     });
   }
 
+  const printFileSettingsForm = document.getElementById("printFileSettingsForm");
+  if (printFileSettingsForm) {
+    printFileSettingsForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await handleSavePrintFileSettings(printFileSettingsForm);
+      renderApp();
+    });
+  }
+
   const jobForm = document.getElementById("jobForm");
   if (jobForm) {
     jobForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       await handleSaveJob(jobForm);
+      renderApp();
+    });
+  }
+
+  const printFileForm = document.getElementById("printFileForm");
+  if (printFileForm) {
+    printFileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await handleSavePrintFile(printFileForm);
       renderApp();
     });
   }
@@ -413,11 +443,26 @@ async function handleSaveMonitoringRules(form) {
   }
 }
 
+async function handleSavePrintFileSettings(form) {
+  const payload = {
+    storageDirectory: form.querySelector("#printFileStorageDirectoryInput").value.trim()
+  };
+
+  try {
+    await savePrintFileSettings(payload);
+    setMessage("Saved print file settings.");
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to save print file settings: ${error.message}`);
+  }
+}
+
 async function handleSaveJob(form) {
   const payload = {
     name: form.querySelector("#jobNameInput").value.trim(),
     type: form.querySelector("#jobTypeInput").value.trim(),
     printerId: emptyToNull(form.querySelector("#jobPrinterIdInput").value),
+    printFileId: emptyToNull(form.querySelector("#jobPrintFileIdInput")?.value),
     targetTemperature: readOptionalNumber(form.querySelector("#jobTargetTemperatureInput").value),
     fanSpeed: readOptionalInteger(form.querySelector("#jobFanSpeedInput").value)
   };
@@ -431,6 +476,24 @@ async function handleSaveJob(form) {
     await refreshAllData({ silent: true });
   } catch (error) {
     setMessage(`Failed to create job: ${error.message}`);
+  }
+}
+
+async function handleSavePrintFile(form) {
+  const fileInput = form.querySelector("#printFileUploadInput");
+  const pathInput = form.querySelector("#printFilePathInput");
+  const selectedFile = fileInput?.files?.[0] ?? null;
+
+  try {
+    const response = selectedFile
+      ? await uploadPrintFile(selectedFile)
+      : await registerPrintFile(pathInput.value.trim());
+
+    setMessage(`Registered print file ${response.originalFilename}.`);
+    form.reset();
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to register print file: ${error.message}`);
   }
 }
 
@@ -486,9 +549,41 @@ async function handleJobAction(action, jobId) {
       setMessage(`Loaded execution diagnostics for job ${jobId}.`);
       return;
     }
+
+    if (action === "show-print-file") {
+      await showPrintFileContent(jobId);
+      return;
+    }
   } catch (error) {
     setMessage(`Failed to ${action} job ${jobId}: ${error.message}`);
   }
+}
+
+async function showPrintFileContent(jobId) {
+  const job = state.jobs.find((candidate) => candidate.id === jobId);
+
+  if (!job?.printFileId) {
+    setMessage(`Job ${jobId} has no print file.`);
+    return;
+  }
+
+  const response = await getPrintFileContent(job.printFileId);
+  const dialog = document.createElement("dialog");
+  dialog.className = "print-file-dialog";
+  dialog.innerHTML = `
+    <div class="section-header compact">
+      <div>
+        <h3>${escapeHtml(response.printFile?.originalFilename || job.printFileId)}</h3>
+        <p class="meta">${escapeHtml(response.printFile?.path || job.printFileId)}</p>
+      </div>
+      <button type="button" class="secondary-button" data-close-dialog>Close</button>
+    </div>
+    <pre class="print-file-content">${escapeHtml(response.content || "")}</pre>
+  `;
+  document.body.appendChild(dialog);
+  dialog.querySelector("[data-close-dialog]").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
 }
 
 async function loadExecutionStepsForSelectedPrinterJobs() {

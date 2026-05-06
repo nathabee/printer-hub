@@ -177,6 +177,10 @@ GET    /printers/{id}/status
 GET    /printers/{id}/events
 POST   /printers/{id}/commands
 
+GET    /print-files
+POST   /print-files
+GET    /print-files/{id}
+
 GET    /jobs
 POST   /jobs
 GET    /jobs/{id}
@@ -202,6 +206,7 @@ Persisted data includes:
 * monitoring rules
 * printer snapshots
 * printer events
+* print-file metadata
 * print jobs
 * print job execution steps
 
@@ -516,6 +521,7 @@ SET_NOZZLE_TEMPERATURE
 SET_BED_TEMPERATURE
 SET_FAN_SPEED
 TURN_FAN_OFF
+PRINT_FILE
 ```
 
 The job workflow layer maps semantic job types to wire commands.
@@ -527,6 +533,7 @@ READ_FIRMWARE_INFO -> M115
 READ_TEMPERATURE   -> M105
 READ_POSITION      -> M114
 HOME_AXES          -> M114, then G28
+PRINT_FILE         -> represented/prepared metadata step, no G-code sent
 ```
 
 Responses are classified into success or failure by the job response classifier.
@@ -641,9 +648,9 @@ sequenceDiagram
 
 PrinterHub currently does not perform slicing, model conversion, or G-code editing.
 
-Current jobs are controlled command/workflow jobs, not full file-backed print jobs.
+Current jobs are controlled command/workflow jobs and represented file-backed `PRINT_FILE` jobs.
 
-The dashboard currently does not upload or select `.gcode` files.
+The dashboard can register existing host-side `.gcode` paths, upload `.gcode` files into the configured print-file storage directory, select print files for `PRINT_FILE` jobs, and show the file content read-only from a job card. The runtime does not transfer or stream those files to a printer in this version.
 
 All persistence is local SQLite.
 

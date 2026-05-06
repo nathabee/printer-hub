@@ -10,6 +10,7 @@ see ROADMAP.md
 
 ## 0.2.x — Local Runtime Administration and Job Management
 
+- 0.2.3 — step E — File-backed print jobs and richer preparation/verification workflows
 - 0.2.3 — step D — Asynchronous job execution and docs
 - 0.2.3 — step C — Correct execution diagnostics and classified outcomes
 - 0.2.3 — step B - New Dashboard UI and Controlled real-printer job workflows

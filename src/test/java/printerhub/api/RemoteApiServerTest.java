@@ -8,6 +8,7 @@ import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.command.PrinterCommandService;
 import printerhub.job.AsyncPrintJobExecutor;
+import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
 import printerhub.job.PrinterActionGuard;
@@ -15,6 +16,8 @@ import printerhub.job.PrinterActionMapper;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintFileSettingsStore;
+import printerhub.persistence.PrintFileStore;
 import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
@@ -29,6 +32,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 
@@ -716,6 +720,7 @@ class RemoteApiServerTest {
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
         PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
         MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+        PrintFileSettingsStore printFileSettingsStore = new PrintFileSettingsStore();
         PrinterEventStore printerEventStore = new PrinterEventStore();
         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                 printerRegistry,
@@ -723,6 +728,7 @@ class RemoteApiServerTest {
 
         int port = findFreePort();
 
+        PrintFileService printFileService = new PrintFileService(new PrintFileStore());
         PrintJobStore printJobStore = new PrintJobStore();
 
         PrintJobService printJobService = new PrintJobService(
@@ -752,8 +758,10 @@ class RemoteApiServerTest {
                 monitoringScheduler,
                 configurationStore,
                 monitoringRulesStore,
+                printFileSettingsStore,
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
+                printFileService,
                 printJobService,
                 asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());
@@ -801,6 +809,175 @@ class RemoteApiServerTest {
             assertTrue(response.body().contains("\"type\":\"HOME_AXES\""));
             assertTrue(response.body().contains("\"state\":\"ASSIGNED\""));
             assertTrue(response.body().contains("\"printerId\":\"printer-1\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postPrintFilesRegistersReadableGcodeFile() throws Exception {
+        TestContext context = createContext("print-files-post.db");
+
+        try {
+            Path gcode = tempDir.resolve("api-cube.gcode");
+            Files.writeString(gcode, "G28\n");
+
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/print-files",
+                    "{\"path\":\"" + gcode.toString() + "\"}");
+
+            assertEquals(201, response.statusCode());
+            assertTrue(response.body().contains("\"originalFilename\":\"api-cube.gcode\""));
+            assertTrue(response.body().contains("\"mediaType\":\"text/x.gcode\""));
+
+            String printFileId = extractJsonString(response.body(), "id");
+            assertNotNull(printFileId);
+
+            HttpResponse<String> listResponse = context.get("/print-files");
+
+            assertEquals(200, listResponse.statusCode());
+            assertTrue(listResponse.body().contains("\"printFiles\":["));
+            assertTrue(listResponse.body().contains("\"id\":\"" + printFileId + "\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postPrintFilesRejectsUnsupportedSourceFormat() throws Exception {
+        TestContext context = createContext("print-files-post-unsupported.db");
+
+        try {
+            Path stl = tempDir.resolve("api-model.stl");
+            Files.writeString(stl, "solid model");
+
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/print-files",
+                    "{\"path\":\"" + stl.toString() + "\"}");
+
+            assertEquals(400, response.statusCode());
+            assertEquals("{\"error\":\"unsupported_print_file_type\"}", response.body());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void printFileSettingsCanBeSavedAndUsedForUploads() throws Exception {
+        TestContext context = createContext("print-file-settings-upload.db");
+
+        try {
+            Path storageDirectory = tempDir.resolve("uploaded-gcode");
+
+            HttpResponse<String> settingsResponse = context.request(
+                    "PUT",
+                    "/settings/print-files",
+                    "{\"storageDirectory\":\"" + storageDirectory.toString() + "\"}");
+
+            assertEquals(200, settingsResponse.statusCode());
+            assertTrue(settingsResponse.body().contains("\"storageDirectory\":\"" + storageDirectory.toString()));
+
+            HttpResponse<String> uploadResponse = context.requestBytes(
+                    "POST",
+                    "/print-files/uploads?filename=dashboard-cube.gcode",
+                    "G28\nM105\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            assertEquals(201, uploadResponse.statusCode());
+            assertTrue(uploadResponse.body().contains("\"originalFilename\":\"dashboard-cube.gcode\""));
+            assertTrue(uploadResponse.body().contains(storageDirectory.toString().replace("\\", "\\\\")));
+
+            String printFileId = extractJsonString(uploadResponse.body(), "id");
+            assertNotNull(printFileId);
+
+            HttpResponse<String> contentResponse = context.get("/print-files/" + printFileId + "/content");
+
+            assertEquals(200, contentResponse.statusCode());
+            assertTrue(contentResponse.body().contains("\"content\":\"G28\\nM105\\n\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postPrintFileUploadsRejectsUnsupportedSourceFormat() throws Exception {
+        TestContext context = createContext("print-file-upload-unsupported.db");
+
+        try {
+            HttpResponse<String> uploadResponse = context.requestBytes(
+                    "POST",
+                    "/print-files/uploads?filename=model.stl",
+                    "solid model".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            assertEquals(400, uploadResponse.statusCode());
+            assertEquals("{\"error\":\"unsupported_print_file_type\"}", uploadResponse.body());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postJobsCreatesFileBackedPrintJob() throws Exception {
+        TestContext context = createContext("jobs-post-print-file.db");
+
+        try {
+            Path gcode = tempDir.resolve("benchy.gcode");
+            Files.writeString(gcode, "G28\n");
+
+            HttpResponse<String> fileResponse = context.request(
+                    "POST",
+                    "/print-files",
+                    "{\"path\":\"" + gcode.toString() + "\"}");
+            assertEquals(201, fileResponse.statusCode());
+
+            String printFileId = extractJsonString(fileResponse.body(), "id");
+            assertNotNull(printFileId);
+
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/jobs",
+                    "{\"name\":\"Print benchy\",\"type\":\"PRINT_FILE\",\"printerId\":\"printer-1\",\"printFileId\":\""
+                            + printFileId
+                            + "\"}");
+
+            assertEquals(201, response.statusCode());
+            assertTrue(response.body().contains("\"name\":\"Print benchy\""));
+            assertTrue(response.body().contains("\"type\":\"PRINT_FILE\""));
+            assertTrue(response.body().contains("\"printFileId\":\"" + printFileId + "\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postJobsDerivesNameForFileBackedPrintJob() throws Exception {
+        TestContext context = createContext("jobs-post-print-file-derived-name.db");
+
+        try {
+            Path gcode = tempDir.resolve("cube.gcode");
+            Files.writeString(gcode, "G28\n");
+
+            HttpResponse<String> fileResponse = context.request(
+                    "POST",
+                    "/print-files",
+                    "{\"path\":\"" + gcode.toString() + "\"}");
+            assertEquals(201, fileResponse.statusCode());
+
+            String printFileId = extractJsonString(fileResponse.body(), "id");
+            assertNotNull(printFileId);
+
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/jobs",
+                    "{\"type\":\"PRINT_FILE\",\"printerId\":\"printer-1\",\"printFileId\":\""
+                            + printFileId
+                            + "\"}");
+
+            assertEquals(201, response.statusCode());
+            assertTrue(response.body().contains("\"name\":\"Print cube.gcode\""));
+            assertTrue(response.body().contains("\"type\":\"PRINT_FILE\""));
+            assertTrue(response.body().contains("\"printFileId\":\"" + printFileId + "\""));
         } finally {
             context.close();
         }
@@ -1085,6 +1262,7 @@ class RemoteApiServerTest {
         PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
         MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
         PrinterEventStore printerEventStore = new PrinterEventStore();
+        PrintFileService printFileService = new PrintFileService(new PrintFileStore());
         PrintJobStore printJobStore = new PrintJobStore();
 
         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
@@ -1120,8 +1298,10 @@ class RemoteApiServerTest {
                 monitoringScheduler,
                 configurationStore,
                 monitoringRulesStore,
+                new PrintFileSettingsStore(),
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
+                printFileService,
                 printJobService,
                 asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());
@@ -1187,6 +1367,7 @@ class RemoteApiServerTest {
         PrintJobService printJobService = new PrintJobService(
                 printJobStore,
                 printerEventStore);
+        PrintFileService printFileService = new PrintFileService(new PrintFileStore());
 
         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
 
@@ -1211,8 +1392,10 @@ class RemoteApiServerTest {
                 monitoringScheduler,
                 configurationStore,
                 monitoringRulesStore,
+                new PrintFileSettingsStore(),
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
+                printFileService,
                 printJobService,
                 asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());
@@ -1256,6 +1439,15 @@ class RemoteApiServerTest {
                 builder.method(method, HttpRequest.BodyPublishers.ofString(body))
                         .header("Content-Type", "application/json");
             }
+
+            return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        }
+
+        private HttpResponse<String> requestBytes(String method, String path, byte[] body) throws Exception {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + path))
+                    .method(method, HttpRequest.BodyPublishers.ofByteArray(body))
+                    .header("Content-Type", "application/octet-stream");
 
             return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         }

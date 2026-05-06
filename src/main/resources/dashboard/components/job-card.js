@@ -34,6 +34,13 @@ export function renderJobCard(job, options = {}) {
         <span>Finished</span>
         <strong>${escapeHtml(job.finishedAt || "n/a")}</strong>
       </div>
+      <div class="info-row">
+        <span>Print file</span>
+        <span class="inline-actions">
+          <strong>${escapeHtml(job.printFileId || "none")}</strong>
+          ${job.printFileId ? `<button type="button" class="secondary-button small-button" data-job-action="show-print-file" data-job-id="${escapeHtml(job.id)}">Show</button>` : ""}
+        </span>
+      </div>
 
       <div class="message-block">
         <span class="message-label">Failure detail</span>
