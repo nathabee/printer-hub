@@ -211,6 +211,23 @@ class SerialConnectionTest {
     }
 
     @Test
+    void homeAxesUsesLongRunningCommandTimeout() {
+        assertEquals(
+                SerialDefaults.LONG_RUNNING_COMMAND_READ_TIMEOUT_MS,
+                SerialConnection.readTimeoutMsForCommand("G28"));
+        assertEquals(
+                SerialDefaults.LONG_RUNNING_COMMAND_READ_TIMEOUT_MS,
+                SerialConnection.readTimeoutMsForCommand("g28 x y"));
+    }
+
+    @Test
+    void regularCommandsUseDefaultReadTimeout() {
+        assertEquals(
+                SerialDefaults.READ_TIMEOUT_MS,
+                SerialConnection.readTimeoutMsForCommand("M105"));
+    }
+
+    @Test
     void sendCommandConvertsReadIOException() {
         FakeSerialPortAdapter adapter = new FakeSerialPortAdapter();
         adapter.inputStream = new FailingInputStream();

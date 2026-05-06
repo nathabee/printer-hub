@@ -1,13 +1,17 @@
 import { renderJobCard } from "../components/job-card.js";
+import { renderExecutionStepList } from "../components/event-list.js";
 import { renderPlaceholderCard } from "../components/placeholder-card.js";
-import { escapeHtml } from "../app.js";
-import { state } from "../state.js";
+import { escapeHtml } from "../dashboard.js";
+import { isJobCardSectionOpen, state } from "../state.js";
 
 export function renderPrinterPrint(printer, jobsForPrinter) {
   const jobsHtml = jobsForPrinter.length === 0
     ? `<div class="empty-state"><h3>No jobs assigned</h3><p class="muted">Create a job below or leave placeholders visible for the later production workflow.</p></div>`
     : jobsForPrinter.map((job) => renderJobCard(job, {
-        eventsHtml: renderJobEvents(job.id)
+        eventsHtml: renderJobEvents(job.id),
+        executionStepsHtml: renderJobExecutionSteps(job.id),
+        historyOpen: isJobCardSectionOpen(job.id, "history"),
+        diagnosticsOpen: isJobCardSectionOpen(job.id, "diagnostics")
       })).join("");
 
   return `
@@ -107,6 +111,11 @@ function renderJobEvents(jobId) {
       <div class="event-message">${escapeHtml(event.message || "none")}</div>
     </div>
   `).join("");
+}
+
+function renderJobExecutionSteps(jobId) {
+  const steps = state.jobExecutionSteps.get(jobId) ?? [];
+  return renderExecutionStepList(steps, "Execution diagnostics not loaded yet.");
 }
 
 function buildPrinterOptions(selectedPrinterId) {

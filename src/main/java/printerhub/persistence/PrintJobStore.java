@@ -209,6 +209,52 @@ public final class PrintJobStore {
         }
     }
 
+    public boolean delete(String jobId) {
+        if (jobId == null || jobId.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.JOB_ID_MUST_NOT_BE_BLANK);
+        }
+
+        try (Connection connection = Database.getConnection()) {
+            boolean originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+
+            try {
+                deleteByJobId(connection, "print_job_execution_steps", jobId);
+                deleteByJobId(connection, "printer_events", jobId);
+
+                int deletedRows;
+                String sql = """
+                        DELETE FROM print_jobs
+                        WHERE id = ?
+                        """;
+
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, jobId.trim());
+                    deletedRows = statement.executeUpdate();
+                }
+
+                connection.commit();
+                connection.setAutoCommit(originalAutoCommit);
+                return deletedRows > 0;
+            } catch (SQLException exception) {
+                connection.rollback();
+                connection.setAutoCommit(originalAutoCommit);
+                throw exception;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException(OperationMessages.FAILED_TO_DELETE_PRINT_JOB, exception);
+        }
+    }
+
+    private void deleteByJobId(Connection connection, String tableName, String jobId) throws SQLException {
+        String sql = "DELETE FROM " + tableName + " WHERE job_id = ?";
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, jobId.trim());
+            statement.executeUpdate();
+        }
+    }
+
     private void bindJob(PreparedStatement statement, PrintJob job) throws SQLException {
         statement.setString(1, job.id());
         statement.setString(2, job.name());

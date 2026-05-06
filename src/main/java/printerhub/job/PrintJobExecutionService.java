@@ -2,6 +2,7 @@ package printerhub.job;
 
 import printerhub.OperationMessages;
 import printerhub.monitoring.PrinterMonitoringScheduler;
+import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
 
@@ -14,13 +15,15 @@ public final class PrintJobExecutionService {
     private final PrinterActionMapper printerActionMapper;
     private final PrinterWorkflowPlanner printerWorkflowPlanner;
     private final PrinterResponseClassifier printerResponseClassifier;
+    private final PrintJobExecutionStepStore printJobExecutionStepStore;
 
     public PrintJobExecutionService(
             PrintJobService printJobService,
             PrinterRegistry printerRegistry,
             PrinterMonitoringScheduler monitoringScheduler,
             PrinterActionGuard printerActionGuard,
-            PrinterActionMapper printerActionMapper
+            PrinterActionMapper printerActionMapper,
+            PrintJobExecutionStepStore printJobExecutionStepStore
     ) {
         if (printJobService == null) {
             throw new IllegalArgumentException(OperationMessages.PRINT_JOB_SERVICE_MUST_NOT_BE_NULL);
@@ -37,6 +40,9 @@ public final class PrintJobExecutionService {
         if (printerActionMapper == null) {
             throw new IllegalArgumentException(OperationMessages.PRINTER_ACTION_MAPPER_MUST_NOT_BE_NULL);
         }
+        if (printJobExecutionStepStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printJobExecutionStepStore"));
+        }
 
         this.printJobService = printJobService;
         this.printerRegistry = printerRegistry;
@@ -45,6 +51,7 @@ public final class PrintJobExecutionService {
         this.printerActionMapper = printerActionMapper;
         this.printerWorkflowPlanner = new PrinterWorkflowPlanner();
         this.printerResponseClassifier = new PrinterResponseClassifier();
+        this.printJobExecutionStepStore = printJobExecutionStepStore;
     }
 
     public PrinterActionExecutionResult execute(String jobId) {
@@ -87,6 +94,7 @@ public final class PrintJobExecutionService {
 
         String currentCommand = null;
         String lastResponse = null;
+        int stepIndex = 0;
 
         try {
             printJobService.markRunning(job.id());
@@ -113,8 +121,31 @@ public final class PrintJobExecutionService {
                 PrinterResponseClassifier.ResponseClassification classification =
                         printerResponseClassifier.classifyResponse(currentCommand, response);
 
+                if (responseContainsBusy(response)) {
+                    printJobService.recordJobAuditEvent(
+                            job.id(),
+                            OperationMessages.EVENT_JOB_EXECUTION_IN_PROGRESS,
+                            "Workflow step reported in progress before completion: "
+                                    + step.name()
+                                    + " -> "
+                                    + currentCommand
+                                    + " | response="
+                                    + OperationMessages.safeDetail(response, "no response")
+                    );
+                }
+
                 if (!classification.success()) {
                     String failureDetail = classification.detail();
+
+                    persistStepFailure(
+                            job.id(),
+                            stepIndex,
+                            step.name(),
+                            currentCommand,
+                            classification.response(),
+                            classification.failureReason(),
+                            failureDetail
+                    );
 
                     printJobService.recordJobAuditEvent(
                             job.id(),
@@ -143,6 +174,14 @@ public final class PrintJobExecutionService {
                     );
                 }
 
+                persistStepSuccess(
+                        job.id(),
+                        stepIndex,
+                        step.name(),
+                        currentCommand,
+                        classification.response()
+                );
+
                 printJobService.recordJobAuditEvent(
                         job.id(),
                         OperationMessages.EVENT_JOB_EXECUTION_SUCCEEDED,
@@ -153,6 +192,8 @@ public final class PrintJobExecutionService {
                                 + " | response="
                                 + OperationMessages.safeDetail(classification.response(), "no response")
                 );
+
+                stepIndex++;
             }
 
             printJobService.markCompleted(job.id());
@@ -170,6 +211,16 @@ public final class PrintJobExecutionService {
         } catch (Exception exception) {
             PrinterResponseClassifier.ResponseClassification classification =
                     printerResponseClassifier.classifyException(currentCommand, exception);
+
+            persistStepFailure(
+                    job.id(),
+                    stepIndex,
+                    "workflow-exception",
+                    currentCommand,
+                    classification.response(),
+                    classification.failureReason(),
+                    classification.detail()
+            );
 
             printJobService.recordJobAuditEvent(
                     job.id(),
@@ -222,6 +273,52 @@ public final class PrintJobExecutionService {
                 ));
             }
         }
+    }
+
+    private void persistStepSuccess(
+            String jobId,
+            int stepIndex,
+            String stepName,
+            String wireCommand,
+            String response
+    ) {
+        printJobExecutionStepStore.save(
+                PrintJobExecutionStep.success(
+                        jobId,
+                        stepIndex,
+                        stepName,
+                        wireCommand,
+                        response,
+                        "SUCCESS"
+                )
+        );
+    }
+
+    private boolean responseContainsBusy(String response) {
+        return response != null && response.toLowerCase(java.util.Locale.ROOT).contains("busy");
+    }
+
+    private void persistStepFailure(
+            String jobId,
+            int stepIndex,
+            String stepName,
+            String wireCommand,
+            String response,
+            JobFailureReason failureReason,
+            String failureDetail
+    ) {
+        printJobExecutionStepStore.save(
+                PrintJobExecutionStep.failure(
+                        jobId,
+                        stepIndex,
+                        stepName,
+                        wireCommand,
+                        response,
+                        failureReason == null ? "FAILED" : failureReason.name(),
+                        failureReason,
+                        failureDetail
+                )
+        );
     }
 
     private String describePlan(PrinterWorkflowPlan workflowPlan) {

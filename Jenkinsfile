@@ -302,14 +302,14 @@ PY
                     curl -fsS "http://localhost:${API_PORT}/dashboard" > target/dashboard.html
                     curl -fsS "http://localhost:${API_PORT}/dashboard/dashboard.css" > target/dashboard.css
                     curl -fsS "http://localhost:${API_PORT}/dashboard/dashboard.js" > target/dashboard.js
-                    curl -fsS "http://localhost:${API_PORT}/dashboard/app.js" > target/dashboard-app.js
+                    curl -fsS "http://localhost:${API_PORT}/dashboard/api.js" > target/dashboard-api.js
                     curl -fsS "http://localhost:${API_PORT}/dashboard/views/farm-home.js" > target/dashboard-view-farm-home.js
                     curl -fsS "http://localhost:${API_PORT}/dashboard/components/nav.js" > target/dashboard-component-nav.js
 
                     grep -q 'PrinterHub' target/dashboard.html
                     grep -q 'app-shell' target/dashboard.css
-                    grep -q 'import "./app.js"' target/dashboard.js
-                    grep -q 'renderFarmHome' target/dashboard-app.js
+                    grep -q 'renderFarmHome' target/dashboard.js
+                    grep -q 'export async function getPrinters' target/dashboard-api.js
                     grep -q 'export function renderFarmHome' target/dashboard-view-farm-home.js
                     grep -q 'export function renderNav' target/dashboard-component-nav.js
 
@@ -582,8 +582,8 @@ PY
                       > target/robust-dashboard.css
                     curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/dashboard.js" \
                       > target/robust-dashboard.js
-                    curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/app.js" \
-                      > target/robust-dashboard-app.js
+                    curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/api.js" \
+                      > target/robust-dashboard-api.js
                     curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/views/farm-home.js" \
                       > target/robust-dashboard-view-farm-home.js
                     curl -fsS "http://localhost:${ROBUST_PORT}/dashboard/components/nav.js" \
@@ -591,8 +591,8 @@ PY
 
                     grep -q 'PrinterHub' target/robust-dashboard.html
                     grep -q 'app-shell' target/robust-dashboard.css
-                    grep -q 'import "./app.js"' target/robust-dashboard.js
-                    grep -q 'renderFarmHome' target/robust-dashboard-app.js
+                    grep -q 'renderFarmHome' target/robust-dashboard.js
+                    grep -q 'export async function getPrinters' target/robust-dashboard-api.js
                     grep -q 'export function renderFarmHome' target/robust-dashboard-view-farm-home.js
                     grep -q 'export function renderNav' target/robust-dashboard-component-nav.js
 
@@ -810,6 +810,7 @@ EOF
                       cp target/dashboard.html release/smoke/ 2>/dev/null || true
                       cp target/dashboard.css release/smoke/ 2>/dev/null || true
                       cp target/dashboard.js release/smoke/ 2>/dev/null || true
+                      cp target/dashboard-api.js release/smoke/ 2>/dev/null || true
                       cp target/db-tables.txt release/smoke/ 2>/dev/null || true
                       cp target/configured-printers.txt release/smoke/ 2>/dev/null || true
                       cp target/printer-snapshots.txt release/smoke/ 2>/dev/null || true
@@ -929,7 +930,7 @@ PY
             archiveArtifacts artifacts: 'target/dashboard.html', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard.css', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard.js', allowEmptyArchive: true
-            archiveArtifacts artifacts: 'target/dashboard-app.js', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/dashboard-api.js', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard-view-farm-home.js', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/dashboard-component-nav.js', allowEmptyArchive: true
 
@@ -966,7 +967,7 @@ PY
             archiveArtifacts artifacts: 'target/robust-dashboard.html', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/robust-dashboard.css', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/robust-dashboard.js', allowEmptyArchive: true
-            archiveArtifacts artifacts: 'target/robust-dashboard-app.js', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'target/robust-dashboard-api.js', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/robust-dashboard-view-farm-home.js', allowEmptyArchive: true
             archiveArtifacts artifacts: 'target/robust-dashboard-component-nav.js', allowEmptyArchive: true
 

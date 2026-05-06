@@ -167,6 +167,11 @@ public final class PrintJobService {
         return updated;
     }
 
+    public void delete(String jobId) {
+        loadRequired(jobId);
+        printJobStore.delete(jobId);
+    }
+
     public void recordJobAuditEvent(
             String jobId,
             String eventType,

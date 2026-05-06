@@ -1,4 +1,4 @@
-import { escapeHtml, isSimulatedMode } from "../app.js";
+import { escapeHtml, isSimulatedMode } from "../dashboard.js";
 import { renderPlaceholderCard } from "../components/placeholder-card.js";
 import { state } from "../state.js";
 

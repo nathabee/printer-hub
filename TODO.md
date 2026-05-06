@@ -1,212 +1,310 @@
-# TODO
+# TODO ab 0.2.3 step C onwards
 
-## Old code migration table for 0.1.x
 
-| Old directory                              | Old file                                      | Likely content / responsibility                                                                        | New target                                                             | Version                                   |
-| ------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------- |
-| `old_src/main/java/printerhub`             | `PrinterPoller.java`                          | Main polling workflow: connect, send command, repeat polling, delay, disconnect, handle polling errors | `monitoring/PrinterMonitoringTask.java`                                | `0.1.1`                                   |
-| `old_src/main/java/printerhub`             | `PrinterStateTracker.java`                    | Converts printer responses/errors into current printer state/snapshot                                  | `runtime/PrinterRuntimeStateCache.java` and maybe monitoring helper    | `0.1.1`                                   |
-| `old_src/main/java/printerhub`             | `PrinterSnapshot.java`                        | Runtime snapshot model                                                                                 | `PrinterSnapshot.java`                                                 | `0.1.1`                                   |
-| `old_src/main/java/printerhub`             | `PrinterState.java`                           | State enum                                                                                             | `PrinterState.java`                                                    | `0.1.1`                                   |
-| `old_src/main/java/printerhub`             | `PrinterPort.java`                            | Printer communication interface                                                                        | `PrinterPort.java`                                                     | `0.1.1`                                   |
-| `old_src/main/java/printerhub`             | `SerialConnection.java`                       | Real serial printer communication                                                                      | `serial/RealPrinterPort` or adapted serial layer                       | later `0.1.1` or `0.1.4`                  |
-| `old_src/main/java/printerhub/serial`      | `SimulatedSerialPortAdapter.java`             | Simulated printer behavior                                                                             | `serial/SimulatedPrinterPort.java`                                     | `0.1.1`                                   |
-| `old_src/main/java/printerhub/serial`      | `SimulationProfile.java`                      | Simulation modes: normal, timeout, error, disconnected                                                 | `serial/SimulatedPrinterPort.java` or helper                           | `0.1.1`                                   |
-| `old_src/main/java/printerhub/serial`      | `SerialPortAdapter.java`                      | Serial abstraction                                                                                     | new serial layer                                                       | later                                     |
-| `old_src/main/java/printerhub/serial`      | `JSerialCommPortAdapter.java`                 | jSerialComm implementation                                                                             | new serial layer                                                       | later                                     |
-| `old_src/main/java/printerhub/serial`      | `SerialPortAdapterFactory.java`               | Selects real/simulated adapter                                                                         | runtime printer creation / registry loading                            | `0.1.3` or `0.2.x`                        |
-| `old_src/main/java/printerhub`             | `RemoteApiServer.java`                        | Old HTTP API, dashboard endpoints, possibly direct polling                                             | `api/RemoteApiServer.java`                                             | `0.1.2`                                   |
-| `old_src/main/resources/dashboard`         | `index.html`, `dashboard.css`, `dashboard.js` | Dashboard UI                                                                                           | resources/dashboard or API static handler                              | `0.1.2`                                   |
-| `old_src/main/java/printerhub/farm`        | `PrinterFarmStore.java`                       | Old printer list/farm storage                                                                          | `runtime/PrinterRegistry.java` first, then `PrinterConfigurationStore` | `0.1.2` / `0.1.3`                         |
-| `old_src/main/java/printerhub/farm`        | `PrinterNode.java`                            | Old printer node model                                                                                 | `runtime/PrinterRuntimeNode.java`                                      | already partly `0.1.0`, refine in `0.1.1` |
-| `old_src/main/java/printerhub/persistence` | `Database.java`                               | SQLite connection handling                                                                             | persistence database layer                                             | `0.1.3`                                   |
-| `old_src/main/java/printerhub/persistence` | `DatabaseConfig.java`                         | DB path/config                                                                                         | persistence database layer                                             | `0.1.3`                                   |
-| `old_src/main/java/printerhub/persistence` | `DatabaseInitializer.java`                    | Table creation                                                                                         | `persistence/DatabaseInitializer.java`                                 | `0.1.3`                                   |
-| `old_src/main/java/printerhub/persistence` | `RuntimeConfigurationStore.java`              | Persist printer config / runtime config                                                                | `PrinterConfigurationStore`                                            | `0.1.3`                                   |
-| `old_src/main/java/printerhub/persistence` | `MonitoringRules.java`                        | Snapshot interval / threshold rules                                                                    | monitoring config / persistence store                                  | `0.1.3`                                   |
-| `old_src/main/java/printerhub/persistence` | `PrinterSnapshotStore.java`                   | Persist snapshots                                                                                      | `PrinterSnapshotStore`                                                 | `0.1.3`                                   |
-| `old_src/main/java/printerhub/persistence` | `PrinterEventStore.java`                      | Persist printer events/errors                                                                          | `PrinterEventStore`                                                    | `0.1.3`                                   |
-| `old_src/main/java/printerhub/persistence` | `PrinterEvent.java`                           | Printer event model                                                                                    | event model/store                                                      | `0.1.3`                                   |
-| `old_src/main/java/printerhub/jobs`        | all job files                                 | Job model, validation, execution, job storage                                                          | runtime job services/stores                                            | after `0.1.x`, probably `0.2.x`           |
-| `old_src/main/java/printerhub`             | `OperationMessages.java`                      | Central operator-facing messages                                                                       | keep/adapt globally                                                    | as needed                                 |
-| `old_src/main/java/printerhub`             | `Main.java`                                   | Old CLI/API startup wiring                                                                             | new `Main.java` / `PrinterHubRuntime` wiring                           | partly `0.1.0`, refine later              |
+here are the step to be done :
+## 0.2.3 step C — Correct execution diagnostics and classified outcomes
+## 0.2.3 step D — File-backed print jobs and print-asset validation
+## 0.2.3 step E — Controlled real-printer print-start workflow
+## 0.2.3 step F — Running print supervision, pause/cancel, and terminal reviewability
+## 0.2.4 — Packaging Local Runtime
+## 0.2.5 — Runtime Recovery and Serial Device Robustness
+
+
+
  
 
+ 
+## 2 Pipelines
 
 
- ---
+On a stock Ender-style workflow, the print path is roughly:
+
+1. prepare and validate the printer,
+2. prepare or obtain a valid `.gcode` file,
+3. make that file available to the printer,
+4. select and start the print,
+5. monitor progress and detect failure states,
+6. pause/cancel/finish with reviewable history. ([Manuals+][1])
 
 
- ## 0.1.4
+There are really **two different pipelines**:
 
+### 1. Host-side preparation pipeline
 
- Yes. For `0.1.4`, do it in this order:
+This is outside the printer itself:
+
+* import/open model or project
+* choose printer profile
+* choose filament/process preset
+* slice to `.gcode`
+* preview/check the result
+* export the file for the printer or send it over a supported transport. ([Creality Wiki][2])
+
+### 2. Printer-side execution pipeline
+
+This is the Ender-like machine workflow:
+
+* printer ready check
+* leveling / Z-offset / homing / heating as needed
+* file selection
+* print start
+* progress/status tracking
+* pause / cancel / completion / failure handling. ([Manuals+][1])
+
+That distinction matters because **`0.2.3` can realistically finish the printer-side runtime orchestration**, but **full slicing/model preparation belongs either to a later step or to an explicitly external workflow** unless you want PrinterHub to become a slicer host too. ([Creality Wiki][2])
+
+## What the real Ender-style subprocesses are
+
+If your target is “at the end of 0.2.3 I can launch a real print,” the subprocesses are these:
+
+## A. Print asset intake
+
+This is the first missing block.
+
+Subprocess:
+
+* accept a print asset
+* distinguish model source vs already-sliced G-code
+* validate filename / extension / basic format
+* store metadata
+* bind the asset to a job
+
+What matters architecturally:
+
+* If the input is already `.gcode`, PrinterHub can stay out of slicing.
+* If the input is STL/OBJ/3MF, then PrinterHub must either reject it for now or introduce a slicing integration layer.
+
+This is the first place where you need a hard product decision. Creality’s own flow explicitly includes model import, preset selection, slicing, preview, then export/send. ([Creality Wiki][2])
+
+## B. Printer readiness and preparation
+
+This is the part that already fits your Ender-like UI best.
+
+Subprocess:
+
+* printer reachable
+* printer enabled
+* no active conflicting job
+* port/session ownership locked
+* state known and fresh
+* optional auto home
+* optional leveling/Z-offset prerequisites
+* optional bed/nozzle preheat
+* optional operator confirmation if preconditions are not ideal
+
+The Ender V2 Neo manual explicitly ties `Auto home`, `Move Z`, `Z-offset`, `Disable stepper`, and reset/config-style operations to the menu paths you already mapped. ([Manuals+][1])
+
+## C. File availability on the printer side
+
+This is the biggest missing concept in your current roadmap.
+
+Subprocess:
+
+* make the selected G-code file available to the printer
+* choose transport mode
+
+For a stock Ender-like workflow, the natural path is **SD-card based printing**: export the G-code to card, then the printer selects and prints it. Creality’s software guide explicitly describes exporting to SD card, inserting it into the printer, then selecting the file from the printer UI. Marlin also documents the SD-print command family: `M20/M21/M23/M24/M25/M27`. ([Creality Wiki][2])
+
+This is where you need another hard decision:
+
+* **Option 1: SD-managed workflow**
+  PrinterHub manages job metadata and operator guidance, but the operator still physically inserts/selects the file on the printer.
+* **Option 2: Host-managed remote start**
+  PrinterHub sends/selects/starts SD print via serial-supported commands where firmware behavior allows it.
+* **Option 3: Host streaming workflow**
+  PrinterHub streams G-code line by line like OctoPrint. That is a much bigger architecture jump.
+
+For `0.2.3`, only **Option 1 or a limited Option 2** is realistic.
+
+## D. Controlled start of print execution
+
+Subprocess:
+
+* select file
+* start print
+* transition job into running
+* correlate runtime job with printer execution state
+
+On Marlin-like firmware, SD printing is represented by selecting the file and starting it, for example `M23` then `M24`; `M25` pauses and `M27` reports SD print status. ([Marlin Firmware][3])
+
+This is where your current “one job = one semantic action” model starts to break down. A real print is no longer one semantic command. It is a **compound workflow job**.
+
+## E. Progress monitoring and execution diagnostics
+
+Subprocess:
+
+* polling while printing
+* distinguish expected heating/waiting from fault states
+* track percentage / elapsed / active file if available
+* detect stop conditions
+* store raw response evidence
+* classify outcome
+
+This is exactly where your planned `0.2.3 step C` belongs.
+
+## F. Pause / cancel / failure / completion handling
+
+Subprocess:
+
+* pause safely
+* cancel safely
+* detect abnormal stop
+* mark completed only on real terminal evidence
+* persist final outcome and operator-visible explanation
+
+This is not just audit polish. This is part of a usable print workflow.
+
+---
+
+# What to add to 0.2.3 from step C onward
+
+ 
+
+## 0.2.3 — Local Audit, History Views, and Controlled Job Actions
+
+Status stays `in progress`.
+
+### step C — Correct execution diagnostics and classified outcomes
+
+Keep this, but sharpen it.
+
+Goals:
+
+* persist the actual printer response that led to success or failure
+* classify outcomes into:
+
+  * success
+  * printer-reported error
+  * timeout / no response
+  * communication failure
+  * validation failure
+  * orchestration failure
+* persist workflow step diagnostics, not only final job diagnostics
+* show command, response, step name, classified outcome, and failure detail in dashboard/API history
+
+This is necessary before real print orchestration, otherwise later failures will be unreadable.
+
+### step D — Print asset intake and file-backed jobs
+
+Add this.
+
+Goals:
+
+* introduce a distinction between:
+
+  * semantic action jobs
+  * file-backed print jobs
+* support job payload metadata for a selected print file
+* validate accepted print file types
+* support at least `.gcode` as first-class print asset
+* reject non-sliced model files unless slicing support is explicitly added
+* persist job-file association and operator-visible file metadata
+
+Expected result:
+
+* PrinterHub can represent a real print job as a file-backed runtime object
+* “Print” page stops being a fake placeholder and starts representing actual printable work
+
+This is the missing bridge between “job concept exists” and “piece can really be printed.”
+
+### step E — Controlled print-start workflow for real printers
+
+Add this.
+
+Goals:
+
+* introduce a compound workflow executor for print jobs
+* define the ordered workflow:
+
+  * validate printer readiness
+  * lock printer ownership
+  * optional homing/preparation
+  * verify print asset availability
+  * start print
+  * transition to running
+* persist step-by-step execution history
+* prevent concurrent monitoring/command/job interference during critical phases
+
+Expected result:
+
+* a print job is no longer one raw action
+* a real print can be started through a controlled runtime workflow
+
+This is the actual “make a real print start” step.
+
+### step F — Running print supervision and operator controls
+
+Add this.
+
+Goals:
+
+* supervise running print jobs
+* expose progress/status polling during print
+* support pause/cancel as job-level controlled actions
+* distinguish paused, cancelling, failed, completed terminal states
+* persist terminal evidence and reason
+
+Expected result:
+
+* a real print is not only startable but operable and reviewable
+
+Without this, “real print support” will still be half-finished.
+
+---
+
+# What should stay out of 0.2.3
+
+This part is important.
+
+## Do not force full slicing into 0.2.3 unless you explicitly want that scope explosion
+
+Model import, slicing presets, G-code generation, thumbnail generation, and preview rendering are a different problem domain. Creality’s own flow treats those as slicer responsibilities before the printer-side send/print step. ([Creality Wiki][2])
+
+So for `0.2.3`, the sane boundary is:
+
+* **supported input for real print jobs: `.gcode`**
+* **unsupported for now: STL/OBJ/3MF direct printing**
+* maybe later: external slicer integration
+
+That keeps `0.2.3` aligned with your Java runtime project instead of turning it into a full print-preparation suite.
+
+---
+
+# What the final subprocess map should look like
+
+Here is the clean decomposition you should keep in mind.
 
 ```text
-Step A — production code review / hardening
-Step B — JUnit unit tests
-Step C — Jenkins integration + robustness smoke tests
+Real print workflow
+├── 1. Print asset intake
+│   ├── accept .gcode
+│   ├── validate file
+│   └── persist metadata
+│
+├── 2. Printer readiness
+│   ├── enabled/reachable
+│   ├── no conflicting execution
+│   ├── state fresh enough
+│   ├── optional homing
+│   └── optional thermal/preparation checks
+│
+├── 3. Print-start orchestration
+│   ├── bind asset to printer
+│   ├── make file available
+│   ├── start print
+│   └── move job to RUNNING
+│
+├── 4. Running supervision
+│   ├── progress polling
+│   ├── pause/cancel
+│   ├── anomaly detection
+│   └── state transitions
+│
+└── 5. Audit and review
+    ├── raw responses
+    ├── classified outcomes
+    ├── per-step diagnostics
+    └── final completion/failure evidence
 ```
 
-## Java files to review first
-
-```text
-src/main/java/printerhub/Main.java
-src/main/java/printerhub/PrinterPort.java
-src/main/java/printerhub/PrinterSnapshot.java
-src/main/java/printerhub/PrinterState.java
-src/main/java/printerhub/SerialConnection.java
-
-src/main/java/printerhub/api/RemoteApiServer.java
-
-src/main/java/printerhub/monitoring/PrinterMonitoringScheduler.java
-src/main/java/printerhub/monitoring/PrinterMonitoringTask.java
-
-src/main/java/printerhub/persistence/Database.java
-src/main/java/printerhub/persistence/DatabaseConfig.java
-src/main/java/printerhub/persistence/DatabaseInitializer.java
-src/main/java/printerhub/persistence/MonitoringRules.java
-src/main/java/printerhub/persistence/PrinterConfigurationStore.java
-src/main/java/printerhub/persistence/PrinterEvent.java
-src/main/java/printerhub/persistence/PrinterEventStore.java
-src/main/java/printerhub/persistence/PrinterSnapshotStore.java
-
-src/main/java/printerhub/runtime/PrinterHubRuntime.java
-src/main/java/printerhub/runtime/PrinterRegistry.java
-src/main/java/printerhub/runtime/PrinterRuntimeNode.java
-src/main/java/printerhub/runtime/PrinterRuntimeNodeFactory.java
-src/main/java/printerhub/runtime/PrinterRuntimeStateCache.java
-
-src/main/java/printerhub/serial/JSerialCommPortAdapter.java
-src/main/java/printerhub/serial/SerialPortAdapter.java
-src/main/java/printerhub/serial/SimulatedPrinterPort.java
-```
-
-## Priority review points
-
-Most important:
-
-```text
-RemoteApiServer
-PrinterMonitoringTask
-PrinterMonitoringScheduler
-PrinterConfigurationStore
-PrinterSnapshotStore
-SerialConnection
-PrinterHubRuntime
-```
-
-These decide whether the runtime is reliable.
-
-## What to check before writing tests
-
-### Error management
-
-Check that errors are:
-
-```text
-caught per printer
-stored in state cache
-persisted as events
-visible through API
-not crashing scheduler
-not blocking other printers
-not hidden silently except during shutdown cleanup
-```
-
-### Monitoring priority
-
-Expected behavior:
-
-```text
-disabled printer -> no polling
-bad printer -> ERROR only for that printer
-good printers -> keep updating
-API reads cache only
-database failure -> logged, but API/runtime still usable
-```
-
-### Persistence priority
-
-Expected behavior:
-
-```text
-printer config survives restart
-snapshot history is stored
-events show cause of failure
-database path can be overridden with -Dprinterhub.databaseFile
-```
-
-## JUnit tests to create
-
-Suggested test files:
-
-```text
-src/test/java/printerhub/runtime/PrinterRegistryTest.java
-src/test/java/printerhub/runtime/PrinterRuntimeStateCacheTest.java
-src/test/java/printerhub/runtime/PrinterRuntimeNodeFactoryTest.java
-
-src/test/java/printerhub/monitoring/PrinterMonitoringTaskTest.java
-src/test/java/printerhub/monitoring/PrinterMonitoringSchedulerTest.java
-
-src/test/java/printerhub/persistence/DatabaseInitializerTest.java
-src/test/java/printerhub/persistence/PrinterConfigurationStoreTest.java
-src/test/java/printerhub/persistence/PrinterSnapshotStoreTest.java
-src/test/java/printerhub/persistence/PrinterEventStoreTest.java
-
-src/test/java/printerhub/api/RemoteApiServerTest.java
-
-src/test/java/printerhub/serial/SimulatedPrinterPortTest.java
-src/test/java/printerhub/SerialConnectionTest.java
-```
-
-## Jenkins integration smoke tests
-
-Keep one normal lifecycle:
-
-```text
-remove DB
-start runtime
-verify no printers
-add simulated printer
-verify monitoring
-disable printer
-verify updatedAt stops
-enable printer
-verify updatedAt resumes
-update printer to sim-error
-verify ERROR is visible
-delete printer
-verify removed
-stop runtime
-inspect SQLite
-restart runtime
-verify persisted printers reload
-```
-
-## Jenkins robustness smoke tests
-
-Add focused failure scenarios:
-
-```text
-sim-error -> API still responds, event is persisted
-sim-timeout -> API still responds, printer state is ERROR
-sim-disconnected -> API still responds, other printers continue
-invalid POST body -> HTTP 400
-unknown printer -> HTTP 404
-wrong method -> HTTP 405
-```
-
-## First files to paste for code review
-
-Start with these:
-
-```text
-PrinterMonitoringTask.java
-PrinterMonitoringScheduler.java
-RemoteApiServer.java
-PrinterSnapshotStore.java
-PrinterConfigurationStore.java
-```
-
-Those are the highest-risk files before test writing.
+ 

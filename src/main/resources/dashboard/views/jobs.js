@@ -1,7 +1,8 @@
 import { renderJobCard } from "../components/job-card.js";
 import { renderPlaceholderCard } from "../components/placeholder-card.js";
-import { escapeHtml } from "../app.js";
-import { state } from "../state.js";
+import { renderExecutionStepList } from "../components/event-list.js";
+import { escapeHtml } from "../dashboard.js";
+import { isJobCardSectionOpen, state } from "../state.js";
 
 export function renderJobsPage() {
   const jobs = state.jobs;
@@ -18,7 +19,10 @@ export function renderJobsPage() {
         ${jobs.length === 0
           ? `<div class="empty-state"><h3>No jobs created yet</h3><p class="muted">Create jobs from the printer Print page or wait for backend data.</p></div>`
           : jobs.map((job) => renderJobCard(job, {
-              eventsHtml: renderJobEvents(job.id)
+              eventsHtml: renderJobEvents(job.id),
+              executionStepsHtml: renderJobExecutionSteps(job.id),
+              historyOpen: isJobCardSectionOpen(job.id, "history"),
+              diagnosticsOpen: isJobCardSectionOpen(job.id, "diagnostics")
             })).join("")}
       </div>
     </section>
@@ -64,4 +68,9 @@ function renderJobEvents(jobId) {
       <div class="event-message">${escapeHtml(event.message || "none")}</div>
     </div>
   `).join("");
+}
+
+function renderJobExecutionSteps(jobId) {
+  const steps = state.jobExecutionSteps.get(jobId) ?? [];
+  return renderExecutionStepList(steps, "Execution diagnostics not loaded yet.");
 }

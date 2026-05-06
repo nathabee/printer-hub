@@ -1,4 +1,4 @@
-import { escapeHtml, formatTemperature, isSimulatedMode, renderStatusLabel, resolveStateClass } from "../app.js";
+import { escapeHtml, formatTemperature, isSimulatedMode, renderStatusLabel, resolveStateClass } from "../dashboard.js";
 
 export function renderPrinterCard(printer, options = {}) {
   const actions = options.actions ?? [];
@@ -17,7 +17,7 @@ export function renderPrinterCard(printer, options = {}) {
   ].filter(Boolean);
 
   return `
-    <article class="printer-card ${printer.enabled ? "" : "printer-card-disabled"} ${isSelected ? "printer-card-selected" : ""}">
+    <article class="printer-card ${printer.enabled ? "" : "printer-card-disabled"} ${isSelected ? "printer-card-selected" : ""}" data-printer-card-id="${escapeHtml(printer.id)}">
       <div class="card-header">
         <div>
           <h3>${escapeHtml(printer.displayName || printer.name || printer.id)}</h3>
@@ -28,15 +28,15 @@ export function renderPrinterCard(printer, options = {}) {
 
       <div class="row">
         <span>Status</span>
-        <span class="badge ${resolveStateClass(printer)}">${escapeHtml(renderStatusLabel(printer, printer.state || "UNKNOWN"))}</span>
+        <span class="badge ${resolveStateClass(printer)}" data-live-printer-field="status">${escapeHtml(renderStatusLabel(printer, printer.state || "UNKNOWN"))}</span>
       </div>
       <div class="row">
         <span>Hotend</span>
-        <strong>${formatTemperature(printer.hotendTemperature)}</strong>
+        <strong data-live-printer-field="hotendTemperature">${formatTemperature(printer.hotendTemperature)}</strong>
       </div>
       <div class="row">
         <span>Bed</span>
-        <strong>${formatTemperature(printer.bedTemperature)}</strong>
+        <strong data-live-printer-field="bedTemperature">${formatTemperature(printer.bedTemperature)}</strong>
       </div>
       <div class="row">
         <span>Mode</span>
@@ -44,16 +44,16 @@ export function renderPrinterCard(printer, options = {}) {
       </div>
       <div class="row">
         <span>Updated</span>
-        <strong>${escapeHtml(printer.updatedAt || "n/a")}</strong>
+        <strong data-live-printer-field="updatedAt">${escapeHtml(printer.updatedAt || "n/a")}</strong>
       </div>
 
       <div class="message-block">
         <span class="message-label">Last response</span>
-        <div class="message-value">${escapeHtml(printer.lastResponse || "n/a")}</div>
+        <div class="message-value" data-live-printer-field="lastResponse">${escapeHtml(printer.lastResponse || "n/a")}</div>
       </div>
       <div class="message-block">
         <span class="message-label">Current error</span>
-        <div class="message-value">${escapeHtml(printer.errorMessage || "none")}</div>
+        <div class="message-value" data-live-printer-field="errorMessage">${escapeHtml(printer.errorMessage || "none")}</div>
       </div>
 
       ${actions.length > 0 ? `

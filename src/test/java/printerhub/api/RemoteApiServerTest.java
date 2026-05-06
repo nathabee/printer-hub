@@ -17,6 +17,7 @@ import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
+import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNodeFactory;
 import printerhub.runtime.PrinterRuntimeStateCache;
@@ -43,11 +44,11 @@ class RemoteApiServerTest {
     }
 
     @Test
-    void dashboardAppJsReturnsJavaScript() throws Exception {
-        TestContext context = createContext("dashboard-app-js.db");
+    void dashboardApiJsReturnsJavaScript() throws Exception {
+        TestContext context = createContext("dashboard-api-js.db");
 
         try {
-            HttpResponse<String> response = context.get("/dashboard/app.js");
+            HttpResponse<String> response = context.get("/dashboard/api.js");
 
             assertEquals(200, response.statusCode());
             assertTrue(response.headers().firstValue("content-type").orElse("").contains("application/javascript"));
@@ -70,8 +71,6 @@ class RemoteApiServerTest {
         }
     }
 
-
-  
     @Test
     void dashboardComponentModuleReturnsJavaScript() throws Exception {
         TestContext context = createContext("dashboard-component-module.db");
@@ -198,6 +197,36 @@ class RemoteApiServerTest {
             assertTrue(response.body().contains("\"enabled\":true"));
 
             assertTrue(context.printerRegistry.findById("printer-1").isPresent());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void optionsPrintersAllowsDashboardPreflight() throws Exception {
+        TestContext context = createContext("printers-options.db");
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + context.port + "/printers"))
+                    .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                    .header("Origin", "http://localhost:5500")
+                    .header("Access-Control-Request-Method", "POST")
+                    .header("Access-Control-Request-Headers", "Content-Type")
+                    .build();
+
+            HttpResponse<String> response = context.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(204, response.statusCode());
+            assertEquals("*", response.headers().firstValue("access-control-allow-origin").orElse(""));
+            assertTrue(response.headers()
+                    .firstValue("access-control-allow-methods")
+                    .orElse("")
+                    .contains("POST"));
+            assertTrue(response.headers()
+                    .firstValue("access-control-allow-headers")
+                    .orElse("")
+                    .contains("Content-Type"));
         } finally {
             context.close();
         }
@@ -704,7 +733,8 @@ class RemoteApiServerTest {
                 printerRegistry,
                 monitoringScheduler,
                 new PrinterActionGuard(),
-                new PrinterActionMapper());
+                new PrinterActionMapper(),
+                new PrintJobExecutionStepStore());
 
         RemoteApiServer server = new RemoteApiServer(
                 port,
@@ -716,7 +746,8 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 printJobService,
-                printJobExecutionService);
+                printJobExecutionService,
+                new PrintJobExecutionStepStore());
 
         server.start();
 
@@ -880,6 +911,55 @@ class RemoteApiServerTest {
     }
 
     @Test
+    void deleteJobRemovesJob() throws Exception {
+        TestContext context = createContext("job-delete.db");
+
+        try {
+            HttpResponse<String> createResponse = context.request(
+                    "POST",
+                    "/jobs",
+                    """
+                            {"name":"Read position","type":"READ_POSITION","printerId":"printer-1"}
+                            """);
+
+            assertEquals(201, createResponse.statusCode());
+            String jobId = extractJsonString(createResponse.body(), "id");
+            assertNotNull(jobId);
+
+            HttpResponse<String> deleteResponse = context.request(
+                    "DELETE",
+                    "/jobs/" + jobId,
+                    null);
+
+            assertEquals(200, deleteResponse.statusCode());
+            assertEquals("{\"deleted\":\"" + jobId + "\"}", deleteResponse.body());
+
+            HttpResponse<String> getResponse = context.get("/jobs/" + jobId);
+            assertEquals(404, getResponse.statusCode());
+            assertEquals("{\"error\":\"job_not_found\"}", getResponse.body());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void deleteJobReturns404WhenMissing() throws Exception {
+        TestContext context = createContext("job-delete-404.db");
+
+        try {
+            HttpResponse<String> response = context.request(
+                    "DELETE",
+                    "/jobs/missing-job",
+                    null);
+
+            assertEquals(404, response.statusCode());
+            assertEquals("{\"error\":\"job_not_found\"}", response.body());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
     void getMissingJobReturns404() throws Exception {
         TestContext context = createContext("job-get-404.db");
 
@@ -910,6 +990,7 @@ class RemoteApiServerTest {
                         + "GET /printers/{id}/events -> 200\n"
                         + "PUT /printers/{id} -> 200\n"
                         + "DELETE /printers/{id} -> 200\n"
+                        + "DELETE /jobs/{id} -> 200\n"
                         + "invalid POST -> 400\n"
                         + "unknown printer -> 404\n"
                         + "wrong method -> 405\n"
@@ -920,6 +1001,64 @@ class RemoteApiServerTest {
                         + "Controlled persistence failure path was also verified.");
 
         assertTrue(java.nio.file.Files.exists(java.nio.file.Path.of("target", "operator-message-report.md")));
+    }
+
+    @Test
+    void getJobExecutionStepsReturnsStructuredExecutionDiagnostics() throws Exception {
+        TestContext context = createContext("job-execution-steps-get.db");
+
+        try {
+            HttpResponse<String> createResponse = context.request(
+                    "POST",
+                    "/jobs",
+                    """
+                            {"name":"Home axes","type":"HOME_AXES","printerId":"printer-1"}
+                            """);
+
+            assertEquals(201, createResponse.statusCode());
+            String jobId = extractJsonString(createResponse.body(), "id");
+            assertNotNull(jobId);
+
+            context.printerRegistry.register(
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+
+            HttpResponse<String> startResponse = context.request(
+                    "POST",
+                    "/jobs/" + jobId + "/start",
+                    null);
+
+            assertEquals(200, startResponse.statusCode());
+
+            HttpResponse<String> response = context.get("/jobs/" + jobId + "/execution-steps");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"executionSteps\":["));
+            assertTrue(response.body().contains("\"jobId\":\"" + jobId + "\""));
+            assertTrue(response.body().contains("\"stepIndex\":0"));
+            assertTrue(response.body().contains("\"stepName\":\"validate-position-before-home\""));
+            assertTrue(response.body().contains("\"wireCommand\":\"M114\""));
+            assertTrue(response.body().contains("\"outcome\":\"SUCCESS\""));
+            assertTrue(response.body().contains("\"success\":true"));
+            assertTrue(response.body().contains("\"stepIndex\":1"));
+            assertTrue(response.body().contains("\"stepName\":\"home-axes\""));
+            assertTrue(response.body().contains("\"wireCommand\":\"G28\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void getJobExecutionStepsReturns404WhenJobIsMissing() throws Exception {
+        TestContext context = createContext("job-execution-steps-404.db");
+
+        try {
+            HttpResponse<String> response = context.get("/jobs/missing-job/execution-steps");
+
+            assertEquals(404, response.statusCode());
+            assertEquals("{\"error\":\"job_not_found\"}", response.body());
+        } finally {
+            context.close();
+        }
     }
 
     private TestContext createContext(String dbName) throws Exception {
@@ -947,7 +1086,8 @@ class RemoteApiServerTest {
                 printerRegistry,
                 monitoringScheduler,
                 new PrinterActionGuard(),
-                new PrinterActionMapper());
+                new PrinterActionMapper(),
+                new PrintJobExecutionStepStore());
 
         int port = findFreePort();
 
@@ -961,7 +1101,8 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 printJobService,
-                printJobExecutionService);
+                printJobExecutionService,
+                new PrintJobExecutionStepStore());
         server.start();
 
         return new TestContext(
@@ -1011,7 +1152,8 @@ class RemoteApiServerTest {
                 printerRegistry,
                 monitoringScheduler,
                 new PrinterActionGuard(),
-                new PrinterActionMapper());
+                new PrinterActionMapper(),
+                new PrintJobExecutionStepStore());
 
         return new RemoteApiServer(
                 port,
@@ -1023,7 +1165,8 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 printJobService,
-                printJobExecutionService);
+                printJobExecutionService,
+                new PrintJobExecutionStepStore());
     }
 
     private static final class TestContext {

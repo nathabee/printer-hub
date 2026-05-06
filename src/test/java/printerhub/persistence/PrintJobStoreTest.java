@@ -7,6 +7,7 @@ import printerhub.config.RuntimeDefaults;
 import printerhub.job.JobState;
 import printerhub.job.JobType;
 import printerhub.job.PrintJob;
+import printerhub.job.PrintJobExecutionStep;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -183,6 +184,55 @@ class PrintJobStoreTest {
         assertEquals(2, recent.size());
         assertEquals("job-c", recent.get(0).id());
         assertEquals("job-b", recent.get(1).id());
+    }
+
+    @Test
+    void deleteRemovesJobAndJobScopedDiagnostics() {
+        initializeDatabase("print-job-delete.db");
+
+        PrintJobStore store = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        PrintJobExecutionStepStore stepStore = new PrintJobExecutionStepStore();
+        Instant now = Instant.parse("2026-05-04T08:00:00Z");
+
+        store.save(new PrintJob(
+                "job-delete",
+                "Delete me",
+                JobType.READ_TEMPERATURE,
+                JobState.ASSIGNED,
+                "printer-1",
+                null,
+                null,
+                null,
+                null,
+                now,
+                now,
+                null,
+                null
+        ));
+        eventStore.record("printer-1", "job-delete", "JOB_CREATED", "Job created.");
+        stepStore.save(PrintJobExecutionStep.success(
+                "job-delete",
+                0,
+                "read-temperature",
+                "M105",
+                "ok",
+                "SUCCESS"));
+
+        assertTrue(store.delete("job-delete"));
+
+        assertTrue(store.findById("job-delete").isEmpty());
+        assertTrue(eventStore.findRecentByJobId("job-delete", 10).isEmpty());
+        assertTrue(stepStore.findByJobId("job-delete").isEmpty());
+    }
+
+    @Test
+    void deleteReturnsFalseWhenJobIsMissing() {
+        initializeDatabase("print-job-delete-missing.db");
+
+        PrintJobStore store = new PrintJobStore();
+
+        assertFalse(store.delete("missing-job"));
     }
 
     private void initializeDatabase(String fileName) {

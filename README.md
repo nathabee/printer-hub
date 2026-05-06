@@ -1,5 +1,3 @@
-# `README.md`
-
 <p align="center">
   <img src="docs/assets/media/banner-1544x500.png" alt="PrinterHub banner">
 </p>

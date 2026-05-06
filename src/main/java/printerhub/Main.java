@@ -13,6 +13,7 @@ import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
+import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.runtime.PrinterHubRuntime;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeStateCache;
@@ -21,120 +22,109 @@ import java.util.concurrent.CountDownLatch;
 
 public final class Main {
 
-    private Main() {
-    }
-
-    public static void main(String[] args) throws InterruptedException {
-        try {
-            int apiPort = readIntProperty(
-                    RuntimeDefaults.API_PORT_PROPERTY,
-                    RuntimeDefaults.DEFAULT_API_PORT
-            );
-
-            PrinterRegistry printerRegistry = new PrinterRegistry();
-            PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
-            DatabaseInitializer databaseInitializer = new DatabaseInitializer();
-            PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
-            MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
-            PrinterEventStore printerEventStore = new PrinterEventStore();
-            PrintJobStore printJobStore = new PrintJobStore();
-
-            PrinterCommandService printerCommandService = new PrinterCommandService(printerEventStore);
-
-            PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
-                    printerRegistry,
-                    stateCache
-            );
-
-            PrintJobService printJobService = new PrintJobService(
-                    printJobStore,
-                    printerEventStore
-            );
-
-            PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
-                    printJobService,
-                    printerRegistry,
-                    monitoringScheduler,
-                    new PrinterActionGuard(),
-                    new PrinterActionMapper()
-            );
-
-            RemoteApiServer apiServer = new RemoteApiServer(
-                    apiPort,
-                    printerRegistry,
-                    stateCache,
-                    monitoringScheduler,
-                    printerConfigurationStore,
-                    monitoringRulesStore,
-                    printerEventStore,
-                    printerCommandService,
-                    printJobService,
-                    printJobExecutionService
-            );
-
-            PrinterHubRuntime runtime = new PrinterHubRuntime(
-                    databaseInitializer,
-                    printerConfigurationStore,
-                    monitoringRulesStore,
-                    printerRegistry,
-                    stateCache,
-                    monitoringScheduler,
-                    apiServer
-            );
-
-            Runtime.getRuntime().addShutdownHook(new Thread(runtime::close));
-
-            runtime.start();
-
-            System.out.println(OperationMessages.localRuntimeStarted());
-            System.out.println(OperationMessages.healthEndpoint(apiPort));
-            System.out.println(OperationMessages.printersEndpoint(apiPort));
-            System.out.println(OperationMessages.monitoringSettingsEndpoint(apiPort));
-
-            new CountDownLatch(1).await();
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            System.err.println(OperationMessages.runtimeStartupFailed(
-                    OperationMessages.safeDetail(
-                            exception.getMessage(),
-                            OperationMessages.UNKNOWN_STARTUP_ERROR
-                    )
-            ));
-            throw exception;
-        } catch (IllegalArgumentException exception) {
-            System.err.println(OperationMessages.runtimeStartupFailed(
-                    OperationMessages.safeDetail(
-                            exception.getMessage(),
-                            OperationMessages.UNKNOWN_STARTUP_ERROR
-                    )
-            ));
-            System.exit(RuntimeDefaults.ERROR_EXIT_CODE);
-        } catch (Exception exception) {
-            System.err.println(OperationMessages.runtimeStartupFailed(
-                    OperationMessages.safeDetail(
-                            exception.getMessage(),
-                            OperationMessages.UNKNOWN_STARTUP_ERROR
-                    )
-            ));
-            exception.printStackTrace(System.err);
-            System.exit(RuntimeDefaults.ERROR_EXIT_CODE);
-        }
-    }
-
-    private static int readIntProperty(String key, int defaultValue) {
-        String value = System.getProperty(key);
-
-        if (value == null || value.isBlank()) {
-            return defaultValue;
+        private Main() {
         }
 
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(
-                    OperationMessages.invalidIntegerSystemProperty(key, value),
-                    exception
-            );
+        public static void main(String[] args) throws InterruptedException {
+                try {
+                        int apiPort = readIntProperty(
+                                        RuntimeDefaults.API_PORT_PROPERTY,
+                                        RuntimeDefaults.DEFAULT_API_PORT);
+
+                        PrinterRegistry printerRegistry = new PrinterRegistry();
+                        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+                        DatabaseInitializer databaseInitializer = new DatabaseInitializer();
+                        PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
+                        MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+                        PrinterEventStore printerEventStore = new PrinterEventStore();
+                        PrintJobStore printJobStore = new PrintJobStore();
+
+                        PrinterCommandService printerCommandService = new PrinterCommandService(printerEventStore);
+
+                        PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
+                                        printerRegistry,
+                                        stateCache);
+
+                        PrintJobService printJobService = new PrintJobService(
+                                        printJobStore,
+                                        printerEventStore);
+
+                        PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                                        printJobService,
+                                        printerRegistry,
+                                        monitoringScheduler,
+                                        new PrinterActionGuard(),
+                                        new PrinterActionMapper(),
+                                        new PrintJobExecutionStepStore());
+
+                        RemoteApiServer apiServer = new RemoteApiServer(
+                                        apiPort,
+                                        printerRegistry,
+                                        stateCache,
+                                        monitoringScheduler,
+                                        printerConfigurationStore,
+                                        monitoringRulesStore,
+                                        printerEventStore,
+                                        printerCommandService,
+                                        printJobService,
+                                        printJobExecutionService,
+                                        new PrintJobExecutionStepStore());
+
+                        PrinterHubRuntime runtime = new PrinterHubRuntime(
+                                        databaseInitializer,
+                                        printerConfigurationStore,
+                                        monitoringRulesStore,
+                                        printerRegistry,
+                                        stateCache,
+                                        monitoringScheduler,
+                                        apiServer);
+
+                        Runtime.getRuntime().addShutdownHook(new Thread(runtime::close));
+
+                        runtime.start();
+
+                        System.out.println(OperationMessages.localRuntimeStarted());
+                        System.out.println(OperationMessages.healthEndpoint(apiPort));
+                        System.out.println(OperationMessages.printersEndpoint(apiPort));
+                        System.out.println(OperationMessages.monitoringSettingsEndpoint(apiPort));
+
+                        new CountDownLatch(1).await();
+                } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        System.err.println(OperationMessages.runtimeStartupFailed(
+                                        OperationMessages.safeDetail(
+                                                        exception.getMessage(),
+                                                        OperationMessages.UNKNOWN_STARTUP_ERROR)));
+                        throw exception;
+                } catch (IllegalArgumentException exception) {
+                        System.err.println(OperationMessages.runtimeStartupFailed(
+                                        OperationMessages.safeDetail(
+                                                        exception.getMessage(),
+                                                        OperationMessages.UNKNOWN_STARTUP_ERROR)));
+                        System.exit(RuntimeDefaults.ERROR_EXIT_CODE);
+                } catch (Exception exception) {
+                        System.err.println(OperationMessages.runtimeStartupFailed(
+                                        OperationMessages.safeDetail(
+                                                        exception.getMessage(),
+                                                        OperationMessages.UNKNOWN_STARTUP_ERROR)));
+                        exception.printStackTrace(System.err);
+                        System.exit(RuntimeDefaults.ERROR_EXIT_CODE);
+                }
         }
-    }
+
+        private static int readIntProperty(String key, int defaultValue) {
+                String value = System.getProperty(key);
+
+                if (value == null || value.isBlank()) {
+                        return defaultValue;
+                }
+
+                try {
+                        return Integer.parseInt(value);
+                } catch (NumberFormatException exception) {
+                        throw new IllegalArgumentException(
+                                        OperationMessages.invalidIntegerSystemProperty(key, value),
+                                        exception);
+                }
+        }
 }

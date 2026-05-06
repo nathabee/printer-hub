@@ -1355,16 +1355,85 @@ Selected Printer
 ├── Control
 └── Info
 ```
+ 
+---
 
-### step C — Correct execution diagnostics and reviewability
+## 0.2.3 — Local Audit, History Views, and Controlled Job Actions
+
+status: in progress
+
+* step A, B : done
+
+### step A — Audit and history visibility
+
+status: done
+
+Goals:
+
+* expose printer event history
+* expose snapshot history
+* expose job history
+* expose error history
+* show job execution command and result details in dashboard and API
+* make local diagnostics easier through both API and dashboard views
+* make operator-triggered job outcomes reviewable after the fact
+
+### step B — New Dashboard UI and controlled real-printer job workflows
+
+status: done
+
+Goals:
+
+* Dashboard UI with menu, navigation, component split to make it a two-level UI
+* implement controlled job actions as predefined workflows, not just single raw command sends
+* support multi-step preparation, validation, execution, and result interpretation for real-printer actions
+* validate printer readiness before state-changing jobs are executed
+* allow required pre-sequences before the main action command is sent
+* make `HOME_AXES` a controlled workflow instead of only a direct `G28` send
+
+Dashboard as two-level UI:
+
+```text
+PrinterHub
+├── Farm Home
+├── Printers
+├── Jobs
+├── History
+└── Settings
+```
+
+Selected printer navigation:
+
+```text
+Selected Printer
+├── Home
+├── Print
+├── Prepare
+├── Control
+└── Info
+```
+---
+
+### step C — Correct execution diagnostics and classified outcomes
+
+status: done
 
 Goals:
 
 * persist the actual printer response that led to success or failure
-* distinguish between printer-reported failure, timeout/no response, and communication failure
+* distinguish clearly between:
+
+  * successful completion
+  * printer-reported failure
+  * timeout / no response
+  * communication failure
+  * validation failure before command execution
+  * workflow/orchestration failure
 * ensure printer-reported failures are not rewritten as generic “no response” failures when a response exists
-* persist raw or normalized diagnostics in job history
-* show sent command, actual response, classified outcome, and failure detail in dashboard history
+* persist raw and/or normalized diagnostics in job history
+* persist workflow-step diagnostics, not only final job state
+* show sent command, actual response, classified outcome, and failure detail in dashboard history and API responses
+* support review and cleanup of completed or failed jobs, including deletion of related job diagnostics/history where implemented
 
 Controlled job-action scope:
 
@@ -1376,6 +1445,14 @@ SET_FAN_SPEED
 TURN_FAN_OFF
 ```
 
+Note:
+
+```text
+For state-changing actions such as SET_NOZZLE_TEMPERATURE or SET_BED_TEMPERATURE,
+step C classifies whether the guarded workflow command path succeeded or failed.
+It does not yet prove that the requested physical target was reached and stabilized afterward.
+```
+
 Expected result:
 
 * the local runtime becomes easier to inspect after failures
@@ -1383,30 +1460,160 @@ Expected result:
 * printer behavior, operator actions, and job state changes become reviewable after the fact
 * controlled real-printer job actions become more operationally useful
 
+---
+
+
+
+### step D — File-backed print jobs and richer preparation/verification workflows
+
+status: planned
+
+Goals:
+
+* extend the job model so that jobs are no longer limited to one guarded semantic command
+* support file-backed print jobs as a first-class runtime concept
+* allow selection of an already prepared printable file stored on the PrinterHub host
+* accept and validate printable file types, starting with `.gcode`
+* persist print-file metadata and association with the job
+* keep PrinterHub out of slicing logic:
+
+  * no model slicing
+  * no G-code editing
+  * no slicer-host role in this version
+* reject unsupported source formats for direct printing unless later explicitly integrated
+* prepare richer controlled workflows where command acceptance and physical-effect verification are distinct concerns
+* allow later workflow variants to include optional follow-up verification steps after state-changing commands
+
+Job model note:
+
+```text
+A file-backed print job references an already prepared printable file.
+PrinterHub does not generate or edit slice data in 0.2.x.
+PrinterHub accepts an existing printable file, associates it with a job,
+and later transfers or makes it available to the printer when execution starts.
+```
+
+Workflow note:
+
+```text
+Step C verifies and classifies guarded command/workflow execution.
+Step D prepares richer workflow structures so later actions may include
+optional follow-up checks after command submission.
+
+Example:
+SET_BED_TEMPERATURE
+├── validate firmware / readiness
+├── send M140 S60
+├── optional poll M105
+├── verify target trend or actual target reached
+└── only then classify as fully achieved
+```
+
+Expected result:
+
+* PrinterHub can represent a real print as a file-backed runtime job
+* the Print area of the dashboard becomes tied to an actual printable artifact
+* the runtime is prepared for real print activation using host-side stored files
+* the job/workflow model is ready for richer verification-oriented actions beyond immediate command acceptance
 
 ---
 
-### 0.2.4 — Packaging Local Runtime
+### step E — Controlled real-printer print-start workflow
+
+status: planned
+
+Goals:
+
+* implement controlled execution of file-backed print jobs
+* treat print start as a multi-step workflow, not as one direct command send
+* validate printer readiness before print activation
+* prevent conflicting access between monitoring, manual commands, and active job execution
+* support required preparation phases before print start
+* support transfer and/or activation of the selected printable file as part of the job workflow
+* persist execution-step history for the print-start workflow
+
+Typical workflow scope:
+
+```text
+PRINT_FILE
+├── validate printer enabled/reachable
+├── validate no conflicting active job
+├── validate fresh enough runtime state
+├── optional prepare / homing / thermal checks
+├── validate selected file
+├── transfer or make file available to printer
+├── start print
+└── transition job to RUNNING
+```
+
+Expected result:
+
+* a real print can be started through the runtime as a controlled workflow
+* file-backed print jobs are no longer just metadata
+* print activation becomes coordinated, reviewable, and safer for real hardware use
+
+### step F — Running print supervision and operator controls
+
+status: planned
+
+Goals:
+
+* supervise running real-printer print jobs after activation
+* expose running-print state and progress as far as the printer/firmware allows
+* support controlled pause and cancel behavior for active print jobs
+* distinguish clearly between:
+
+  * running
+  * paused
+  * cancelling
+  * completed
+  * failed
+  * cancelled
+* persist terminal evidence and operator-visible outcome details
+* improve dashboard visibility for active print execution
+
+Expected result:
+
+* real print jobs are not only startable but operable
+* dashboard and API can follow running print execution more meaningfully
+* completion, cancellation, and failure become properly reviewable in job history
+
+Expected result for 0.2.3 overall:
+
+* audit and history views become useful for real diagnostics
+* controlled printer-side actions become more robust and reviewable
+* PrinterHub can manage a real print job based on an already prepared printable file
+* the dashboard reflects both Ender-like printer logic and browser-native reviewability
+* the runtime is ready for local real-printer print execution without becoming a slicer host
+
+---
+
+## 0.2.4 — Packaging Local Runtime
 
 status: planned
 
 Goals:
 
 * package PrinterHub as a local runtime service
-* document systemd usage
+* document production-style jar execution outside the source tree
 * document runtime config location
 * document database location
+* document dashboard/static asset location if relevant
+* provide startup script and/or service wrapper for local installation
+* document and support `systemd` usage
+* define log location and working-directory expectations
 * prepare deployment on a local machine connected to printers
 
 Expected result:
 
 ```text
-PrinterHub runs as a local service near the printers.
+PrinterHub runs as a documented, repeatable local service near the printers,
+not only as a manually started development jar.
 ```
-  
+
 ---
 
-### 0.2.5 — Runtime Recovery and Serial Device Robustness
+## 0.2.5 — Runtime Recovery and Serial Device Robustness
 
 status: planned
 
@@ -1417,11 +1624,10 @@ Goals:
 * make real-printer administration more robust
 * improve operator visibility for serial-port failures
 
-Minor CR/Anomalies :
+Minor CR / anomalies:
 
-* README banner and dashboard screenshot path currently points to `docs/assets/media-src/...`,  not a final published-media location.
-* dashboard.js : editing a disabled printer will re-enable it unintentionally (enabled: true always true even if update)
-
+* README banner and dashboard screenshot path currently points to `docs/assets/media-src/...`, not a final published-media location
+* dashboard.js: editing a disabled printer will re-enable it unintentionally (`enabled: true` always set even on update)
 
 Focus:
 
@@ -1444,6 +1650,65 @@ Expected result:
 * real printers recover more reliably after reconnect scenarios
 * operators can understand whether the failure is caused by cable disconnect, changed port path, or invalid configuration
 * local runtime administration becomes safer for real hardware use
+
+---
+
+## 0.2.6 — Print Asset Transfer and Printer File Handling Hardening
+
+status: planned
+
+Goals:
+
+* harden host-side handling of printable files used by file-backed jobs
+* clarify how PrinterHub transfers or exposes prepared `.gcode` files to the printer
+* improve validation and error reporting around missing, unreadable, or invalid print files
+* make print-file handling more reviewable in dashboard and API
+* avoid ambiguous failures during print activation caused by file-path or transfer problems
+
+Focus:
+
+* host-side printable file registry or controlled file reference handling
+* validation of file existence, readability, and allowed type
+* clearer distinction between:
+
+  * job exists but file missing
+  * file invalid
+  * file cannot be transferred
+  * printer-side print activation failed after transfer
+* persist file-related diagnostics in job execution history
+
+Expected result:
+
+* file-backed print jobs become safer and more predictable
+* operators can understand whether a print failure is caused by printer behavior or by file-handling problems
+* the runtime becomes more reliable for repeated real print activation
+
+---
+
+## 0.2.7 — Post-Print Review and Operational History Hardening
+
+status: planned
+
+Goals:
+
+* improve reviewability after completed, failed, or cancelled print jobs
+* strengthen operator visibility of final print outcome
+* correlate print job lifecycle, printer events, and execution diagnostics more clearly
+* make local troubleshooting easier after real print runs
+
+Focus:
+
+* better final job summaries
+* clearer per-step execution history in dashboard
+* stronger linkage between printer-side events and job-side state changes
+* clearer operator-facing failure narratives for real print attempts
+
+Expected result:
+
+* local print operations become easier to review after the fact
+* PrinterHub becomes more usable for repeated real-printer operations and troubleshooting
+* audit value improves beyond raw event storage
+ 
 
 
 ---
