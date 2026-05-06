@@ -51,6 +51,7 @@ public final class PrinterActionGuard {
                  READ_POSITION,
                  READ_FIRMWARE_INFO,
                  HOME_AXES,
+                 PRINT_FILE,
                  TURN_FAN_OFF -> GuardDecision.allow();
 
             case SET_NOZZLE_TEMPERATURE,

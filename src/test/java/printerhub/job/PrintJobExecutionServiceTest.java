@@ -412,6 +412,68 @@ class PrintJobExecutionServiceTest {
     }
 
     @Test
+    void executePrintFileJobCompletesAsPreparedMetadataWithoutSendingGcode() {
+        initializeDatabase("job-execution-print-file-prepared.db");
+
+        PrintJobStore store = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        PrintJobExecutionStepStore stepStore = new PrintJobExecutionStepStore();
+        Clock clock = Clock.fixed(Instant.parse("2026-05-04T08:00:00Z"), ZoneOffset.UTC);
+
+        PrintJobService jobService = new PrintJobService(store, eventStore, clock);
+
+        PrinterRegistry registry = new PrinterRegistry();
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+        PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(registry, stateCache);
+        CountingPrinterPort printerPort = new CountingPrinterPort();
+
+        try {
+            PrinterRuntimeNode node = new PrinterRuntimeNode(
+                    "printer-1",
+                    "Printer 1",
+                    "SIM_PORT",
+                    "sim",
+                    printerPort,
+                    true);
+            registry.register(node);
+
+            PrintJob job = jobService.create(
+                    "Print cube",
+                    JobType.PRINT_FILE,
+                    "printer-1",
+                    "print-file-1",
+                    null,
+                    null);
+
+            PrintJobExecutionService executionService = new PrintJobExecutionService(
+                    jobService,
+                    registry,
+                    scheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper(),
+                    stepStore);
+
+            PrinterActionExecutionResult result = executionService.execute(job.id());
+
+            assertTrue(result.success());
+            assertNull(result.wireCommand());
+            assertEquals(0, printerPort.commandCount());
+
+            PrintJob loaded = store.findById(job.id()).orElseThrow();
+            assertEquals(JobState.COMPLETED, loaded.state());
+            assertEquals("print-file-1", loaded.printFileId());
+
+            List<PrintJobExecutionStep> steps = stepStore.findByJobId(job.id());
+            assertEquals(1, steps.size());
+            assertEquals("file-backed-print-prepared", steps.get(0).stepName());
+            assertNull(steps.get(0).wireCommand());
+            assertTrue(steps.get(0).success());
+        } finally {
+            scheduler.stop();
+        }
+    }
+
+    @Test
     void executeHomeAxesWithPrinterReportedFailurePersistsStructuredFailureStep() {
         initializeDatabase("job-execution-step-printer-failure.db");
 
@@ -542,6 +604,29 @@ class PrintJobExecutionServiceTest {
 
         @Override
         public void disconnect() {
+        }
+    }
+
+    private static final class CountingPrinterPort implements PrinterPort {
+
+        private int commandCount = 0;
+
+        @Override
+        public void connect() {
+        }
+
+        @Override
+        public String sendCommand(String command) {
+            commandCount++;
+            return "ok";
+        }
+
+        @Override
+        public void disconnect() {
+        }
+
+        private int commandCount() {
+            return commandCount;
         }
     }
 

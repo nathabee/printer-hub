@@ -26,6 +26,8 @@ public enum PrinterActionType {
             case SET_BED_TEMPERATURE -> SET_BED_TEMPERATURE;
             case SET_FAN_SPEED -> SET_FAN_SPEED;
             case TURN_FAN_OFF -> TURN_FAN_OFF;
+            case PRINT_FILE -> throw new IllegalArgumentException(
+                    OperationMessages.invalidEnumField("type", jobType.name()));
         };
     }
 }

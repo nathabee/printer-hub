@@ -8,5 +8,6 @@ public enum JobType {
     SET_NOZZLE_TEMPERATURE,
     SET_BED_TEMPERATURE,
     SET_FAN_SPEED,
-    TURN_FAN_OFF
+    TURN_FAN_OFF,
+    PRINT_FILE
 }

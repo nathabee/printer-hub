@@ -4,6 +4,7 @@ import { state } from "../state.js";
 
 export function renderSettingsPage() {
   const monitoringRules = state.monitoringRules || {};
+  const printFileSettings = state.printFileSettings || {};
   const printers = state.printers;
 
   return `
@@ -47,6 +48,26 @@ export function renderSettingsPage() {
 
           <div class="form-actions">
             <button type="submit">Save monitoring rules</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="section-card">
+        <div class="section-header">
+          <div>
+            <h2>Print file storage</h2>
+            <p class="lead">Directory where uploaded .gcode files are saved by PrinterHub.</p>
+          </div>
+        </div>
+
+        <form id="printFileSettingsForm" class="form-grid">
+          <label>
+            Storage directory
+            <input id="printFileStorageDirectoryInput" name="storageDirectory" type="text" value="${escapeHtml(printFileSettings.storageDirectory ?? "printerhub-print-files")}" required>
+          </label>
+
+          <div class="form-actions">
+            <button type="submit">Save print file settings</button>
           </div>
         </form>
       </article>

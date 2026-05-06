@@ -1302,59 +1302,6 @@ Expected result:
 * basic job creation and execution are available through API and dashboard
 * the runtime architecture is ready for richer execution and audit features later
 
----
-
-## 0.2.3 — Local Audit, History Views, and Controlled Job Actions
-
-status: in progress
-- step A,B : done 
-
-
-### step A — Audit and history visibility
-
-Goals:
-
-* expose printer event history
-* expose snapshot history
-* expose job history
-* expose error history
-* show job execution command and result details in dashboard and API
-* make local diagnostics easier through both API and dashboard views
-* make operator-triggered job outcomes reviewable after the fact
-
-### step B — New Dashboard UI and Controlled real-printer job workflows
-
-Goals:
-
-* Dashboard UI with menu, navigation, component to make it a 2 level UI
-* implement controlled job actions as predefined workflows, not just single raw command sends
-* support multi-step preparation, validation, execution, and result interpretation for real-printer actions
-* validate printer readiness before state-changing jobs are executed
-* allow required pre-sequences before the main action command is sent
-* make `HOME_AXES` a controlled workflow instead of only a direct `G28` send
-
-
-Dashboard as **two-level UI**, the menu is :
-
-```text 
-PrinterHub
-├── Farm Home
-├── Printers
-├── Jobs
-├── History
-└── Settings
-```
-
-But once a printer is selected, its internal navigation should follow the Ender logic very closely:
-
-```text  
-Selected Printer
-├── Home
-├── Print
-├── Prepare
-├── Control
-└── Info
-```
  
 ---
 
@@ -1484,7 +1431,7 @@ That step would include:
 
 ### step E — File-backed print jobs and richer preparation/verification workflows
 
-status: planned
+status: done
 
 Goals:
 
@@ -1505,14 +1452,13 @@ Goals:
 
 It will be done in this order:
 
-- Add file metadata persistence.
-- Add `.gcode` validation and storage/registration logic.
-- Extend PrintJob so it can reference a print file.
-- Add backend API for printable files.
-- Add dashboard UI to select a file and create a file-backed job.
-- Refactor workflow model to support richer step types.
-- Keep actual G-code execution minimal or stubbed as “represented/prepared,” unless we decide Step E should really send the file to the printer.
-- Add tests around file validation, persistence, job creation, and unsupported file rejection.
+- Add file metadata persistence. Done.
+- Add `.gcode` validation and storage/registration logic. Done.
+- Extend PrintJob so it can reference a print file. Done.
+- Add backend API for printable files. Done.
+- Add dashboard UI to select a file and create a file-backed job. Done.
+- Keep actual G-code execution minimal/stubbed as “represented/prepared.” Done.
+- Add tests around file validation, persistence, job creation, and unsupported file rejection. Done.
 
 
 Job model note:

@@ -497,6 +497,33 @@ textarea:focus {
   word-break: break-word;
 }
 
+.print-file-dialog {
+  width: min(980px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  color: var(--text-main);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.print-file-dialog::backdrop {
+  background: rgba(3, 7, 14, 0.72);
+}
+
+.print-file-content {
+  max-height: 70vh;
+  overflow: auto;
+  margin: 1rem 0 0;
+  padding: 1rem;
+  background: var(--bg-nav);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text-main);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .printer-card-disabled {
   opacity: 0.8;
 }

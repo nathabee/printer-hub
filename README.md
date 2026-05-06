@@ -213,19 +213,25 @@ What is already available:
 * job event visibility
 * job execution result visibility
 * structured execution-step diagnostics
+* host-side `.gcode` print-file registration and dashboard upload
+* file-backed `PRINT_FILE` jobs represented as prepared metadata
 * controlled real-printer action workflows for selected action types
 
 Current controlled action scope:
 
 ```text
+READ_TEMPERATURE
+READ_POSITION
+READ_FIRMWARE_INFO
 HOME_AXES
 SET_NOZZLE_TEMPERATURE
 SET_BED_TEMPERATURE
 SET_FAN_SPEED
 TURN_FAN_OFF
+PRINT_FILE
 ```
 
-The direction is to evolve these backend jobs further into richer, piece-oriented production workflows.
+`PRINT_FILE` jobs reference an already prepared `.gcode` file on the PrinterHub host. PrinterHub can register an existing host path or save a dashboard-uploaded file into the configured print-file storage directory. It validates and persists the file metadata, but it does not slice, edit, or stream the G-code in this version.
 
 Job start behavior:
 

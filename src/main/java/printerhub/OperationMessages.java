@@ -81,6 +81,8 @@ public final class OperationMessages {
 
     public static final String FAILED_TO_LOAD_MONITORING_RULES = "Failed to load monitoring rules";
     public static final String FAILED_TO_SAVE_MONITORING_RULES = "Failed to save monitoring rules";
+    public static final String FAILED_TO_LOAD_PRINT_FILE_SETTINGS = "Failed to load print file settings";
+    public static final String FAILED_TO_SAVE_PRINT_FILE_SETTINGS = "Failed to save print file settings";
 
     public static final String SERIAL_CONNECTION_IS_NOT_OPEN = "Serial port is not open.";
     public static final String INTERRUPTED_WHILE_READING_RESPONSE = "Interrupted while reading response from serial port.";
@@ -133,6 +135,20 @@ public final class OperationMessages {
     public static final String FAILED_TO_LOAD_PRINT_JOBS = "Failed to load print jobs";
     public static final String FAILED_TO_UPDATE_PRINT_JOB = "Failed to update print job";
     public static final String FAILED_TO_DELETE_PRINT_JOB = "Failed to delete print job";
+    public static final String FAILED_TO_SAVE_PRINT_FILE = "Failed to save print file";
+    public static final String FAILED_TO_LOAD_PRINT_FILE = "Failed to load print file";
+    public static final String FAILED_TO_LOAD_PRINT_FILES = "Failed to load print files";
+    public static final String FAILED_TO_STORE_UPLOADED_PRINT_FILE = "failed_to_store_uploaded_print_file";
+    public static final String FAILED_TO_READ_PRINT_FILE_CONTENT = "failed_to_read_print_file_content";
+    public static final String PRINT_FILE_NOT_FOUND = "print_file_not_found";
+    public static final String PRINT_FILE_ID_MUST_NOT_BE_BLANK = "printFileId must not be blank";
+    public static final String PRINT_FILE_PATH_MUST_NOT_BE_BLANK = "path must not be blank";
+    public static final String PRINT_FILE_STORAGE_DIRECTORY_MUST_NOT_BE_BLANK = "printFileStorageDirectory must not be blank";
+    public static final String PRINT_FILE_FILENAME_MUST_NOT_BE_BLANK = "filename must not be blank";
+    public static final String UNSUPPORTED_PRINT_FILE_TYPE = "unsupported_print_file_type";
+    public static final String PRINT_FILE_MUST_EXIST = "print_file_must_exist";
+    public static final String PRINT_FILE_MUST_BE_READABLE = "print_file_must_be_readable";
+    public static final String PRINT_FILE_MUST_BE_REGULAR_FILE = "print_file_must_be_regular_file";
 
     public static final String EVENT_JOB_CREATED = "JOB_CREATED";
     public static final String EVENT_JOB_ASSIGNED = "JOB_ASSIGNED";

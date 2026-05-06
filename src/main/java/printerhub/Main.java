@@ -4,6 +4,7 @@ import printerhub.api.RemoteApiServer;
 import printerhub.command.PrinterCommandService;
 import printerhub.config.RuntimeDefaults;
 import printerhub.job.AsyncPrintJobExecutor;
+import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
 import printerhub.job.PrinterActionGuard;
@@ -11,6 +12,8 @@ import printerhub.job.PrinterActionMapper;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintFileSettingsStore;
+import printerhub.persistence.PrintFileStore;
 import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
@@ -37,7 +40,9 @@ public final class Main {
                         DatabaseInitializer databaseInitializer = new DatabaseInitializer();
                         PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
                         MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+                        PrintFileSettingsStore printFileSettingsStore = new PrintFileSettingsStore();
                         PrinterEventStore printerEventStore = new PrinterEventStore();
+                        PrintFileStore printFileStore = new PrintFileStore();
                         PrintJobStore printJobStore = new PrintJobStore();
 
                         PrinterCommandService printerCommandService = new PrinterCommandService(printerEventStore);
@@ -49,6 +54,10 @@ public final class Main {
                         PrintJobService printJobService = new PrintJobService(
                                         printJobStore,
                                         printerEventStore);
+                        PrintFileService printFileService = new PrintFileService(
+                                        printFileStore,
+                                        printFileSettingsStore,
+                                        java.time.Clock.systemUTC());
 
                         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
 
@@ -73,8 +82,10 @@ public final class Main {
                                         monitoringScheduler,
                                         printerConfigurationStore,
                                         monitoringRulesStore,
+                                        printFileSettingsStore,
                                         printerEventStore,
                                         printerCommandService,
+                                        printFileService,
                                         printJobService,
                                         asyncPrintJobExecutor,
                                         new PrintJobExecutionStepStore());

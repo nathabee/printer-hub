@@ -24,10 +24,26 @@ export function renderPrinterPrint(printer, jobsForPrinter) {
         </div>
       </div>
 
+      <form id="printFileForm" class="form-grid">
+        <label>
+          Upload .gcode file
+          <input id="printFileUploadInput" name="file" type="file" accept=".gcode">
+        </label>
+
+        <label>
+          Existing host .gcode path
+          <input id="printFilePathInput" name="path" type="text" placeholder="/home/user/prints/cube.gcode">
+        </label>
+
+        <div class="form-actions">
+          <button type="submit">Save print file</button>
+        </div>
+      </form>
+
       <form id="jobForm" class="form-grid">
         <label>
           Job name
-          <input id="jobNameInput" name="jobName" type="text" placeholder="Read firmware on printer-1" required>
+          <input id="jobNameInput" name="jobName" type="text" placeholder="Optional for PRINT_FILE jobs">
         </label>
 
         <label>
@@ -41,6 +57,7 @@ export function renderPrinterPrint(printer, jobsForPrinter) {
             <option value="SET_BED_TEMPERATURE">SET_BED_TEMPERATURE</option>
             <option value="SET_FAN_SPEED">SET_FAN_SPEED</option>
             <option value="TURN_FAN_OFF">TURN_FAN_OFF</option>
+            <option value="PRINT_FILE">PRINT_FILE</option>
           </select>
         </label>
 
@@ -48,6 +65,13 @@ export function renderPrinterPrint(printer, jobsForPrinter) {
           Printer
           <select id="jobPrinterIdInput" name="printerId">
             ${buildPrinterOptions(printer.id)}
+          </select>
+        </label>
+
+        <label>
+          Print file
+          <select id="jobPrintFileIdInput" name="printFileId">
+            ${buildPrintFileOptions()}
           </select>
         </label>
 
@@ -126,6 +150,19 @@ function buildPrinterOptions(selectedPrinterId) {
     ...printers.map((printer) => `
       <option value="${escapeHtml(printer.id)}" ${printer.id === selectedPrinterId ? "selected" : ""}>
         ${escapeHtml(printer.displayName || printer.id)}
+      </option>
+    `)
+  ].join("");
+}
+
+function buildPrintFileOptions() {
+  const printFiles = state.printFiles;
+
+  return [
+    `<option value="">Select .gcode file for PRINT_FILE jobs</option>`,
+    ...printFiles.map((printFile) => `
+      <option value="${escapeHtml(printFile.id)}">
+        ${escapeHtml(printFile.originalFilename || printFile.path || printFile.id)}
       </option>
     `)
   ].join("");
