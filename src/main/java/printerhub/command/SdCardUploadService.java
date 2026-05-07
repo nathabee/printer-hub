@@ -8,6 +8,7 @@ import printerhub.job.PrinterActionGuard;
 import printerhub.job.PrinterSdFile;
 import printerhub.job.PrinterSdFileService;
 import printerhub.monitoring.PrinterMonitoringScheduler;
+import printerhub.persistence.MonitoringRulesStore;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import printerhub.config.PrinterProtocolDefaults;
 
 public final class SdCardUploadService {
@@ -32,6 +34,7 @@ public final class SdCardUploadService {
     private final PrinterSdFileService printerSdFileService;
     private final PrinterEventStore printerEventStore;
     private final SdCardFileParser sdCardFileParser;
+    private final BooleanSupplier debugWireTracingEnabledSupplier;
 
     public SdCardUploadService(
             PrinterRegistry printerRegistry,
@@ -41,6 +44,27 @@ public final class SdCardUploadService {
             SdCardService sdCardService,
             PrinterSdFileService printerSdFileService,
             PrinterEventStore printerEventStore) {
+        this(
+                printerRegistry,
+                monitoringScheduler,
+                printerActionGuard,
+                printFileService,
+                sdCardService,
+                printerSdFileService,
+                printerEventStore,
+                () -> new MonitoringRulesStore().load().debugWireTracingEnabled()
+        );
+    }
+
+    SdCardUploadService(
+            PrinterRegistry printerRegistry,
+            PrinterMonitoringScheduler monitoringScheduler,
+            PrinterActionGuard printerActionGuard,
+            PrintFileService printFileService,
+            SdCardService sdCardService,
+            PrinterSdFileService printerSdFileService,
+            PrinterEventStore printerEventStore,
+            BooleanSupplier debugWireTracingEnabledSupplier) {
         if (printerRegistry == null) {
             throw new IllegalArgumentException(OperationMessages.PRINTER_REGISTRY_MUST_NOT_BE_NULL);
         }
@@ -62,6 +86,9 @@ public final class SdCardUploadService {
         if (printerEventStore == null) {
             throw new IllegalArgumentException(OperationMessages.EVENT_STORE_MUST_NOT_BE_NULL);
         }
+        if (debugWireTracingEnabledSupplier == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("debugWireTracingEnabledSupplier"));
+        }
 
         this.printerRegistry = printerRegistry;
         this.monitoringScheduler = monitoringScheduler;
@@ -71,6 +98,7 @@ public final class SdCardUploadService {
         this.printerSdFileService = printerSdFileService;
         this.printerEventStore = printerEventStore;
         this.sdCardFileParser = new SdCardFileParser();
+        this.debugWireTracingEnabledSupplier = debugWireTracingEnabledSupplier;
     }
 
     public UploadResult uploadToPrinterSd(
@@ -342,6 +370,9 @@ public final class SdCardUploadService {
     }
 
     private void logUploadWire(String printerId, String direction, String detail) {
+        if (!debugWireTracingEnabledSupplier.getAsBoolean()) {
+            return;
+        }
         System.out.println("[PrinterHub] SD upload wire " + printerId + " " + direction + " "
                 + sanitizeWireDetail(detail));
     }

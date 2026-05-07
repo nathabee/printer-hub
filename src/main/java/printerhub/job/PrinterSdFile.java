@@ -14,6 +14,8 @@ public final class PrinterSdFile {
     private final String rawLine;
     private final String printFileId;
     private final boolean enabled;
+    private final boolean deleted;
+    private final Instant deletedAt;
     private final Instant createdAt;
     private final Instant updatedAt;
 
@@ -28,7 +30,20 @@ public final class PrinterSdFile {
             Instant createdAt,
             Instant updatedAt
     ) {
-        this(id, printerId, firmwarePath, displayName, sizeBytes, rawLine, printFileId, true, createdAt, updatedAt);
+        this(
+                id,
+                printerId,
+                firmwarePath,
+                displayName,
+                sizeBytes,
+                rawLine,
+                printFileId,
+                true,
+                false,
+                null,
+                createdAt,
+                updatedAt
+        );
     }
 
     public PrinterSdFile(
@@ -40,6 +55,36 @@ public final class PrinterSdFile {
             String rawLine,
             String printFileId,
             boolean enabled,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        this(
+                id,
+                printerId,
+                firmwarePath,
+                displayName,
+                sizeBytes,
+                rawLine,
+                printFileId,
+                enabled,
+                false,
+                null,
+                createdAt,
+                updatedAt
+        );
+    }
+
+    public PrinterSdFile(
+            String id,
+            String printerId,
+            String firmwarePath,
+            String displayName,
+            Long sizeBytes,
+            String rawLine,
+            String printFileId,
+            boolean enabled,
+            boolean deleted,
+            Instant deletedAt,
             Instant createdAt,
             Instant updatedAt
     ) {
@@ -67,6 +112,8 @@ public final class PrinterSdFile {
         this.rawLine = rawLine == null || rawLine.isBlank() ? this.firmwarePath : rawLine.trim();
         this.printFileId = printFileId == null || printFileId.isBlank() ? null : printFileId.trim();
         this.enabled = enabled;
+        this.deleted = deleted;
+        this.deletedAt = deletedAt;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -101,6 +148,14 @@ public final class PrinterSdFile {
 
     public boolean enabled() {
         return enabled;
+    }
+
+    public boolean deleted() {
+        return deleted;
+    }
+
+    public Instant deletedAt() {
+        return deletedAt;
     }
 
     public Instant createdAt() {

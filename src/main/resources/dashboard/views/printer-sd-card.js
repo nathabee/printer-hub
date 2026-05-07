@@ -232,17 +232,26 @@ function renderRegisteredFileTable(files) {
               <td>${escapeHtml(formatSize(file.sizeBytes))}</td>
               <td>${escapeHtml(resolveHostFileLabel(file.printFileId))}</td>
               <td>
-                <span class="badge ${file.enabled === true ? "badge-real" : "badge-sim"}">
-                  ${file.enabled === true ? "Enabled" : "Disabled"}
+                <span class="badge ${resolvePrinterSdStatusClass(file)}">
+                  ${escapeHtml(resolvePrinterSdStatusLabel(file))}
                 </span>
               </td>
               <td>
+                ${file.deleted === true
+      ? `<span class="muted">Deleted</span>`
+      : `
                 <button
                   type="button"
                   class="secondary-button small-button"
                   data-printer-sd-file-id="${escapeHtml(file.id)}"
                   data-printer-sd-file-enabled="${file.enabled === true ? "false" : "true"}"
                 >${file.enabled === true ? "Disable" : "Enable"}</button>
+                <button
+                  type="button"
+                  class="danger-button small-button"
+                  data-delete-printer-sd-file-id="${escapeHtml(file.id)}"
+                >Delete</button>
+                `}
               </td>
             </tr>
           `).join("")}
@@ -320,6 +329,20 @@ function formatSize(sizeBytes) {
   }
 
   return `${numericSize} bytes`;
+}
+
+function resolvePrinterSdStatusLabel(file) {
+  if (file.deleted === true) {
+    return "Deleted";
+  }
+  return file.enabled === true ? "Enabled" : "Disabled";
+}
+
+function resolvePrinterSdStatusClass(file) {
+  if (file.deleted === true) {
+    return "badge-disabled";
+  }
+  return file.enabled === true ? "badge-real" : "badge-sim";
 }
 
 function defaultSdTargetFilename(filename) {

@@ -15,6 +15,7 @@ public final class MonitoringRules {
     private final double temperatureDeltaThreshold;
     private final long eventDeduplicationWindowSeconds;
     private final ErrorPersistenceBehavior errorPersistenceBehavior;
+    private final boolean debugWireTracingEnabled;
 
     public MonitoringRules(
             long pollIntervalSeconds,
@@ -22,6 +23,24 @@ public final class MonitoringRules {
             double temperatureDeltaThreshold,
             long eventDeduplicationWindowSeconds,
             ErrorPersistenceBehavior errorPersistenceBehavior
+    ) {
+        this(
+                pollIntervalSeconds,
+                snapshotMinimumIntervalSeconds,
+                temperatureDeltaThreshold,
+                eventDeduplicationWindowSeconds,
+                errorPersistenceBehavior,
+                false
+        );
+    }
+
+    public MonitoringRules(
+            long pollIntervalSeconds,
+            long snapshotMinimumIntervalSeconds,
+            double temperatureDeltaThreshold,
+            long eventDeduplicationWindowSeconds,
+            ErrorPersistenceBehavior errorPersistenceBehavior,
+            boolean debugWireTracingEnabled
     ) {
         if (pollIntervalSeconds <= 0) {
             throw new IllegalArgumentException(
@@ -58,6 +77,7 @@ public final class MonitoringRules {
         this.temperatureDeltaThreshold = temperatureDeltaThreshold;
         this.eventDeduplicationWindowSeconds = eventDeduplicationWindowSeconds;
         this.errorPersistenceBehavior = errorPersistenceBehavior;
+        this.debugWireTracingEnabled = debugWireTracingEnabled;
     }
 
     public static MonitoringRules defaults() {
@@ -88,6 +108,10 @@ public final class MonitoringRules {
 
     public ErrorPersistenceBehavior errorPersistenceBehavior() {
         return errorPersistenceBehavior;
+    }
+
+    public boolean debugWireTracingEnabled() {
+        return debugWireTracingEnabled;
     }
 
     public static ErrorPersistenceBehavior parseErrorPersistenceBehavior(String value) {

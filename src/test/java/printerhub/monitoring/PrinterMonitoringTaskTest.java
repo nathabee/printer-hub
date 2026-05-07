@@ -6,8 +6,13 @@ import org.junit.jupiter.api.io.TempDir;
 import printerhub.PrinterPort;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
+import printerhub.job.JobState;
+import printerhub.job.JobType;
+import printerhub.job.PrintJob;
+import printerhub.job.PrintJobService;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRules;
+import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.persistence.PrinterSnapshotStore;
 import printerhub.runtime.PrinterRuntimeNode;
@@ -392,6 +397,126 @@ class PrinterMonitoringTaskTest {
         assertTrue(stateCache.findByPrinterId("printer-1").isPresent());
     }
 
+    @Test
+    void printingToIdleTransitionCompletesRunningAutonomousPrintJob() throws Exception {
+        useDatabase("autonomous-print-complete.db");
+
+        MutableClock clock = new MutableClock(Instant.parse("2026-04-29T10:09:00Z"));
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache(clock);
+        stateCache.update(
+                "printer-1",
+                PrinterSnapshot.fromResponse(
+                        PrinterState.PRINTING,
+                        21.0,
+                        21.0,
+                        "busy",
+                        clock.instant().minusSeconds(5)
+                )
+        );
+
+        PrintJobStore jobStore = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        PrintJobService jobService = new PrintJobService(jobStore, eventStore, clock);
+        PrintJob job = jobService.create(
+                "Autonomous print",
+                JobType.PRINT_FILE,
+                "printer-1",
+                null,
+                "printer-sd-file-1",
+                null,
+                null
+        );
+        jobService.markRunning(job.id());
+
+        StubPrinterPort port = new StubPrinterPort();
+        port.response = "ok T:21.80 /0.00 B:21.52 /0.00 @:0 B@:0";
+
+        PrinterRuntimeNode node = new PrinterRuntimeNode(
+                "printer-1",
+                "Printer 1",
+                "SIM_PORT",
+                "sim",
+                port,
+                true);
+
+        PrinterMonitoringTask task = new PrinterMonitoringTask(
+                node,
+                stateCache,
+                new PrinterSnapshotStore(),
+                eventStore,
+                clock,
+                "M105",
+                () -> false,
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults());
+
+        task.run();
+
+        PrintJob completed = jobStore.findById(job.id()).orElseThrow();
+        assertEquals(JobState.COMPLETED, completed.state());
+        assertNotNull(completed.finishedAt());
+    }
+
+    @Test
+    void sdPrintStatusTransitionCompletesRunningAutonomousPrintJob() throws Exception {
+        useDatabase("autonomous-print-status-complete.db");
+
+        MutableClock clock = new MutableClock(Instant.parse("2026-04-29T10:10:00Z"));
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache(clock);
+
+        PrintJobStore jobStore = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        PrintJobService jobService = new PrintJobService(jobStore, eventStore, clock);
+        PrintJob job = jobService.create(
+                "Autonomous print",
+                JobType.PRINT_FILE,
+                "printer-1",
+                null,
+                "printer-sd-file-1",
+                null,
+                null
+        );
+        jobService.markRunning(job.id());
+
+        StubPrinterPort port = new StubPrinterPort();
+        port.response = "ok T:21.80 /0.00 B:21.52 /0.00 @:0 B@:0";
+        port.sdPrintStatusResponse = "SD printing byte 42/230";
+
+        PrinterRuntimeNode node = new PrinterRuntimeNode(
+                "printer-1",
+                "Printer 1",
+                "SIM_PORT",
+                "sim",
+                port,
+                true);
+
+        PrinterMonitoringTask task = new PrinterMonitoringTask(
+                node,
+                stateCache,
+                new PrinterSnapshotStore(),
+                eventStore,
+                clock,
+                "M105",
+                () -> false,
+                new MonitoringEventPolicy(clock, Duration.ofSeconds(60)),
+                MonitoringRules.defaults());
+
+        task.run();
+
+        PrintJob stillRunning = jobStore.findById(job.id()).orElseThrow();
+        assertEquals(JobState.RUNNING, stillRunning.state());
+        assertEquals(PrinterState.PRINTING, stateCache.findByPrinterId("printer-1").orElseThrow().state());
+
+        port.sdPrintStatusResponse = "Not SD printing";
+        clock.setInstant(clock.instant().plusSeconds(5));
+
+        task.run();
+
+        PrintJob completed = jobStore.findById(job.id()).orElseThrow();
+        assertEquals(JobState.COMPLETED, completed.state());
+        assertNotNull(completed.finishedAt());
+    }
+
     private void useDatabase(String fileName) {
         Path dbFile = tempDir.resolve(fileName);
         System.setProperty("printerhub.databaseFile", dbFile.toString());
@@ -432,6 +557,7 @@ class PrinterMonitoringTaskTest {
         private int sendCommandCalls;
         private String lastCommand;
         private String response = "ok";
+        private String sdPrintStatusResponse = "Not SD printing";
         private RuntimeException connectException;
         private boolean sendInterrupted;
 
@@ -455,6 +581,10 @@ class PrinterMonitoringTaskTest {
 
             if (sendInterrupted) {
                 throw new IllegalStateException("scheduler shutdown", new InterruptedException("scheduler shutdown"));
+            }
+
+            if ("M27".equals(command)) {
+                return sdPrintStatusResponse;
             }
 
             return response;

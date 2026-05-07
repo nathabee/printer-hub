@@ -1,6 +1,6 @@
 > **Project restructuring notice**
 >
-> PrinterHub is currently being refactored from the `0.0.x` prototype line into the `0.1.x` local runtime architecture.
+> PrinterHub is currently being developped
 >
 > Some details in this document still describe the previous prototype state. The documentation will be cleaned up after the runtime architecture stabilizes.
 >
@@ -307,41 +307,14 @@ Purpose:
 
 ---
 
-## 9. Development Steps
+## 9. Development Steps and status
 
-> **Status note**
->
-> This section still reflects the previous `0.0.x` prototype. It will be rewritten after the `0.1.x` runtime backbone is complete.
-
-
-
-| Step | Goal | Status |
-|---|---|---|
-
-
-
----
-  
-## 10. Current Project Status
-
-
-> **Status note**
->
-> This section still reflects the previous `0.0.x` prototype. It will be rewritten after the `0.1.x` runtime backbone is complete.
+see [`docs/roadmap.md`](docs/roadmap.md)
 
 
 ---
 
-## 11. Next Steps
-
-
-> **Status note**
->
-> This section still reflects the previous `0.0.x` prototype. It will be rewritten after the `0.1.x` runtime backbone is complete.
-
----
-
-## 12. Long-Term Vision
+## 10. Long-Term Vision
 
 The long-term goal is to approximate a real industrial printer environment.
 

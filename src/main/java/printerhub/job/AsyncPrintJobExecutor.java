@@ -82,6 +82,14 @@ public final class AsyncPrintJobExecutor implements AutoCloseable {
             return StartResult.rejected(failed, decision.failureReason(), decision.detail());
         }
 
+        if (hasConflictingRunningJob(job)) {
+            PrintJob failed = failBeforeSubmission(
+                    job,
+                    JobFailureReason.PRINTER_BUSY,
+                    "Another RUNNING job is already associated with printer " + job.printerId() + ".");
+            return StartResult.rejected(failed, JobFailureReason.PRINTER_BUSY, OperationMessages.PRINTER_BUSY);
+        }
+
         if (!activePrinterIds.add(node.id())) {
             PrintJob failed = failBeforeSubmission(
                     job,
@@ -110,6 +118,16 @@ public final class AsyncPrintJobExecutor implements AutoCloseable {
         });
 
         return StartResult.accepted(running);
+    }
+
+    private boolean hasConflictingRunningJob(PrintJob job) {
+        return printJobService.findRecent(200)
+                .stream()
+                .anyMatch(existing ->
+                        !existing.id().equals(job.id())
+                                && existing.printerId() != null
+                                && existing.printerId().equals(job.printerId())
+                                && existing.state() == JobState.RUNNING);
     }
 
     private PrintJob failBeforeSubmission(

@@ -93,6 +93,7 @@ public final class SimulatedPrinterPort implements PrinterPort {
             case "M114" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M114;
             case "M115" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M115;
             case "M20" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M20;
+            case "M27" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M27;
             default -> PrinterProtocolDefaults.SIMULATED_RESPONSE_DEFAULT_OK;
         };
     }

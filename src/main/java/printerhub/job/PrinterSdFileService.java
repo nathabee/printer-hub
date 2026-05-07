@@ -73,7 +73,9 @@ public final class PrinterSdFileService {
                 printFileId == null || printFileId.isBlank()
                         ? existingFile.map(PrinterSdFile::printFileId).orElse(null)
                         : printFileId,
-                existingFile.map(PrinterSdFile::enabled).orElse(true),
+                existingFile.map(existing -> existing.deleted() ? true : existing.enabled()).orElse(true),
+                false,
+                null,
                 existingFile.map(PrinterSdFile::createdAt).orElse(now),
                 now);
 
@@ -111,7 +113,9 @@ public final class PrinterSdFileService {
                 existingFile.sizeBytes(),
                 existingFile.rawLine(),
                 existingFile.printFileId(),
-                enabled,
+                enabled && !existingFile.deleted(),
+                existingFile.deleted(),
+                existingFile.deletedAt(),
                 existingFile.createdAt(),
                 now);
 
@@ -126,6 +130,28 @@ public final class PrinterSdFileService {
 
     public List<PrinterSdFile> findAll() {
         return printerSdFileStore.findAll();
+    }
+
+    public PrinterSdFile markDeleted(String id) {
+        PrinterSdFile existingFile = printerSdFileStore.findById(id)
+                .orElseThrow(() -> new IllegalStateException(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+        Instant now = Instant.now(clock);
+        PrinterSdFile updatedFile = new PrinterSdFile(
+                existingFile.id(),
+                existingFile.printerId(),
+                existingFile.firmwarePath(),
+                existingFile.displayName(),
+                existingFile.sizeBytes(),
+                existingFile.rawLine(),
+                existingFile.printFileId(),
+                false,
+                true,
+                now,
+                existingFile.createdAt(),
+                now);
+
+        printerSdFileStore.save(updatedFile);
+        return updatedFile;
     }
 
     private void validatePrinterId(String printerId) {

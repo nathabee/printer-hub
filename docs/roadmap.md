@@ -1660,7 +1660,7 @@ The upload path is currently verified and adapted against the Ender 2 Neo V3 sty
 
 ### step G — Autonomous real-printer print-start workflow and SD-card operation hardening
 
-status: planned
+status: done
 
 Purpose:
 
@@ -1683,6 +1683,7 @@ Goals:
 * validate printer readiness before print activation
 * support required preparation phases before print start
 * support printer-side file selection and activation as part of the job workflow
+* add basic monitoring-assisted autonomous print completion handling after activation
 * persist execution-step history for the print-start workflow
 * add explicit guarded delete of printer-side SD files from the SD Card administration view
 * track deleted printer-side files in persistence distinctly from enabled/disabled state
@@ -1714,12 +1715,14 @@ Suggested substeps:
 6. Add a monitoring/debug flag that enables printer command/response trace logging only when requested.
 7. Verify and test `.gcode` upload behavior with comment lines and representative real files.
 8. Add tests for print-start workflow decisions, SD delete behavior, debug-trace flag behavior, and commented-file upload handling.
+9. Add initial monitoring-assisted `RUNNING -> COMPLETED` handling for autonomous SD prints when firmware responses make completion observable.
 
 Expected result:
 
 * a real autonomous printer-side print can be started through the runtime as a controlled workflow
 * file-backed print jobs are no longer just metadata
 * print activation becomes coordinated, reviewable, and safer for real hardware use
+* basic autonomous completion detection is available through printer monitoring for observable firmware responses
 * SD-card administration covers enable/disable, delete, host upload, and operator-selected tracing
 * Mode 1 streamed printing remains a later local-runtime capability
 
@@ -1732,7 +1735,7 @@ status: planned
 
 Goals:
 
-* supervise Mode 2 running real-printer print jobs after activation
+* deepen Mode 2 running real-printer supervision beyond the initial completion handling added in Step G
 * expose running-print state and progress as far as the printer/firmware allows
 * support controlled pause and cancel behavior for active print jobs
 * distinguish clearly between:
@@ -1745,6 +1748,11 @@ Goals:
   * cancelled
 * persist terminal evidence and operator-visible outcome details
 * improve dashboard visibility for active print execution
+
+Already covered in Step G:
+
+* autonomous print-start workflow events and execution-step diagnostics
+* initial monitoring-assisted `RUNNING -> COMPLETED` handling when firmware responses expose completion
 
 Expected result:
 
@@ -1777,6 +1785,8 @@ Goals:
 * document and support `systemd` usage
 * define log location and working-directory expectations
 * prepare deployment on a local machine connected to printers
+* keep the current Ubuntu/Linux packaging path as the first documented target
+* add Windows-oriented packaging and verification after the Linux local-service path is stable
 
 Expected result:
 

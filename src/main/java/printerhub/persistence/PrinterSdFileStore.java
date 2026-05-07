@@ -29,15 +29,19 @@ public final class PrinterSdFileStore {
                     raw_line,
                     print_file_id,
                     enabled,
+                    deleted,
+                    deleted_at,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(printer_id, firmware_path) DO UPDATE SET
                     display_name = excluded.display_name,
                     size_bytes = excluded.size_bytes,
                     raw_line = excluded.raw_line,
                     print_file_id = COALESCE(excluded.print_file_id, printer_sd_files.print_file_id),
                     enabled = excluded.enabled,
+                    deleted = excluded.deleted,
+                    deleted_at = excluded.deleted_at,
                     updated_at = excluded.updated_at
                 """;
 
@@ -59,8 +63,10 @@ public final class PrinterSdFileStore {
             statement.setString(6, file.rawLine());
             statement.setString(7, file.printFileId());
             statement.setInt(8, file.enabled() ? 1 : 0);
-            statement.setString(9, file.createdAt().toString());
-            statement.setString(10, file.updatedAt().toString());
+            statement.setInt(9, file.deleted() ? 1 : 0);
+            statement.setString(10, file.deletedAt() == null ? null : file.deletedAt().toString());
+            statement.setString(11, file.createdAt().toString());
+            statement.setString(12, file.updatedAt().toString());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException(OperationMessages.FAILED_TO_SAVE_PRINTER_SD_FILE, exception);
@@ -175,6 +181,8 @@ public final class PrinterSdFileStore {
                     raw_line,
                     print_file_id,
                     enabled,
+                    deleted,
+                    deleted_at,
                     created_at,
                     updated_at
                 FROM printer_sd_files
@@ -191,6 +199,8 @@ public final class PrinterSdFileStore {
                 resultSet.getString("raw_line"),
                 resultSet.getString("print_file_id"),
                 resultSet.getInt("enabled") == 1,
+                resultSet.getInt("deleted") == 1,
+                nullableInstant(resultSet, "deleted_at"),
                 Instant.parse(resultSet.getString("created_at")),
                 Instant.parse(resultSet.getString("updated_at"))
         );
@@ -202,5 +212,13 @@ public final class PrinterSdFileStore {
             return null;
         }
         return value;
+    }
+
+    private Instant nullableInstant(ResultSet resultSet, String columnName) throws SQLException {
+        String value = resultSet.getString(columnName);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return Instant.parse(value);
     }
 }
