@@ -444,6 +444,11 @@ class PrinterMonitoringTaskTest {
         }
 
         @Override
+        public String sendRawLine(String line) {
+            return "ok";
+        }
+
+        @Override
         public String sendCommand(String command) {
             sendCommandCalls++;
             lastCommand = command;

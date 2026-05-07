@@ -12,6 +12,10 @@ This roadmap separates the PrinterHub project into three architectural stages:
 
 ---
 
+<details >
+  <summary>0.0.x — Prototype Foundation (done)</summary>
+ 
+
 ## 0.0.x — Prototype Foundation (done)
 
 status: closed after `0.0.19`
@@ -586,6 +590,18 @@ snapshot.storeOnStateChange = true
 
 ---
  
+</details>
+
+----
+
+
+<details  >
+  <summary>0.1.x — Local Farm Runtime Architecture</summary>
+
+
+
+
+
 ## 0.1.x — Local Farm Runtime Architecture
 
 Goal:
@@ -1113,6 +1129,18 @@ Expected result:
 ---
  
 
+
+ 
+</details>
+
+
+<details open>
+  <summary>0.2.x — Local Runtime Administration and Job Management</summary>
+ 
+
+
+
+
 ## 0.2.x — Local Runtime Administration and Job Management
 
 Goal:
@@ -1305,6 +1333,8 @@ Expected result:
  
 ---
 
+</details>
+
 ## 0.2.3 — Local Audit, History Views, and Controlled Job Actions
 
 status: in progress
@@ -1480,19 +1510,184 @@ Expected result:
 
 ---
 
-### step F — Controlled real-printer print-start workflow
+Future local print execution mode split:
 
-status: planned
+```text
+Mode 1 — streamed job
+PrinterHub owns the command stream.
+PrintJobExecutionService sends G-code commands line by line,
+waits for firmware acceptance, records diagnostics, and controls the full flow.
+
+Mode 2 — autonomous printer job
+PrinterHub stores or exposes a prepared file, requests print start,
+monitors printer state, and persists telemetry/events while the printer firmware
+owns the print execution.
+```
+
+0.2.3 continues with Mode 2 first because it is the safer first real-print path
+for local PrinterHub operation. Mode 1 remains useful for mini jobs, calibration
+jobs, controlled command sequences, and future streaming workflows, but it should
+not block the first autonomous print activation milestone.
+
+---
+
+
+### step F — SD-card administration and guarded host-side G-code upload
+
+status: done
+
+Purpose:
+
+Make the selected-printer SD Card workflow real and usable:
+
+```text
+PrinterHub can inspect printer-side SD files,
+register and manage printable targets,
+store host-side .gcode files,
+and copy a host-side file to a real printer SD card through
+a guarded Marlin-style upload session.
+```
+
+This step does not yet start a real autonomous print from the uploaded file.
 
 Goals:
 
-* implement controlled execution of file-backed print jobs
-* treat print start as a multi-step workflow, not as one direct command send
+* add a selected-printer SD Card view to inspect printer-side printable files
+* move file preparation/upload responsibilities out of Print job creation and into the SD Card view
+* make SD upload feedback visible in the dashboard with clear in-progress / success / failure status
+* support Marlin-style host-driven SD upload only through a dedicated guarded upload session, not through the simple single-command path
+* prevent conflicting access between monitoring, manual commands, and active SD upload execution
+* persist SD-card listing, registration, enable/disable, and upload diagnostics
+
+Selected-printer dashboard addition:
+
+```text
+Selected Printer
+├── Home
+├── Print
+├── SD Card
+├── Prepare
+├── Control
+├── Info
+└── History
+```
+
+SD Card view scope:
+
+* list printer-side files as reported by the firmware
+* show the information available from the printer, such as:
+
+  * filename
+  * size when available
+  * date/time when available
+  * raw firmware line/details when richer parsing is not yet reliable
+* refresh the SD-card file list on user demand
+* automatically register newly discovered printer-side files when the SD-card list is refreshed, using the firmware-reported path as the printer-side path
+* keep registration separate from print availability:
+
+  * registered means PrinterHub knows that this printer-side path exists or existed
+  * enabled means the file is allowed to appear in `PRINT_FILE` job creation
+  * disabled registered files remain in persistence/history but are hidden from normal print-job selection
+* register or upload a host-side `.gcode` file into the configured PrinterHub print-file storage directory
+* show the relationship between host-side file metadata and printer-side firmware path when known
+* allow review/edit of the host-side registered `.gcode` file before it is copied to the printer SD card, where safe
+* upload/copy a registered host-side file to the printer SD card only when a reliable transfer path is confirmed
+* show guarded upload status directly in the SD Card view
+* after a host-side file is copied to a printer SD card, refresh/read that printer SD card so the resulting firmware path can be registered for that specific printer
+* provide the registered printer-side file target that the Print page can later use for autonomous `PRINT_FILE` jobs
+
+Print page scope after this split:
+
+* create a print job from an enabled, already registered printer-side file target
+* do not upload, edit, or register `.gcode` files directly in the job creation form
+* show enough file identity for the operator to know what will be printed:
+
+  * display name when available
+  * firmware path / printer SD path
+  * source host file when linked
+  * size when available
+
+Backend/API scope:
+
+* add printer-specific SD-card/file-list operations
+* add persistent mapping/registration for printer-side files discovered on SD card
+* add enabled/disabled state to registered printer-side file targets and filter job creation to enabled targets
+* add API support for registering an existing SD-card firmware path as a printable target
+* add API support for enabling/disabling registered printer-side file targets
+* keep host-side `.gcode` registration and upload APIs, but present them in the SD Card workflow rather than job creation
+* add guarded API support for copying/transferring a registered host-side file to one selected printer SD card
+* parse Marlin-style file-list responses as far as practical
+* persist relevant file-operation diagnostics as printer events and/or job execution steps
+* keep SD-card operations coordinated with monitoring and active jobs
+* implement dedicated upload/session handling for firmware that requires numbered and checksummed host upload lines during `M28`/`M29` file transfer
+* do not treat SD upload as a normal one-command request/response exchange
+
+Suggested substeps:
+
+1. Add firmware/file-list command support and parsing for SD-card listing. Done.
+2. Add backend API for selected-printer SD-card file listing. Done.
+3. Add the dashboard SD Card menu and read-only file list. Done.
+4. Add automatic printer-side file registration for files discovered on SD-card refresh. Done.
+5. Move host-side `.gcode` register/upload UI from Print job creation into the SD Card workflow. Done.
+6. Persist/link host-side file metadata to printer-side firmware path when known. Done.
+7. Change Print job creation so it only selects a registered printer-side printable target. Done.
+8. Add enabled/disabled state for registered printer-side files and filter Print job creation to enabled targets. Done.
+9. Add dashboard controls to enable/disable registered printer-side files. Done.
+10. Add guarded host-file-to-printer-SD transfer entry points in backend and dashboard. Done.
+11. Add dashboard-visible upload status and clearer operator error reporting for SD upload attempts. Done.
+12. Real-printer verify the transfer path on the Ender-style Marlin path. Done.
+13. Implement `SdCardUploadService` as a dedicated upload/session service instead of reusing the simple command path. Done.
+14. Implement numbered/checksummed line streaming for SD upload, including resend handling and clean `M29` close. Done.
+15. After transfer, refresh SD-card listing and link the discovered printer-side path to the host print file where possible. Done with confirmation-only linking.
+16. Persist workflow steps and printer events for listing, registration, enable/disable, transfer, resend, confirmation, and failures. Done.
+17. Add tests for list parsing, API responses, file registration/mapping, enable/disable filtering, upload-session behavior, checksum/resend handling, busy-printer rejection, and unsupported file operations. Done.
+
+Expected result:
+
+* the selected-printer dashboard can inspect printer-side SD-card files
+* the SD Card page owns file preparation, host upload, SD-card registration, and guarded transfer actions
+* the Print page creates jobs only from registered printer-side printable targets
+* PrinterHub can copy a host-side `.gcode` file to the verified real printer SD card through a dedicated numbered/checksummed upload session
+* upload confirmation depends on the printer SD listing, not on optimistic fallback registration
+* Mode 2 print activation remains the next step
+
+Note:
+
+The upload path is currently verified and adapted against the Ender 2 Neo V3 style Marlin behavior. On that path, PrinterHub resets host line numbering, opens `M28` inside the numbered session, streams numbered/checksummed content lines, closes with numbered `M29`, and verifies with numbered `M20`.
+
+---
+
+
+### step G — Autonomous real-printer print-start workflow and SD-card operation hardening
+
+status: planned
+
+Purpose:
+
+Turn the prepared SD-card/runtime model from Step F into actual autonomous
+printer-side print activation, and finish the remaining SD-card administration
+hardening.
+
+Step G is about Mode 2:
+
+```text
+PrinterHub selects a registered printer-side file target,
+asks the printer firmware to start printing it,
+then observes the printer through monitoring, events, and job diagnostics.
+```
+
+Goals:
+
+* implement Mode 2 controlled execution of file-backed `PRINT_FILE` jobs
+* treat autonomous print start as a multi-step workflow, not as one direct command send
 * validate printer readiness before print activation
-* prevent conflicting access between monitoring, manual commands, and active job execution
 * support required preparation phases before print start
-* support transfer and/or activation of the selected printable file as part of the job workflow
+* support printer-side file selection and activation as part of the job workflow
 * persist execution-step history for the print-start workflow
+* add explicit guarded delete of printer-side SD files from the SD Card administration view
+* track deleted printer-side files in persistence distinctly from enabled/disabled state
+* add a monitoring/debug setting that enables printer wire trace logging only when operators request it
+* verify and test upload behavior for `.gcode` files containing comments
 
 Typical workflow scope:
 
@@ -1502,25 +1697,42 @@ PRINT_FILE
 ├── validate no conflicting active job
 ├── validate fresh enough runtime state
 ├── optional prepare / homing / thermal checks
-├── validate selected file
-├── transfer or make file available to printer
-├── start print
+├── validate selected registered printer-side file target
+├── inspect SD-card file state when needed
+├── select firmware path / printer SD path
+├── request autonomous print start
 └── transition job to RUNNING
 ```
 
+Suggested substeps:
+
+1. Implement guarded printer-side file selection / print-start workflow.
+2. Persist workflow steps and printer events for selection, activation, running transition, and failures.
+3. Add explicit guarded delete only after real-printer command behavior is verified.
+4. Extend printer-side file persistence beyond enable/disable so deleted files can remain traceable in history.
+5. Add dashboard delete controls in the SD Card administration view.
+6. Add a monitoring/debug flag that enables printer command/response trace logging only when requested.
+7. Verify and test `.gcode` upload behavior with comment lines and representative real files.
+8. Add tests for print-start workflow decisions, SD delete behavior, debug-trace flag behavior, and commented-file upload handling.
+
 Expected result:
 
-* a real print can be started through the runtime as a controlled workflow
+* a real autonomous printer-side print can be started through the runtime as a controlled workflow
 * file-backed print jobs are no longer just metadata
 * print activation becomes coordinated, reviewable, and safer for real hardware use
+* SD-card administration covers enable/disable, delete, host upload, and operator-selected tracing
+* Mode 1 streamed printing remains a later local-runtime capability
 
-### step G — Running print supervision and operator controls
+---
+
+
+### step H — Autonomous running print supervision and operator controls
 
 status: planned
 
 Goals:
 
-* supervise running real-printer print jobs after activation
+* supervise Mode 2 running real-printer print jobs after activation
 * expose running-print state and progress as far as the printer/firmware allows
 * support controlled pause and cancel behavior for active print jobs
 * distinguish clearly between:
@@ -1536,7 +1748,7 @@ Goals:
 
 Expected result:
 
-* real print jobs are not only startable but operable
+* autonomous real print jobs are not only startable but operable
 * dashboard and API can follow running print execution more meaningfully
 * completion, cancellation, and failure become properly reviewable in job history
 
@@ -1621,8 +1833,8 @@ status: planned
 
 Goals:
 
-* harden host-side handling of printable files used by file-backed jobs
-* clarify how PrinterHub transfers or exposes prepared `.gcode` files to the printer
+* harden Mode 2 host-side handling of printable files used by file-backed jobs
+* clarify how PrinterHub transfers, selects, or exposes prepared `.gcode` files to the printer
 * improve validation and error reporting around missing, unreadable, or invalid print files
 * make print-file handling more reviewable in dashboard and API
 * avoid ambiguous failures during print activation caused by file-path or transfer problems
@@ -1635,8 +1847,8 @@ Focus:
 
   * job exists but file missing
   * file invalid
-  * file cannot be transferred
-  * printer-side print activation failed after transfer
+  * file cannot be transferred, selected, or exposed
+  * printer-side print activation failed after transfer/selection
 * persist file-related diagnostics in job execution history
 
 Expected result:
@@ -1674,6 +1886,93 @@ Expected result:
 
 
 ---
+
+## 0.2.8 — Streamed G-code Job Execution
+
+status: planned
+
+Purpose:
+
+Introduce Mode 1 for local jobs where PrinterHub owns the command stream.
+
+This is intentionally planned after the autonomous print path because streamed
+printing turns PrinterHub into the real-time sender. It requires stronger flow
+control, response tracking, cancellation behavior, and recovery rules than
+autonomous printer-side execution.
+
+Goals:
+
+* support a streamed job execution mode for selected `.gcode` files or generated mini jobs
+* send G-code commands sequentially through `PrintJobExecutionService`
+* wait for firmware acceptance before sending the next command
+* persist per-line or grouped execution diagnostics without flooding history unnecessarily
+* support pause, cancel, and failure handling for a PrinterHub-owned stream
+* coordinate streamed execution with monitoring so status polling does not corrupt the command flow
+* keep streamed mode separate from autonomous printer-side print mode in API, persistence, and dashboard wording
+
+Typical workflow scope:
+
+```text
+STREAMED_GCODE
+├── validate printer enabled/reachable
+├── validate no conflicting active job
+├── validate selected .gcode file or mini-job command list
+├── open controlled printer session
+├── send next command
+├── wait for ok / busy / error / timeout
+├── persist grouped diagnostics
+├── repeat until complete, cancelled, or failed
+└── close controlled printer session
+```
+
+Expected result:
+
+* PrinterHub can execute small controlled G-code streams itself
+* mini jobs and future calibration workflows can be controlled line by line
+* autonomous print mode remains available for normal printer-side file execution
+* local 0.2.x printing supports both architecture models without moving central monitoring into scope
+
+---
+
+## 0.2.9 — Local Security, Roles, and Dangerous Action Guards
+
+status: planned
+
+Goals:
+
+* distinguish read-only monitoring actions from state-changing printer actions
+* protect dangerous operations behind explicit confirmation
+* introduce local operator/admin role separation
+* prevent accidental execution of risky commands from the dashboard
+* define safety wording for heating, movement, SD delete, cancel, and streamed execution
+* add audit entries for all operator-triggered state-changing actions
+* prepare authentication boundaries before central VPS integration
+
+Risky action groups:
+
+```text
+heating
+movement
+homing
+fan control
+SD delete
+file upload/overwrite
+print start
+pause/resume/cancel
+emergency stop
+streamed G-code execution
+raw command execution
+```
+
+Expected result:
+
+* PrinterHub becomes safer for real hardware operation
+* operator actions are traceable
+* central VPS integration later has a clean local permission model
+
+
+---
+
 ## 1.0.x — Central VPS Multi-Farm Management
 
 Goal:

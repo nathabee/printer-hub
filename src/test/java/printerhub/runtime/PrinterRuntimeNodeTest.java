@@ -51,8 +51,7 @@ class PrinterRuntimeNodeTest {
                 "SIM_PORT",
                 "sim",
                 new NoOpPrinterPort(),
-                true
-        );
+                true);
     }
 
     private static final class NoOpPrinterPort implements PrinterPort {
@@ -62,6 +61,11 @@ class PrinterRuntimeNodeTest {
 
         @Override
         public String sendCommand(String command) {
+            return "ok";
+        }
+
+        @Override
+        public String sendRawLine(String line) {
             return "ok";
         }
 

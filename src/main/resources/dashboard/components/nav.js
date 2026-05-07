@@ -12,6 +12,7 @@ const PRIMARY_ITEMS = [
 const PRINTER_ITEMS = [
   { id: PRINTER_VIEW_IDS.HOME, label: "Home" },
   { id: PRINTER_VIEW_IDS.PRINT, label: "Print" },
+  { id: PRINTER_VIEW_IDS.SD_CARD, label: "SD Card" },
   { id: PRINTER_VIEW_IDS.PREPARE, label: "Prepare" },
   { id: PRINTER_VIEW_IDS.CONTROL, label: "Control" },
   { id: PRINTER_VIEW_IDS.INFO, label: "Info" },

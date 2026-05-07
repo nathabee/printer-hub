@@ -19,3 +19,8 @@ jacoco-pretty.xml
 # development files
 scripts/**
 **/to_ignore/**
+
+printerhub-print-files/**
+
+# AI
+.codex

@@ -2,11 +2,13 @@ package printerhub;
 
 import printerhub.api.RemoteApiServer;
 import printerhub.command.PrinterCommandService;
+import printerhub.command.SdCardService;
 import printerhub.config.RuntimeDefaults;
 import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
+import printerhub.job.PrinterSdFileService;
 import printerhub.job.PrinterActionGuard;
 import printerhub.job.PrinterActionMapper;
 import printerhub.monitoring.PrinterMonitoringScheduler;
@@ -18,10 +20,11 @@ import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.persistence.PrintJobExecutionStepStore;
+import printerhub.persistence.PrinterSdFileStore;
 import printerhub.runtime.PrinterHubRuntime;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeStateCache;
-
+import printerhub.command.SdCardUploadService;
 import java.util.concurrent.CountDownLatch;
 
 public final class Main {
@@ -43,9 +46,11 @@ public final class Main {
                         PrintFileSettingsStore printFileSettingsStore = new PrintFileSettingsStore();
                         PrinterEventStore printerEventStore = new PrinterEventStore();
                         PrintFileStore printFileStore = new PrintFileStore();
+                        PrinterSdFileStore printerSdFileStore = new PrinterSdFileStore();
                         PrintJobStore printJobStore = new PrintJobStore();
 
                         PrinterCommandService printerCommandService = new PrinterCommandService(printerEventStore);
+                        SdCardService sdCardService = new SdCardService(printerEventStore);
 
                         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
                                         printerRegistry,
@@ -58,8 +63,20 @@ public final class Main {
                                         printFileStore,
                                         printFileSettingsStore,
                                         java.time.Clock.systemUTC());
+                        PrinterSdFileService printerSdFileService = new PrinterSdFileService(
+                                        printerSdFileStore,
+                                        printFileStore);
 
                         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
+                        SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                                        printerRegistry,
+                                        monitoringScheduler,
+                                        printerActionGuard,
+                                        printFileService,
+                                        sdCardService,
+                                        printerSdFileService,
+                                        printerEventStore);
 
                         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                         printJobService,
@@ -85,7 +102,10 @@ public final class Main {
                                         printFileSettingsStore,
                                         printerEventStore,
                                         printerCommandService,
+                                        sdCardService,
+                                        sdCardUploadService,
                                         printFileService,
+                                        printerSdFileService,
                                         printJobService,
                                         asyncPrintJobExecutor,
                                         new PrintJobExecutionStepStore());

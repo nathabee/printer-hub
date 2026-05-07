@@ -264,11 +264,26 @@ textarea:focus {
   background: var(--bg-app);
 }
 
+.main-panel-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  gap: 0.85rem;
+  padding-bottom: 0.35rem;
+  background: linear-gradient(180deg, var(--bg-app) 0%, var(--bg-app) 86%, rgba(11, 18, 32, 0) 100%);
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
   align-items: start;
   gap: 1rem;
+  padding: 1rem 1.1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 .topbar h2,
@@ -308,7 +323,44 @@ textarea:focus {
 }
 
 .global-message {
-  min-height: 1.5rem;
+  display: none;
+  padding: 0.95rem 1.1rem;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.global-message.is-visible {
+  display: block;
+}
+
+.global-message.global-message-info {
+  background: var(--primary-soft);
+  border-color: rgba(123, 170, 230, 0.42);
+  color: var(--text-main);
+}
+
+.global-message.global-message-success {
+  background: var(--ok-soft);
+  border-color: rgba(106, 217, 160, 0.4);
+  color: var(--text-main);
+}
+
+.global-message.global-message-warning {
+  background: var(--warn-soft);
+  border-color: rgba(245, 182, 111, 0.42);
+  color: var(--text-main);
+}
+
+.global-message.global-message-error {
+  background: var(--danger-soft);
+  border-color: rgba(255, 138, 128, 0.42);
+  color: var(--text-main);
 }
 
 .page-content {
@@ -565,6 +617,28 @@ textarea:focus {
   border-radius: 14px;
 }
 
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
 .event-header {
   display: flex;
   justify-content: space-between;
@@ -572,6 +646,8 @@ textarea:focus {
   align-items: start;
   margin-bottom: 0.4rem;
 }
+
+
 
 .form-grid {
   display: grid;

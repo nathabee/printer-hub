@@ -230,7 +230,7 @@ class PrinterMonitoringSchedulerTest {
                                 "SIM_PORT",
                                 "sim",
                                 new TestPrinterPort(),
-                                true);
+                                false);
 
                 registry.register(node);
 
@@ -342,6 +342,11 @@ class PrinterMonitoringSchedulerTest {
                 @Override
                 public void connect() {
                         // no-op
+                }
+
+                @Override
+                public String sendRawLine(String line) {
+                        return "ok";
                 }
 
                 @Override

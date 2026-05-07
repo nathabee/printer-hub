@@ -1,11 +1,13 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>PrinterHub Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/dashboard/dashboard.css">
 </head>
+
 <body>
   <div class="app-shell">
     <aside class="sidebar">
@@ -17,7 +19,8 @@
 
       <nav id="primaryNav" class="primary-nav" aria-label="Primary"></nav>
 
-      <section id="selectedPrinterNavSection" class="printer-nav-section hidden" aria-labelledby="selectedPrinterNavTitle">
+      <section id="selectedPrinterNavSection" class="printer-nav-section hidden"
+        aria-labelledby="selectedPrinterNavTitle">
         <div class="section-header compact">
           <div>
             <h2 id="selectedPrinterNavTitle">Selected printer</h2>
@@ -27,24 +30,25 @@
         <nav id="selectedPrinterNav" class="secondary-nav" aria-label="Selected printer"></nav>
       </section>
     </aside>
-
     <main class="main-panel">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Operator console</p>
-          <h2 id="pageTitle">Loading dashboard</h2>
-          <p id="pageLead" class="lead">Preparing dashboard shell.</p>
-        </div>
-        <div class="topbar-actions">
-          <div class="refresh-meta">
-            <span class="muted">Last refresh</span>
-            <strong id="lastRefresh">never</strong>
+      <div class="main-panel-sticky">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Operator console</p>
+            <h2 id="pageTitle">Loading dashboard</h2>
+            <p id="pageLead" class="lead">Preparing dashboard shell.</p>
           </div>
-          <button id="refreshButton" type="button">Refresh now</button>
-        </div>
-      </header>
+          <div class="topbar-actions">
+            <div class="refresh-meta">
+              <span class="muted">Last refresh</span>
+              <strong id="lastRefresh">never</strong>
+            </div>
+            <button id="refreshButton" type="button">Refresh now</button>
+          </div>
+        </header>
 
-      <section id="globalMessage" class="global-message muted" aria-live="polite"></section>
+        <section id="globalMessage" class="global-message global-message-info" aria-live="polite"></section>
+      </div>
 
       <section id="pageContent" class="page-content" aria-live="polite">
         <div class="empty-state">
@@ -57,4 +61,5 @@
 
   <script type="module" src="/dashboard/dashboard.js"></script>
 </body>
+
 </html>

@@ -6,5 +6,7 @@ public interface PrinterPort {
 
     String sendCommand(String command);
 
+    String sendRawLine(String line);
+
     void disconnect();
 }

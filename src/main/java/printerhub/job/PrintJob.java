@@ -12,6 +12,7 @@ public final class PrintJob {
     private final JobState state;
     private final String printerId;
     private final String printFileId;
+    private final String printerSdFileId;
     private final Double targetTemperature;
     private final Integer fanSpeed;
     private final String failureReason;
@@ -43,6 +44,7 @@ public final class PrintJob {
                 state,
                 printerId,
                 null,
+                null,
                 targetTemperature,
                 fanSpeed,
                 failureReason,
@@ -61,6 +63,7 @@ public final class PrintJob {
             JobState state,
             String printerId,
             String printFileId,
+            String printerSdFileId,
             Double targetTemperature,
             Integer fanSpeed,
             String failureReason,
@@ -95,6 +98,7 @@ public final class PrintJob {
         this.state = state;
         this.printerId = printerId == null || printerId.isBlank() ? null : printerId.trim();
         this.printFileId = printFileId == null || printFileId.isBlank() ? null : printFileId.trim();
+        this.printerSdFileId = printerSdFileId == null || printerSdFileId.isBlank() ? null : printerSdFileId.trim();
         this.targetTemperature = targetTemperature;
         this.fanSpeed = fanSpeed;
         this.failureReason = failureReason == null || failureReason.isBlank() ? null : failureReason.trim();
@@ -114,7 +118,7 @@ public final class PrintJob {
             Integer fanSpeed,
             Instant now
     ) {
-        return created(id, name, type, printerId, null, targetTemperature, fanSpeed, now);
+        return created(id, name, type, printerId, null, null, targetTemperature, fanSpeed, now);
     }
 
     public static PrintJob created(
@@ -123,6 +127,20 @@ public final class PrintJob {
             JobType type,
             String printerId,
             String printFileId,
+            Double targetTemperature,
+            Integer fanSpeed,
+            Instant now
+    ) {
+        return created(id, name, type, printerId, printFileId, null, targetTemperature, fanSpeed, now);
+    }
+
+    public static PrintJob created(
+            String id,
+            String name,
+            JobType type,
+            String printerId,
+            String printFileId,
+            String printerSdFileId,
             Double targetTemperature,
             Integer fanSpeed,
             Instant now
@@ -138,6 +156,7 @@ public final class PrintJob {
                 printerId == null || printerId.isBlank() ? JobState.CREATED : JobState.ASSIGNED,
                 printerId,
                 printFileId,
+                printerSdFileId,
                 targetTemperature,
                 fanSpeed,
                 null,
@@ -171,6 +190,10 @@ public final class PrintJob {
 
     public String printFileId() {
         return printFileId;
+    }
+
+    public String printerSdFileId() {
+        return printerSdFileId;
     }
 
     public Double targetTemperature() {
@@ -220,6 +243,7 @@ public final class PrintJob {
                 newState,
                 printerId,
                 printFileId,
+                printerSdFileId,
                 targetTemperature,
                 fanSpeed,
                 failureReason,
@@ -246,6 +270,7 @@ public final class PrintJob {
                 JobState.RUNNING,
                 printerId,
                 printFileId,
+                printerSdFileId,
                 targetTemperature,
                 fanSpeed,
                 null,
@@ -272,6 +297,7 @@ public final class PrintJob {
                 JobState.COMPLETED,
                 printerId,
                 printFileId,
+                printerSdFileId,
                 targetTemperature,
                 fanSpeed,
                 null,
@@ -300,6 +326,7 @@ public final class PrintJob {
                 JobState.FAILED,
                 printerId,
                 printFileId,
+                printerSdFileId,
                 targetTemperature,
                 fanSpeed,
                 failureReason,
@@ -323,6 +350,7 @@ public final class PrintJob {
                 JobState.CANCELLED,
                 printerId,
                 printFileId,
+                printerSdFileId,
                 targetTemperature,
                 fanSpeed,
                 failureReason,

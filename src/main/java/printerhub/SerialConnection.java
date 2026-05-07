@@ -75,8 +75,7 @@ public final class SerialConnection implements PrinterPort {
             out = null;
             throw new IllegalStateException(
                     OperationMessages.failedToInitializeSerialStreams(portName),
-                    exception
-            );
+                    exception);
         }
     }
 
@@ -100,21 +99,18 @@ public final class SerialConnection implements PrinterPort {
             disconnect();
             throw new IllegalStateException(
                     OperationMessages.failedToSendCommand(trimmedCommand, portName),
-                    exception
-            );
+                    exception);
         } catch (TimeoutException exception) {
             disconnect();
             throw new IllegalStateException(
                     OperationMessages.noResponseForCommandOnPort(trimmedCommand, portName),
-                    exception
-            );
+                    exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             disconnect();
             throw new IllegalStateException(
                     OperationMessages.interruptedWhileReadingResponse(portName),
-                    exception
-            );
+                    exception);
         } catch (RuntimeException exception) {
             disconnect();
             throw exception;
@@ -138,9 +134,43 @@ public final class SerialConnection implements PrinterPort {
                     portName,
                     OperationMessages.safeDetail(
                             exception.getMessage(),
-                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR
-                    )
-            ));
+                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR)));
+        }
+    }
+
+    @Override
+    public synchronized String sendRawLine(String line) {
+        ensureConnected();
+
+        if (line == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("line"));
+        }
+
+        try {
+            out.write((line + SerialDefaults.DEFAULT_COMMAND_TERMINATOR)
+                    .getBytes(StandardCharsets.UTF_8));
+            out.flush();
+
+            return readLine(SerialDefaults.LONG_RUNNING_COMMAND_READ_TIMEOUT_MS);
+        } catch (IOException exception) {
+            disconnect();
+            throw new IllegalStateException(
+                    OperationMessages.failedToSendCommand(line, portName),
+                    exception);
+        } catch (TimeoutException exception) {
+            disconnect();
+            throw new IllegalStateException(
+                    OperationMessages.noResponseForCommandOnPort(line, portName),
+                    exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            disconnect();
+            throw new IllegalStateException(
+                    OperationMessages.interruptedWhileReadingResponse(portName),
+                    exception);
+        } catch (RuntimeException exception) {
+            disconnect();
+            throw exception;
         }
     }
 
@@ -199,8 +229,7 @@ public final class SerialConnection implements PrinterPort {
 
         if (cleaned.isEmpty()) {
             throw new TimeoutException(
-                    OperationMessages.noResponseWithinTimeout(readTimeoutMs)
-            );
+                    OperationMessages.noResponseWithinTimeout(readTimeoutMs));
         }
 
         return cleaned;
@@ -223,8 +252,7 @@ public final class SerialConnection implements PrinterPort {
     private void ensureConnected() {
         if (!isConnected()) {
             throw new IllegalStateException(
-                    OperationMessages.SERIAL_CONNECTION_IS_NOT_OPEN + " " + portName
-            );
+                    OperationMessages.SERIAL_CONNECTION_IS_NOT_OPEN + " " + portName);
         }
     }
 
@@ -246,9 +274,7 @@ public final class SerialConnection implements PrinterPort {
                     portName,
                     OperationMessages.safeDetail(
                             exception.getMessage(),
-                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR
-                    )
-            ));
+                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR)));
         }
     }
 
@@ -264,9 +290,8 @@ public final class SerialConnection implements PrinterPort {
                     resourceName,
                     OperationMessages.safeDetail(
                             exception.getMessage(),
-                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR
-                    )
-            ));
+                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR)));
         }
     }
+
 }

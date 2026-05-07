@@ -24,22 +24,6 @@ export function renderPrinterPrint(printer, jobsForPrinter) {
         </div>
       </div>
 
-      <form id="printFileForm" class="form-grid">
-        <label>
-          Upload .gcode file
-          <input id="printFileUploadInput" name="file" type="file" accept=".gcode">
-        </label>
-
-        <label>
-          Existing host .gcode path
-          <input id="printFilePathInput" name="path" type="text" placeholder="/home/user/prints/cube.gcode">
-        </label>
-
-        <div class="form-actions">
-          <button type="submit">Save print file</button>
-        </div>
-      </form>
-
       <form id="jobForm" class="form-grid">
         <label>
           Job name
@@ -69,9 +53,9 @@ export function renderPrinterPrint(printer, jobsForPrinter) {
         </label>
 
         <label>
-          Print file
-          <select id="jobPrintFileIdInput" name="printFileId">
-            ${buildPrintFileOptions()}
+          Printer-side print file
+          <select id="jobPrinterSdFileIdInput" name="printerSdFileId">
+            ${buildPrinterSdFileOptions(printer.id)}
           </select>
         </label>
 
@@ -155,14 +139,14 @@ function buildPrinterOptions(selectedPrinterId) {
   ].join("");
 }
 
-function buildPrintFileOptions() {
-  const printFiles = state.printFiles;
+function buildPrinterSdFileOptions(printerId) {
+  const files = state.printerSdFiles.filter((file) => file.printerId === printerId && file.enabled === true);
 
   return [
-    `<option value="">Select .gcode file for PRINT_FILE jobs</option>`,
-    ...printFiles.map((printFile) => `
-      <option value="${escapeHtml(printFile.id)}">
-        ${escapeHtml(printFile.originalFilename || printFile.path || printFile.id)}
+    `<option value="">Select enabled SD file for PRINT_FILE jobs</option>`,
+    ...files.map((file) => `
+      <option value="${escapeHtml(file.id)}">
+        ${escapeHtml(file.displayName || file.firmwarePath || file.id)}
       </option>
     `)
   ].join("");

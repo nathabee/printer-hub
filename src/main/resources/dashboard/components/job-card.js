@@ -41,6 +41,10 @@ export function renderJobCard(job, options = {}) {
           ${job.printFileId ? `<button type="button" class="secondary-button small-button" data-job-action="show-print-file" data-job-id="${escapeHtml(job.id)}">Show</button>` : ""}
         </span>
       </div>
+      <div class="info-row">
+        <span>Printer SD target</span>
+        <strong>${escapeHtml(job.printerSdFileId || "none")}</strong>
+      </div>
 
       <div class="message-block">
         <span class="message-label">Failure detail</span>

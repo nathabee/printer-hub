@@ -176,6 +176,7 @@ POST   /printers/{id}/disable
 GET    /printers/{id}/status
 GET    /printers/{id}/events
 POST   /printers/{id}/commands
+GET    /printers/{id}/sd-card/files
 
 GET    /print-files
 POST   /print-files
@@ -588,6 +589,7 @@ PrinterHub
 Selected Printer
 ├── Home
 ├── Print
+├── SD Card
 ├── Prepare
 ├── Control
 ├── Info

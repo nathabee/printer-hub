@@ -33,9 +33,11 @@ The current implementation provides:
 * SQLite persistence for printer configuration, monitoring rules, snapshots, events, jobs, and execution diagnostics
 * embedded dashboard with two-level navigation
 * selected-printer workspace inspired by the printer display logic
+* selected-printer SD Card administration for printer-side file discovery and host-side file preparation
 * controlled job-oriented actions instead of only raw direct command sending
 * asynchronous job start with bounded background execution
 * job history, printer history, execution events, and structured workflow-step diagnostics
+* guarded host-to-printer SD-card `.gcode` upload for the verified real-printer Marlin path
 * simulation modes for normal and failing printer behavior
 * Jenkins CI verification and runtime smoke tests
 
@@ -158,9 +160,11 @@ PrinterHub
 Selected Printer
 ├── Home
 ├── Print
+├── SD Card
 ├── Prepare
 ├── Control
-└── Info
+├── Info
+└── History
 ```
 
 This structure is designed to stay aligned with the practical logic of operating a printer, while still supporting local runtime administration and diagnostics.
@@ -175,9 +179,9 @@ This structure is designed to stay aligned with the practical logic of operating
       <sub>Farm Home</sub>
     </td>
     <td align="center">
-      <img src="docs/assets/media-src/screenshot-printerhub-dashboard-02.png" alt="PrinterHub dashboard jobs view" width="100%">
+      <img src="docs/assets/media-src/screenshot-printerhub-dashboard-02.png" alt="SD card management" width="100%">
       <br>
-      <sub>Jobs</sub>
+      <sub>SD card management</sub>
     </td>
   </tr>
   <tr>
@@ -196,6 +200,17 @@ This structure is designed to stay aligned with the practical logic of operating
 
 The dashboard is part of the local runtime architecture and reads through the API layer.
 
+The **SD Card** view now owns:
+
+* printer-side SD file listing
+* registration of printer-side printable targets
+* enable / disable of registered printable targets
+* host-side `.gcode` registration and upload
+* guarded copy of a host-side `.gcode` file to the selected printer SD card
+
+The **Print** view now creates `PRINT_FILE` jobs only from already registered
+printer-side file targets.
+
 ---
 
 ## Jobs and controlled actions
@@ -213,8 +228,10 @@ What is already available:
 * job event visibility
 * job execution result visibility
 * structured execution-step diagnostics
-* host-side `.gcode` print-file registration and dashboard upload
-* file-backed `PRINT_FILE` jobs represented as prepared metadata
+* host-side `.gcode` print-file registration and dashboard upload through the SD Card workflow
+* printer-side SD file discovery, registration, and enable/disable management
+* guarded host-to-printer SD-card `.gcode` upload
+* file-backed `PRINT_FILE` jobs created from registered printer-side SD targets
 * controlled real-printer action workflows for selected action types
 
 Current controlled action scope:
@@ -231,7 +248,25 @@ TURN_FAN_OFF
 PRINT_FILE
 ```
 
-`PRINT_FILE` jobs reference an already prepared `.gcode` file on the PrinterHub host. PrinterHub can register an existing host path or save a dashboard-uploaded file into the configured print-file storage directory. It validates and persists the file metadata, but it does not slice, edit, or stream the G-code in this version.
+`PRINT_FILE` jobs now reference a registered printer-side SD target. PrinterHub
+can register an existing host path or save a dashboard-uploaded file into the
+configured print-file storage directory, then copy that host-side file to the
+selected printer SD card through a guarded upload session. It validates and
+persists the file metadata, but it does not slice, edit, or line-stream a full
+print in this version.
+
+Current limitation:
+
+* PrinterHub can prepare and upload a file to the printer SD card, but it does
+  not yet start the autonomous print from that SD target. That print-start
+  workflow is the next step.
+
+Real-printer note:
+
+* the currently verified SD-upload path was tested against an Ender 2 Neo V3
+  style Marlin behavior
+* on that path, PrinterHub uses a dedicated numbered/checksummed upload session
+  instead of the normal single-command request/response path
 
 Job start behavior:
 

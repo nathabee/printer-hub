@@ -1,0 +1,3482 @@
+===== src/main/java/printerhub/command/SdCardUploadService.java =====
+package printerhub.command;
+
+import printerhub.OperationMessages;
+import printerhub.job.JobFailureReason;
+import printerhub.job.PrintFile;
+import printerhub.job.PrintFileService;
+import printerhub.job.PrinterActionGuard;
+import printerhub.job.PrinterSdFile;
+import printerhub.job.PrinterSdFileService;
+import printerhub.monitoring.PrinterMonitoringScheduler;
+import printerhub.persistence.PrinterEventStore;
+import printerhub.runtime.PrinterRegistry;
+import printerhub.runtime.PrinterRuntimeNode;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+
+public final class SdCardUploadService {
+
+    private final PrinterRegistry printerRegistry;
+    private final PrinterMonitoringScheduler monitoringScheduler;
+    private final PrinterActionGuard printerActionGuard;
+    private final PrintFileService printFileService;
+    private final SdCardService sdCardService;
+    private final PrinterSdFileService printerSdFileService;
+    private final PrinterEventStore printerEventStore;
+
+    public SdCardUploadService(
+            PrinterRegistry printerRegistry,
+            PrinterMonitoringScheduler monitoringScheduler,
+            PrinterActionGuard printerActionGuard,
+            PrintFileService printFileService,
+            SdCardService sdCardService,
+            PrinterSdFileService printerSdFileService,
+            PrinterEventStore printerEventStore
+    ) {
+        if (printerRegistry == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_REGISTRY_MUST_NOT_BE_NULL);
+        }
+        if (monitoringScheduler == null) {
+            throw new IllegalArgumentException(OperationMessages.MONITORING_SCHEDULER_MUST_NOT_BE_NULL);
+        }
+        if (printerActionGuard == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ACTION_GUARD_MUST_NOT_BE_NULL);
+        }
+        if (printFileService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileService"));
+        }
+        if (sdCardService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("sdCardService"));
+        }
+        if (printerSdFileService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printerSdFileService"));
+        }
+        if (printerEventStore == null) {
+            throw new IllegalArgumentException(OperationMessages.EVENT_STORE_MUST_NOT_BE_NULL);
+        }
+
+        this.printerRegistry = printerRegistry;
+        this.monitoringScheduler = monitoringScheduler;
+        this.printerActionGuard = printerActionGuard;
+        this.printFileService = printFileService;
+        this.sdCardService = sdCardService;
+        this.printerSdFileService = printerSdFileService;
+        this.printerEventStore = printerEventStore;
+    }
+
+    public UploadResult uploadToPrinterSd(
+            String printerId,
+            String printFileId,
+            String requestedTargetFilename
+    ) {
+        if (printerId == null || printerId.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
+        }
+        if (printFileId == null || printFileId.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_ID_MUST_NOT_BE_BLANK);
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId.trim())
+                .orElseThrow(() -> new IllegalStateException(OperationMessages.PRINTER_NOT_FOUND));
+
+        PrinterActionGuard.GuardDecision decision = printerActionGuard.validateForSdUpload(node);
+        if (!decision.allowed()) {
+            throw new IllegalStateException(OperationMessages.safeDetail(
+                    decision.detail(),
+                    decision.failureReason() == null ? OperationMessages.PRECONDITION_FAILED : decision.failureReason().name()
+            ));
+        }
+
+        PrintFile printFile = printFileService.findById(printFileId.trim())
+                .orElseThrow(() -> new IllegalArgumentException(OperationMessages.PRINT_FILE_NOT_FOUND));
+
+        Path hostPath = Path.of(printFile.path()).toAbsolutePath().normalize();
+        validateHostFile(hostPath);
+
+        String targetFilename = normalizeTargetFilename(
+                requestedTargetFilename,
+                printFile.originalFilename()
+        );
+
+        String executionToken = "sd-upload:" + printFile.id() + ":" + Instant.now();
+
+        node.beginJobExecution(executionToken);
+        monitoringScheduler.stopMonitoring(node.id());
+
+        try {
+            printerEventStore.record(
+                    node.id(),
+                    null,
+                    "SD_CARD_UPLOAD_STARTED",
+                    "SD upload started: host file "
+                            + printFile.originalFilename()
+                            + " -> "
+                            + targetFilename
+            );
+
+            node.printerPort().connect();
+
+            String startResponse = node.printerPort().sendCommand("M28 " + targetFilename);
+
+            printerEventStore.record(
+                    node.id(),
+                    null,
+                    "SD_CARD_UPLOAD_WRITE_OPENED",
+                    "SD write opened: "
+                            + targetFilename
+                            + " | response="
+                            + OperationMessages.safeDetail(startResponse, "no response")
+            );
+
+            long uploadedLineCount = streamFileLines(node, hostPath);
+
+            String finishResponse = node.printerPort().sendCommand("M29");
+
+            printerEventStore.record(
+                    node.id(),
+                    null,
+                    "SD_CARD_UPLOAD_WRITE_FINISHED",
+                    "SD write finished: "
+                            + targetFilename
+                            + " | lines="
+                            + uploadedLineCount
+                            + " | response="
+                            + OperationMessages.safeDetail(finishResponse, "no response")
+            );
+
+            SdCardFileList fileList = sdCardService.listFiles(node);
+            for (SdCardFile file : fileList.files()) {
+                printerSdFileService.registerListedFile(node.id(), file);
+            }
+
+            PrinterSdFile linkedFile = linkUploadedTarget(node.id(), targetFilename, printFile.id(), fileList.files());
+
+            printerEventStore.record(
+                    node.id(),
+                    null,
+                    "SD_CARD_UPLOAD_SUCCEEDED",
+                    "SD upload succeeded: host file "
+                            + printFile.originalFilename()
+                            + " -> "
+                            + linkedFile.firmwarePath()
+            );
+
+            return new UploadResult(
+                    node.id(),
+                    printFile.id(),
+                    printFile.originalFilename(),
+                    targetFilename,
+                    linkedFile.firmwarePath(),
+                    linkedFile.id(),
+                    uploadedLineCount,
+                    true,
+                    null
+            );
+        } catch (Exception exception) {
+            String detail = OperationMessages.safeDetail(
+                    exception.getMessage(),
+                    JobFailureReason.UNKNOWN.name()
+            );
+
+            try {
+                printerEventStore.record(
+                        node.id(),
+                        null,
+                        "SD_CARD_UPLOAD_FAILED",
+                        "SD upload failed: host file "
+                                + printFile.originalFilename()
+                                + " -> "
+                                + targetFilename
+                                + " | detail="
+                                + detail
+                );
+            } catch (Exception persistException) {
+                System.err.println(OperationMessages.failedToPersistEvent(
+                        node.id(),
+                        OperationMessages.safeDetail(
+                                persistException.getMessage(),
+                                OperationMessages.FAILED_TO_SAVE_PRINTER_EVENT
+                        )
+                ));
+            }
+
+            throw exception;
+        } finally {
+            try {
+                node.printerPort().disconnect();
+            } catch (Exception exception) {
+                System.err.println(OperationMessages.failedToDisconnectPrinterNode(
+                        node.id(),
+                        OperationMessages.safeDetail(
+                                exception.getMessage(),
+                                OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR
+                        )
+                ));
+            }
+
+            node.endJobExecution();
+
+            try {
+                if (node.enabled()) {
+                    monitoringScheduler.startMonitoring(node);
+                }
+            } catch (Exception exception) {
+                System.err.println(OperationMessages.apiOperationFailed(
+                        OperationMessages.safeDetail(
+                                exception.getMessage(),
+                                OperationMessages.UNKNOWN_API_ERROR
+                        )
+                ));
+            }
+        }
+    }
+
+    private long streamFileLines(PrinterRuntimeNode node, Path hostPath) {
+        long uploadedLineCount = 0;
+
+        try (BufferedReader reader = Files.newBufferedReader(hostPath)) {
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                node.printerPort().sendRawLine(line);
+                uploadedLineCount++;
+            }
+        } catch (IOException exception) {
+            throw new IllegalStateException(OperationMessages.PRINT_FILE_MUST_BE_READABLE, exception);
+        }
+
+        return uploadedLineCount;
+    }
+
+    private PrinterSdFile linkUploadedTarget(
+            String printerId,
+            String targetFilename,
+            String printFileId,
+            List<SdCardFile> listedFiles
+    ) {
+        Optional<PrinterSdFile> exactMatch =
+                printerSdFileService.findByPrinterIdAndFirmwarePath(printerId, targetFilename);
+
+        if (exactMatch.isPresent()) {
+            PrinterSdFile file = exactMatch.get();
+            return printerSdFileService.register(
+                    file.printerId(),
+                    file.firmwarePath(),
+                    file.displayName(),
+                    file.sizeBytes(),
+                    file.rawLine(),
+                    printFileId
+            );
+        }
+
+        Optional<SdCardFile> listedMatch = listedFiles.stream()
+                .filter(file -> sameFirmwarePath(file.filename(), targetFilename))
+                .findFirst();
+
+        if (listedMatch.isPresent()) {
+            SdCardFile file = listedMatch.get();
+            return printerSdFileService.register(
+                    printerId,
+                    file.filename(),
+                    file.filename(),
+                    file.sizeBytes(),
+                    file.rawLine(),
+                    printFileId
+            );
+        }
+
+        return printerSdFileService.register(
+                printerId,
+                targetFilename,
+                targetFilename,
+                null,
+                "Uploaded target requested by PrinterHub: " + targetFilename,
+                printFileId
+        );
+    }
+
+    private boolean sameFirmwarePath(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+
+        return a.trim().equalsIgnoreCase(b.trim());
+    }
+
+    private void validateHostFile(Path hostPath) {
+        if (!Files.exists(hostPath)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_EXIST);
+        }
+        if (!Files.isRegularFile(hostPath)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_BE_REGULAR_FILE);
+        }
+        if (!Files.isReadable(hostPath)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_BE_READABLE);
+        }
+    }
+
+    private String normalizeTargetFilename(String requestedTargetFilename, String originalFilename) {
+        String candidate = requestedTargetFilename;
+
+        if (candidate == null || candidate.isBlank()) {
+            candidate = originalFilename;
+        }
+
+        if (candidate == null || candidate.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_FILENAME_MUST_NOT_BE_BLANK);
+        }
+
+        String normalized = Path.of(candidate.trim()).getFileName().toString();
+        normalized = normalized.replaceAll("[^A-Za-z0-9._/-]", "_");
+
+        if (normalized.isBlank() || ".".equals(normalized) || "..".equals(normalized)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_FILENAME_MUST_NOT_BE_BLANK);
+        }
+
+        String upper = normalized.toUpperCase(Locale.ROOT);
+
+        if (!(upper.endsWith(".GCODE") || upper.endsWith(".GCO"))) {
+            normalized = normalized + ".gco";
+        }
+
+        return normalized;
+    }
+
+    public record UploadResult(
+            String printerId,
+            String printFileId,
+            String originalFilename,
+            String requestedTargetFilename,
+            String linkedFirmwarePath,
+            String printerSdFileId,
+            long uploadedLineCount,
+            boolean success,
+            String detail
+    ) {
+    }
+}
+===== src/main/java/printerhub/PrinterPort.java =====
+package printerhub;
+
+public interface PrinterPort {
+
+    void connect();
+
+    String sendCommand(String command);
+
+    void sendRawLine(String line);
+
+    void disconnect();
+}
+===== src/main/java/printerhub/SerialConnection.java =====
+package printerhub;
+
+import printerhub.config.SerialDefaults;
+import printerhub.serial.JSerialCommPortAdapter;
+import printerhub.serial.SerialPortAdapter;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeoutException;
+
+public final class SerialConnection implements PrinterPort {
+
+    private final String portName;
+    private final int baudRate;
+
+    private SerialPortAdapter port;
+    private InputStream in;
+    private OutputStream out;
+
+    public SerialConnection(String portName) {
+        this(portName, SerialDefaults.DEFAULT_BAUD_RATE);
+    }
+
+    public SerialConnection(String portName, int baudRate) {
+        if (portName == null || portName.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PORT_NAME_MUST_NOT_BE_BLANK);
+        }
+
+        this.portName = portName.trim();
+        this.baudRate = baudRate;
+        this.port = null;
+    }
+
+    public SerialConnection(String portName, int baudRate, SerialPortAdapter portAdapter) {
+        if (portName == null || portName.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PORT_NAME_MUST_NOT_BE_BLANK);
+        }
+        if (portAdapter == null) {
+            throw new IllegalArgumentException(OperationMessages.PORT_ADAPTER_MUST_NOT_BE_NULL);
+        }
+
+        this.portName = portName.trim();
+        this.baudRate = baudRate;
+        this.port = portAdapter;
+    }
+
+    @Override
+    public synchronized void connect() {
+        if (isConnected()) {
+            return;
+        }
+
+        disconnect();
+
+        SerialPortAdapter activePort = port();
+
+        activePort.setBaudRate(baudRate);
+        activePort.setNumDataBits(SerialPortAdapter.EIGHT_DATA_BITS);
+        activePort.setNumStopBits(SerialPortAdapter.ONE_STOP_BIT);
+        activePort.setParity(SerialPortAdapter.NO_PARITY);
+        activePort.setComPortTimeouts(SerialPortAdapter.TIMEOUT_NONBLOCKING, 0, 0);
+
+        if (!activePort.openPort()) {
+            throw new IllegalStateException(OperationMessages.failedToOpenSerialPort(portName));
+        }
+
+        try {
+            in = activePort.getInputStream();
+            out = activePort.getOutputStream();
+        } catch (Exception exception) {
+            safelyClosePortOnly();
+            in = null;
+            out = null;
+            throw new IllegalStateException(
+                    OperationMessages.failedToInitializeSerialStreams(portName),
+                    exception);
+        }
+    }
+
+    @Override
+    public synchronized String sendCommand(String command) {
+        ensureConnected();
+
+        if (command == null || command.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.COMMAND_MUST_NOT_BE_BLANK);
+        }
+
+        String trimmedCommand = command.trim();
+        int readTimeoutMs = readTimeoutMsForCommand(trimmedCommand);
+
+        try {
+            out.write((trimmedCommand + SerialDefaults.DEFAULT_COMMAND_TERMINATOR)
+                    .getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            return readLine(readTimeoutMs);
+        } catch (IOException exception) {
+            disconnect();
+            throw new IllegalStateException(
+                    OperationMessages.failedToSendCommand(trimmedCommand, portName),
+                    exception);
+        } catch (TimeoutException exception) {
+            disconnect();
+            throw new IllegalStateException(
+                    OperationMessages.noResponseForCommandOnPort(trimmedCommand, portName),
+                    exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            disconnect();
+            throw new IllegalStateException(
+                    OperationMessages.interruptedWhileReadingResponse(portName),
+                    exception);
+        } catch (RuntimeException exception) {
+            disconnect();
+            throw exception;
+        }
+    }
+
+    @Override
+    public synchronized void disconnect() {
+        closeQuietly(in, "serial input stream");
+        in = null;
+
+        closeQuietly(out, "serial output stream");
+        out = null;
+
+        try {
+            if (port != null && port.isOpen()) {
+                port.closePort();
+            }
+        } catch (Exception exception) {
+            System.err.println(OperationMessages.failedToCloseSerialPort(
+                    portName,
+                    OperationMessages.safeDetail(
+                            exception.getMessage(),
+                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR)));
+        }
+    }
+
+    @Override
+    public synchronized void sendRawLine(String line) {
+        ensureConnected();
+
+        if (line == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("line"));
+        }
+
+        try {
+            out.write((line + printerhub.config.SerialDefaults.DEFAULT_COMMAND_TERMINATOR)
+                    .getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        } catch (IOException exception) {
+            disconnect();
+            throw new IllegalStateException(
+                    OperationMessages.failedToSendCommand(line, portName),
+                    exception);
+        } catch (RuntimeException exception) {
+            disconnect();
+            throw exception;
+        }
+    }
+
+    public String portName() {
+        return portName;
+    }
+
+    public synchronized boolean isConnected() {
+        return port != null && port.isOpen() && in != null && out != null;
+    }
+
+    static int readTimeoutMsForCommand(String command) {
+        if (command == null) {
+            return SerialDefaults.READ_TIMEOUT_MS;
+        }
+
+        String normalizedCommand = command.trim().toUpperCase(java.util.Locale.ROOT);
+
+        if ("G28".equals(normalizedCommand) || normalizedCommand.startsWith("G28 ")) {
+            return SerialDefaults.LONG_RUNNING_COMMAND_READ_TIMEOUT_MS;
+        }
+
+        return SerialDefaults.READ_TIMEOUT_MS;
+    }
+
+    private String readLine(int readTimeoutMs) throws IOException, TimeoutException, InterruptedException {
+        StringBuilder response = new StringBuilder();
+        long start = System.currentTimeMillis();
+        long lastDataTime = start;
+
+        while (System.currentTimeMillis() - start < readTimeoutMs) {
+            boolean readSomething = false;
+
+            while (in.available() > 0) {
+                int value = in.read();
+                if (value >= 0) {
+                    response.append((char) value);
+                    readSomething = true;
+                    lastDataTime = System.currentTimeMillis();
+                }
+            }
+
+            if (readSomething) {
+                Thread.sleep(SerialDefaults.READ_ACTIVITY_SLEEP_MS);
+            } else {
+                if (response.length() > 0
+                        && hasCommandCompletionSignal(response.toString())
+                        && System.currentTimeMillis() - lastDataTime > SerialDefaults.QUIET_PERIOD_MS) {
+                    break;
+                }
+                Thread.sleep(SerialDefaults.READ_IDLE_SLEEP_MS);
+            }
+        }
+
+        String cleaned = response.toString().trim();
+
+        if (cleaned.isEmpty()) {
+            throw new TimeoutException(
+                    OperationMessages.noResponseWithinTimeout(readTimeoutMs));
+        }
+
+        return cleaned;
+    }
+
+    private boolean hasCommandCompletionSignal(String response) {
+        if (response == null || response.isBlank()) {
+            return false;
+        }
+
+        String normalizedResponse = response.toLowerCase(java.util.Locale.ROOT);
+
+        return normalizedResponse.contains("ok")
+                || normalizedResponse.contains("error:")
+                || normalizedResponse.contains("failed")
+                || normalizedResponse.contains("halted")
+                || normalizedResponse.contains("kill() called");
+    }
+
+    private void ensureConnected() {
+        if (!isConnected()) {
+            throw new IllegalStateException(
+                    OperationMessages.SERIAL_CONNECTION_IS_NOT_OPEN + " " + portName);
+        }
+    }
+
+    private SerialPortAdapter port() {
+        if (port == null) {
+            port = new JSerialCommPortAdapter(portName);
+        }
+
+        return port;
+    }
+
+    private void safelyClosePortOnly() {
+        try {
+            if (port != null && port.isOpen()) {
+                port.closePort();
+            }
+        } catch (Exception exception) {
+            System.err.println(OperationMessages.failedToCloseSerialPort(
+                    portName,
+                    OperationMessages.safeDetail(
+                            exception.getMessage(),
+                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR)));
+        }
+    }
+
+    private void closeQuietly(AutoCloseable closeable, String resourceName) {
+        if (closeable == null) {
+            return;
+        }
+
+        try {
+            closeable.close();
+        } catch (Exception exception) {
+            System.err.println(OperationMessages.failedToCloseResource(
+                    resourceName,
+                    OperationMessages.safeDetail(
+                            exception.getMessage(),
+                            OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR)));
+        }
+    }
+
+}
+
+===== src/main/java/printerhub/serial/SimulatedPrinterPort.java =====
+package printerhub.serial;
+
+import printerhub.OperationMessages;
+import printerhub.PrinterPort;
+import printerhub.config.PrinterProtocolDefaults;
+
+import java.util.Locale;
+
+public final class SimulatedPrinterPort implements PrinterPort {
+
+    private final String portName;
+    private final String mode;
+    private boolean connected;
+
+    public SimulatedPrinterPort(String portName) {
+        this(portName, PrinterProtocolDefaults.SIM_MODE);
+    }
+
+    public SimulatedPrinterPort(String portName, String mode) {
+        if (portName == null || portName.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PORT_NAME_MUST_NOT_BE_BLANK);
+        }
+
+        this.portName = portName.trim();
+        this.mode = (mode == null || mode.isBlank())
+                ? PrinterProtocolDefaults.SIM_MODE
+                : mode.trim();
+    }
+
+    @Override
+    public void connect() {
+        if (isDisconnectedMode()) {
+            connected = false;
+            throw new IllegalStateException(OperationMessages.simulatedPrinterDisconnected(portName));
+        }
+
+        connected = true;
+    }
+
+    @Override
+    public String sendCommand(String command) {
+        if (!connected) {
+            throw new IllegalStateException(OperationMessages.simulatedPrinterNotConnected(portName));
+        }
+
+        if (command == null || command.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.COMMAND_MUST_NOT_BE_BLANK);
+        }
+
+        if (isTimeoutMode()) {
+            return "";
+        }
+
+        if (isErrorMode()) {
+            return OperationMessages.SIMULATED_PRINTER_FAILURE_RESPONSE;
+        }
+
+        return defaultResponseFor(command);
+    }
+
+    @Override
+    public void sendRawLine(String line) {
+        if (!connected) {
+            throw new IllegalStateException(OperationMessages.simulatedPrinterNotConnected(portName));
+        }
+
+        if (line == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("line"));
+        }
+
+        if (isErrorMode()) {
+            throw new IllegalStateException(OperationMessages.SIMULATED_PRINTER_FAILURE_RESPONSE);
+        }
+
+        if (isDisconnectedMode()) {
+            connected = false;
+            throw new IllegalStateException(OperationMessages.simulatedPrinterDisconnected(portName));
+        }
+
+        // Intentionally no-op in normal simulation mode.
+        // Raw upload lines are accepted and ignored for now.
+    }
+
+    @Override
+    public void disconnect() {
+        connected = false;
+    }
+
+    private String defaultResponseFor(String command) {
+        String normalized = command.trim().toUpperCase(Locale.ROOT);
+
+        return switch (normalized) {
+            case "M105" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M105;
+            case "M114" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M114;
+            case "M115" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M115;
+            case "M20" -> PrinterProtocolDefaults.SIMULATED_RESPONSE_M20;
+            default -> PrinterProtocolDefaults.SIMULATED_RESPONSE_DEFAULT_OK;
+        };
+    }
+
+    private boolean isDisconnectedMode() {
+        return normalizedMode().equals(PrinterProtocolDefaults.SIM_DISCONNECTED_MODE);
+    }
+
+    private boolean isTimeoutMode() {
+        return normalizedMode().equals(PrinterProtocolDefaults.SIM_TIMEOUT_MODE);
+    }
+
+    private boolean isErrorMode() {
+        return normalizedMode().equals(PrinterProtocolDefaults.SIM_ERROR_MODE);
+    }
+
+    private String normalizedMode() {
+        return mode.trim().toLowerCase(Locale.ROOT);
+    }
+}
+===== src/main/java/printerhub/api/RemoteApiServer.java =====
+package printerhub.api;
+
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import printerhub.OperationMessages;
+import printerhub.PrinterSnapshot;
+import printerhub.PrinterState;
+import printerhub.command.PrinterCommandService;
+import printerhub.command.SdCardFile;
+import printerhub.command.SdCardFileList;
+import printerhub.command.SdCardService;
+import printerhub.config.RuntimeDefaults;
+import printerhub.job.AsyncPrintJobExecutor;
+// import printerhub.job.JobFailureReason;
+import printerhub.command.SdCardUploadService;
+import printerhub.job.PrintFile;
+import printerhub.job.PrintFileService;
+import printerhub.job.PrintJobExecutionStep;
+import printerhub.job.PrinterSdFile;
+import printerhub.job.PrinterSdFileService;
+import printerhub.persistence.PrintJobExecutionStepStore;
+import printerhub.job.JobType;
+import printerhub.job.PrintJob;
+import printerhub.job.PrintJobService;
+import printerhub.monitoring.PrinterMonitoringScheduler;
+import printerhub.persistence.MonitoringRules;
+import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintFileSettings;
+import printerhub.persistence.PrintFileSettingsStore;
+import printerhub.persistence.PrinterConfigurationStore;
+import printerhub.persistence.PrinterEvent;
+import printerhub.persistence.PrinterEventStore;
+import printerhub.runtime.PrinterRegistry;
+import printerhub.runtime.PrinterRuntimeNode;
+import printerhub.runtime.PrinterRuntimeNodeFactory;
+import printerhub.runtime.PrinterRuntimeStateCache;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public final class RemoteApiServer {
+
+    private final int port;
+    private final PrinterRegistry printerRegistry;
+    private final PrinterRuntimeStateCache stateCache;
+    private final PrinterMonitoringScheduler monitoringScheduler;
+    private final PrinterConfigurationStore printerConfigurationStore;
+    private final MonitoringRulesStore monitoringRulesStore;
+    private final PrintFileSettingsStore printFileSettingsStore;
+    private final PrinterEventStore printerEventStore;
+    private final PrinterCommandService printerCommandService;
+    private final SdCardService sdCardService;
+    private final PrintFileService printFileService;
+    private final PrinterSdFileService printerSdFileService;
+    private final PrintJobService printJobService;
+    private final AsyncPrintJobExecutor asyncPrintJobExecutor;
+    private final PrintJobExecutionStepStore printJobExecutionStepStore;
+    private final SdCardUploadService sdCardUploadService;
+
+    private HttpServer server;
+
+    public RemoteApiServer(
+            int port,
+            PrinterRegistry printerRegistry,
+            PrinterRuntimeStateCache stateCache,
+            PrinterMonitoringScheduler monitoringScheduler,
+            PrinterConfigurationStore printerConfigurationStore,
+            MonitoringRulesStore monitoringRulesStore,
+            PrintFileSettingsStore printFileSettingsStore,
+            PrinterEventStore printerEventStore,
+            PrinterCommandService printerCommandService,
+            SdCardService sdCardService,
+            SdCardUploadService sdCardUploadService,
+            PrintFileService printFileService,
+            PrinterSdFileService printerSdFileService,
+            PrintJobService printJobService,
+            AsyncPrintJobExecutor asyncPrintJobExecutor,
+            PrintJobExecutionStepStore printJobExecutionStepStore) {
+        if (port < RuntimeDefaults.MIN_PORT || port > RuntimeDefaults.MAX_PORT) {
+            throw new IllegalArgumentException(OperationMessages.PORT_MUST_BE_IN_VALID_RANGE);
+        }
+        if (printerRegistry == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_REGISTRY_MUST_NOT_BE_NULL);
+        }
+        if (stateCache == null) {
+            throw new IllegalArgumentException(OperationMessages.STATE_CACHE_MUST_NOT_BE_NULL);
+        }
+        if (monitoringScheduler == null) {
+            throw new IllegalArgumentException(OperationMessages.MONITORING_SCHEDULER_MUST_NOT_BE_NULL);
+        }
+        if (printerConfigurationStore == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_CONFIGURATION_STORE_MUST_NOT_BE_NULL);
+        }
+        if (monitoringRulesStore == null) {
+            throw new IllegalArgumentException(OperationMessages.MONITORING_RULES_STORE_MUST_NOT_BE_NULL);
+        }
+        if (printFileSettingsStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileSettingsStore"));
+        }
+        if (printerEventStore == null) {
+            throw new IllegalArgumentException(OperationMessages.EVENT_STORE_MUST_NOT_BE_NULL);
+        }
+        if (printerCommandService == null) {
+            throw new IllegalArgumentException(OperationMessages.COMMAND_SERVICE_MUST_NOT_BE_NULL);
+        }
+        if (sdCardService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("sdCardService"));
+        }
+        if (printFileService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileService"));
+        }
+        if (printerSdFileService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printerSdFileService"));
+        }
+        if (printJobService == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_JOB_SERVICE_MUST_NOT_BE_NULL);
+        }
+        if (asyncPrintJobExecutor == null) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_JOB_EXECUTION_SERVICE_MUST_NOT_BE_NULL);
+        }
+        if (printJobExecutionStepStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printJobExecutionStepStore"));
+        }
+        if (sdCardUploadService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("sdCardUploadService"));
+        }
+
+        this.port = port;
+        this.printerRegistry = printerRegistry;
+        this.stateCache = stateCache;
+        this.monitoringScheduler = monitoringScheduler;
+        this.printerConfigurationStore = printerConfigurationStore;
+        this.monitoringRulesStore = monitoringRulesStore;
+        this.printFileSettingsStore = printFileSettingsStore;
+        this.printerEventStore = printerEventStore;
+        this.printerCommandService = printerCommandService;
+        this.sdCardService = sdCardService;
+        this.sdCardUploadService = sdCardUploadService;
+        this.printFileService = printFileService;
+        this.printerSdFileService = printerSdFileService;
+        this.printJobService = printJobService;
+        this.asyncPrintJobExecutor = asyncPrintJobExecutor;
+        this.printJobExecutionStepStore = printJobExecutionStepStore;
+    }
+
+    public void start() {
+        if (server != null) {
+            return;
+        }
+
+        try {
+            server = HttpServer.create(new InetSocketAddress(port), 0);
+            server.setExecutor(Executors.newFixedThreadPool(RuntimeDefaults.DEFAULT_API_THREAD_POOL_SIZE));
+
+            server.createContext("/health", exchange -> safeHandle(exchange, this::handleHealth));
+            server.createContext("/printers", exchange -> safeHandle(exchange, this::handlePrinters));
+            server.createContext("/print-files", exchange -> safeHandle(exchange, this::handlePrintFiles));
+            server.createContext("/printer-sd-files", exchange -> safeHandle(exchange, this::handlePrinterSdFiles));
+            server.createContext("/jobs", exchange -> safeHandle(exchange, this::handleJobs));
+            server.createContext("/settings/monitoring",
+                    exchange -> safeHandle(exchange, this::handleMonitoringSettings));
+            server.createContext("/settings/print-files",
+                    exchange -> safeHandle(exchange, this::handlePrintFileSettings));
+            server.createContext("/dashboard", exchange -> safeHandle(exchange, this::handleDashboard));
+            server.start();
+
+            System.out.println(OperationMessages.apiServerStarted(port));
+        } catch (IOException exception) {
+            throw new IllegalStateException(OperationMessages.failedToStartApiServer(port), exception);
+        }
+    }
+
+    public void stop() {
+        if (server != null) {
+            server.stop(0);
+            server = null;
+            asyncPrintJobExecutor.close();
+            System.out.println(OperationMessages.apiServerStopped());
+        }
+    }
+
+    private void safeHandle(HttpExchange exchange, ExchangeHandler handler) throws IOException {
+        addCorsHeaders(exchange);
+
+        if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
+        try {
+            handler.handle(exchange);
+        } catch (IllegalArgumentException exception) {
+            sendJson(exchange, 400, errorJson(safeMessage(exception)));
+        } catch (IllegalStateException exception) {
+            String message = safeMessage(exception);
+
+            if (OperationMessages.JOB_NOT_FOUND.equals(message)
+                    || OperationMessages.PRINTER_NOT_FOUND.equals(message)
+                    || OperationMessages.PRINTER_SD_FILE_NOT_FOUND.equals(message)) {
+                sendJson(exchange, 404, errorJson(message));
+                return;
+            }
+
+            System.err.println(OperationMessages.apiOperationFailed(message));
+            sendJson(exchange, 500, errorJson(message));
+        } catch (Exception exception) {
+            System.err.println(OperationMessages.unexpectedApiError(safeMessage(exception)));
+            sendJson(exchange, 500, errorJson(OperationMessages.INTERNAL_SERVER_ERROR));
+        }
+    }
+
+    private void addCorsHeaders(HttpExchange exchange) {
+        Headers headers = exchange.getResponseHeaders();
+        headers.set("Access-Control-Allow-Origin", "*");
+        headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        headers.set("Access-Control-Allow-Headers", "Content-Type");
+    }
+
+    private void handleHealth(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        sendJson(exchange, 200, "{\"status\":\"ok\"}");
+    }
+
+    private void handleMonitoringSettings(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 200, monitoringRulesJson(monitoringRulesStore.load()));
+            return;
+        }
+
+        if ("PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+            MonitoringRules currentRules = monitoringRulesStore.load();
+
+            MonitoringRules updatedRules = new MonitoringRules(
+                    optionalJsonLong(body, "pollIntervalSeconds", currentRules.pollIntervalSeconds()),
+                    optionalJsonLong(
+                            body,
+                            "snapshotMinimumIntervalSeconds",
+                            currentRules.snapshotMinimumIntervalSeconds()),
+                    optionalJsonDouble(
+                            body,
+                            "temperatureDeltaThreshold",
+                            currentRules.temperatureDeltaThreshold()),
+                    optionalJsonLong(
+                            body,
+                            "eventDeduplicationWindowSeconds",
+                            currentRules.eventDeduplicationWindowSeconds()),
+                    optionalJsonErrorPersistenceBehavior(
+                            body,
+                            "errorPersistenceBehavior",
+                            currentRules.errorPersistenceBehavior()));
+
+            monitoringRulesStore.save(updatedRules);
+            monitoringScheduler.updateMonitoringRules(updatedRules);
+
+            sendJson(exchange, 200, monitoringRulesJson(updatedRules));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handlePrintFileSettings(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 200, printFileSettingsJson(printFileSettingsStore.load()));
+            return;
+        }
+
+        if ("PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+            PrintFileSettings settings = new PrintFileSettings(requiredJsonString(body, "storageDirectory"));
+            sendJson(exchange, 200, printFileSettingsJson(printFileSettingsStore.save(settings)));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handlePrinters(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/printers".equals(path)) {
+            handlePrintersRoot(exchange);
+            return;
+        }
+
+        if (path.startsWith("/printers/")) {
+            handlePrinterById(exchange, path);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_ENDPOINT_NOT_FOUND));
+    }
+
+    private void handleJobs(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/jobs".equals(path)) {
+            handleJobsRoot(exchange);
+            return;
+        }
+
+        if (path.startsWith("/jobs/")) {
+            handleJobById(exchange, path);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.JOB_ENDPOINT_NOT_FOUND));
+    }
+
+    private void handlePrintFiles(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/print-files".equals(path)) {
+            handlePrintFilesRoot(exchange);
+            return;
+        }
+
+        if ("/print-files/uploads".equals(path)) {
+            handlePrintFileUpload(exchange);
+            return;
+        }
+
+        if (path.startsWith("/print-files/")) {
+            String remaining = path.substring("/print-files/".length());
+
+            if (remaining.endsWith("/content")) {
+                String printFileId = remaining.substring(0, remaining.length() - "/content".length());
+
+                if (printFileId.isBlank()) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+                    return;
+                }
+
+                handlePrintFileContent(exchange, printFileId);
+                return;
+            }
+
+            String printFileId = remaining;
+
+            if (printFileId.isBlank()) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+                return;
+            }
+
+            handlePrintFileResource(exchange, printFileId);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+    }
+
+    private void handlePrinterSdFiles(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/printer-sd-files".equals(path)) {
+            handlePrinterSdFilesRoot(exchange);
+            return;
+        }
+
+        if (path.startsWith("/printer-sd-files/")) {
+            handlePrinterSdFileById(exchange, path);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+    }
+
+    private void handlePrinterSdFilesRoot(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String printerId = queryParameter(exchange.getRequestURI().getRawQuery(), "printerId");
+            List<PrinterSdFile> files = printerId == null || printerId.isBlank()
+                    ? printerSdFileService.findAll()
+                    : printerSdFileService.findByPrinterId(printerId);
+            sendJson(exchange, 200, printerSdFilesJson(files));
+            return;
+        }
+
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+            PrinterSdFile file = printerSdFileService.register(
+                    requiredJsonString(body, "printerId"),
+                    requiredJsonString(body, "firmwarePath"),
+                    optionalJsonString(body, "displayName", null),
+                    optionalJsonLongObject(body, "sizeBytes"),
+                    optionalJsonString(body, "rawLine", null),
+                    optionalJsonString(body, "printFileId", null));
+            sendJson(exchange, 201, printerSdFileJson(file));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handlePrinterSdFileById(HttpExchange exchange, String path) throws IOException {
+        String remaining = path.substring("/printer-sd-files/".length());
+
+        if (remaining.isBlank()) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+            return;
+        }
+
+        String[] parts = remaining.split("/");
+        String printerSdFileId = parts[0];
+
+        if (parts.length == 1 && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrinterSdFile file = printerSdFileService.findById(printerSdFileId).orElse(null);
+
+            if (file == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+                return;
+            }
+
+            sendJson(exchange, 200, printerSdFileJson(file));
+            return;
+        }
+
+        if (parts.length == 2
+                && ("enable".equals(parts[1]) || "disable".equals(parts[1]))
+                && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrinterSdFile file = printerSdFileService.setEnabled(printerSdFileId, "enable".equals(parts[1]));
+            sendJson(exchange, 200, printerSdFileJson(file));
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+    }
+
+    private void handlePrintFileUpload(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        String filename = queryParameter(exchange.getRequestURI().getRawQuery(), "filename");
+        PrintFile printFile = printFileService.storeUploadedFile(filename, readBodyBytes(exchange));
+        sendJson(exchange, 201, printFileJson(printFile));
+    }
+
+    private void handlePrintFilesRoot(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 200, printFilesJson(printFileService.findAll()));
+            return;
+        }
+
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+            PrintFile printFile = printFileService.registerHostFile(requiredJsonString(body, "path"));
+            sendJson(exchange, 201, printFileJson(printFile));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handlePrintFileResource(HttpExchange exchange, String printFileId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintFile printFile = printFileService.findById(printFileId).orElse(null);
+
+        if (printFile == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+            return;
+        }
+
+        sendJson(exchange, 200, printFileJson(printFile));
+    }
+
+    private void handlePrintFileContent(HttpExchange exchange, String printFileId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintFile printFile = printFileService.findById(printFileId).orElse(null);
+
+        if (printFile == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+            return;
+        }
+
+        sendJson(exchange, 200, "{\"printFile\":" + printFileJson(printFile)
+                + ",\"content\":\"" + escapeJson(printFileService.readContent(printFileId)) + "\"}");
+    }
+
+    private void handleJobsRoot(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            List<PrintJob> jobs = printJobService.findRecent(RuntimeDefaults.DEFAULT_RECENT_JOB_LIMIT);
+            sendJson(exchange, 200, printJobsJson(jobs));
+            return;
+        }
+
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+
+            JobType type = parseJobType(requiredJsonString(body, "type"));
+            String printerId = optionalJsonString(body, "printerId", null);
+            String printFileId = optionalJsonString(body, "printFileId", null);
+            String printerSdFileId = optionalJsonString(body, "printerSdFileId", null);
+            Double targetTemperature = optionalJsonDoubleObject(body, "targetTemperature");
+            Integer fanSpeed = optionalJsonIntegerObject(body, "fanSpeed");
+            PrintFile printFile = null;
+            PrinterSdFile printerSdFile = null;
+
+            if (type == JobType.PRINT_FILE) {
+                if (printerSdFileId == null || printerSdFileId.isBlank()) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+                    return;
+                }
+
+                printerSdFile = printerSdFileService.findById(printerSdFileId).orElse(null);
+
+                if (printerSdFile == null) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+                    return;
+                }
+
+                if (!printerSdFile.enabled()) {
+                    sendJson(exchange, 400, errorJson(OperationMessages.PRINTER_SD_FILE_DISABLED));
+                    return;
+                }
+
+                if (printerId == null || printerId.isBlank()) {
+                    printerId = printerSdFile.printerId();
+                } else if (!printerId.equals(printerSdFile.printerId())) {
+                    sendJson(exchange, 400, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+                    return;
+                }
+
+                printFileId = printerSdFile.printFileId();
+                if (printFileId != null) {
+                    printFile = printFileService.findById(printFileId).orElse(null);
+                }
+            }
+
+            PrintJob job = printJobService.create(
+                    resolveJobName(optionalJsonString(body, "name", null), type, printFile, printerSdFile),
+                    type,
+                    printerId,
+                    printFileId,
+                    printerSdFileId,
+                    targetTemperature,
+                    fanSpeed);
+
+            sendJson(exchange, 201, printJobJson(job));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handleJobById(HttpExchange exchange, String path) throws IOException {
+        String remaining = path.substring("/jobs/".length());
+
+        if (remaining.isBlank()) {
+            sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+            return;
+        }
+
+        String[] parts = remaining.split("/");
+        String jobId = parts[0];
+
+        if (parts.length == 1) {
+            handleJobResource(exchange, jobId);
+            return;
+        }
+
+        if (parts.length == 2 && "start".equals(parts[1])) {
+            handleJobStart(exchange, jobId);
+            return;
+        }
+
+        if (parts.length == 2 && "cancel".equals(parts[1])) {
+            handleJobCancel(exchange, jobId);
+            return;
+        }
+
+        if (parts.length == 2 && "events".equals(parts[1])) {
+            handleJobEvents(exchange, jobId);
+            return;
+        }
+
+        if (parts.length == 2 && "execution-steps".equals(parts[1])) {
+            handleJobExecutionSteps(exchange, jobId);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.JOB_ENDPOINT_NOT_FOUND));
+    }
+
+    private void handleJobExecutionSteps(HttpExchange exchange, String jobId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintJob job = printJobService.findById(jobId).orElse(null);
+
+        if (job == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+            return;
+        }
+
+        List<PrintJobExecutionStep> steps = printJobExecutionStepStore.findByJobId(jobId);
+        sendJson(exchange, 200, printJobExecutionStepsJson(steps));
+    }
+
+    private void handleJobEvents(HttpExchange exchange, String jobId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintJob job = printJobService.findById(jobId).orElse(null);
+
+        if (job == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+            return;
+        }
+
+        List<PrinterEvent> events = printerEventStore.findRecentByJobId(
+                jobId,
+                RuntimeDefaults.DEFAULT_RECENT_JOB_LIMIT);
+
+        sendJson(exchange, 200, printerEventsJson(events));
+    }
+
+    private void handleJobResource(HttpExchange exchange, String jobId) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrintJob job = printJobService.findById(jobId).orElse(null);
+
+            if (job == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+                return;
+            }
+
+            sendJson(exchange, 200, printJobJson(job));
+            return;
+        }
+
+        if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrintJob job = printJobService.findById(jobId).orElse(null);
+
+            if (job == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.JOB_NOT_FOUND));
+                return;
+            }
+
+            printJobService.delete(jobId);
+            sendJson(exchange, 200, "{\"deleted\":\"" + escapeJson(jobId) + "\"}");
+            return;
+        }
+
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+    }
+
+    private void handleJobStart(HttpExchange exchange, String jobId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        AsyncPrintJobExecutor.StartResult result = asyncPrintJobExecutor.start(jobId);
+        sendJson(exchange, 200, jobStartJson(result));
+    }
+
+    private void handleJobCancel(HttpExchange exchange, String jobId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrintJob job = printJobService.cancel(jobId);
+        sendJson(exchange, 200, printJobJson(job));
+    }
+
+    private void handlePrintersRoot(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 200, printersJson());
+            return;
+        }
+
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+
+            PrinterRuntimeNode node = PrinterRuntimeNodeFactory.create(
+                    requiredJsonString(body, "id"),
+                    requiredJsonString(body, "displayName"),
+                    requiredJsonString(body, "portName"),
+                    requiredJsonString(body, "mode"),
+                    optionalJsonBoolean(body, "enabled", true));
+
+            boolean registered = false;
+
+            try {
+                printerRegistry.register(node);
+                registered = true;
+
+                printerConfigurationStore.save(node);
+                monitoringScheduler.startMonitoring(node);
+
+                sendJson(exchange, 201, printerJson(node));
+            } catch (Exception exception) {
+                if (registered) {
+                    rollbackRegister(node.id());
+                }
+                throw exception;
+            }
+
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handlePrinterById(HttpExchange exchange, String path) throws IOException {
+        String remaining = path.substring("/printers/".length());
+
+        if (remaining.isBlank()) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        String[] parts = remaining.split("/");
+        String printerId = parts[0];
+
+        if (parts.length == 1) {
+            handlePrinterResource(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 2 && "status".equals(parts[1])) {
+            handlePrinterStatus(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 2 && "enable".equals(parts[1])) {
+            handlePrinterEnable(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 2 && "disable".equals(parts[1])) {
+            handlePrinterDisable(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 2 && "commands".equals(parts[1])) {
+            handlePrinterCommands(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 3 && "sd-card".equals(parts[1]) && "files".equals(parts[2])) {
+            handlePrinterSdCardFiles(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 3 && "sd-card".equals(parts[1]) && "uploads".equals(parts[2])) {
+            handlePrinterSdCardUploads(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 2 && "events".equals(parts[1])) {
+            handlePrinterEvents(exchange, printerId);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_ENDPOINT_NOT_FOUND));
+    }
+
+    private void handlePrinterResource(HttpExchange exchange, String printerId) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            Optional<PrinterRuntimeNode> node = printerRegistry.findById(printerId);
+
+            if (node.isEmpty()) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+                return;
+            }
+
+            sendJson(exchange, 200, printerJson(node.get()));
+            return;
+        }
+
+        if ("PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+
+            PrinterRuntimeNode oldNode = printerRegistry.findById(printerId).orElse(null);
+
+            if (oldNode == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+                return;
+            }
+
+            boolean enabled = optionalJsonBoolean(body, "enabled", oldNode.enabled());
+
+            PrinterRuntimeNode newNode = PrinterRuntimeNodeFactory.create(
+                    printerId,
+                    requiredJsonString(body, "displayName"),
+                    requiredJsonString(body, "portName"),
+                    requiredJsonString(body, "mode"),
+                    enabled);
+
+            monitoringScheduler.stopMonitoring(printerId);
+            printerRegistry.remove(printerId);
+
+            boolean restored = false;
+
+            try {
+                printerConfigurationStore.save(newNode);
+                printerRegistry.register(newNode);
+                monitoringScheduler.startMonitoring(newNode);
+
+                sendJson(exchange, 200, printerJson(newNode));
+            } catch (Exception exception) {
+                try {
+                    printerRegistry.register(oldNode);
+                    monitoringScheduler.startMonitoring(oldNode);
+                    restored = true;
+                } catch (Exception rollbackException) {
+                    System.err.println(OperationMessages.failedToRestorePrinterAfterPut(
+                            printerId,
+                            safeMessage(rollbackException)));
+                }
+
+                if (!restored) {
+                    stateCache.update(
+                            printerId,
+                            PrinterSnapshot.error(
+                                    PrinterState.ERROR,
+                                    null,
+                                    null,
+                                    null,
+                                    OperationMessages.printerUpdateRestoreFailed(printerId),
+                                    Instant.now()));
+                }
+
+                throw exception;
+            }
+
+            return;
+        }
+
+        if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrinterRuntimeNode existingNode = printerRegistry.findById(printerId).orElse(null);
+
+            if (existingNode == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+                return;
+            }
+
+            monitoringScheduler.stopMonitoring(printerId);
+            printerRegistry.remove(printerId);
+            stateCache.remove(printerId);
+
+            try {
+                printerConfigurationStore.delete(printerId);
+                existingNode.close();
+
+                sendJson(exchange, 200, "{\"deleted\":\"" + escapeJson(printerId) + "\"}");
+            } catch (Exception exception) {
+                try {
+                    printerRegistry.register(existingNode);
+                    monitoringScheduler.startMonitoring(existingNode);
+                } catch (Exception rollbackException) {
+                    System.err.println(OperationMessages.failedToRestorePrinterAfterDelete(
+                            printerId,
+                            safeMessage(rollbackException)));
+                }
+                throw exception;
+            }
+
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handlePrinterStatus(HttpExchange exchange, String printerId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        PrinterSnapshot snapshot = stateCache.findByPrinterId(printerId).orElse(null);
+        sendJson(exchange, 200, snapshotJson(snapshot));
+    }
+
+    private void handlePrinterEnable(HttpExchange exchange, String printerId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        boolean previousEnabled = node.enabled();
+
+        try {
+            printerConfigurationStore.enable(printerId);
+            node.enable();
+            monitoringScheduler.startMonitoring(node);
+
+            sendJson(exchange, 200, printerJson(node));
+        } catch (Exception exception) {
+            if (!previousEnabled) {
+                node.disable();
+                monitoringScheduler.startMonitoring(node);
+            }
+            throw exception;
+        }
+    }
+
+    private void handlePrinterDisable(HttpExchange exchange, String printerId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        boolean previousEnabled = node.enabled();
+
+        try {
+            printerConfigurationStore.disable(printerId);
+            node.disable();
+            monitoringScheduler.stopMonitoring(printerId);
+            node.close();
+            monitoringScheduler.startMonitoring(node);
+
+            sendJson(exchange, 200, printerJson(node));
+        } catch (Exception exception) {
+            if (previousEnabled) {
+                node.enable();
+                monitoringScheduler.startMonitoring(node);
+            }
+            throw exception;
+        }
+    }
+
+    private void handlePrinterCommands(HttpExchange exchange, String printerId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        String body = readBody(exchange);
+        String command = requiredJsonString(body, "command");
+        Double targetTemperature = optionalJsonDoubleObject(body, "targetTemperature");
+
+        PrinterCommandService.CommandExecutionResult result = printerCommandService.execute(node, command,
+                targetTemperature);
+
+        sendJson(exchange, 200, commandExecutionJson(result));
+    }
+
+    private void handlePrinterSdCardUploads(HttpExchange exchange, String printerId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        String body = readBody(exchange);
+
+        SdCardUploadService.UploadResult result = sdCardUploadService.uploadToPrinterSd(
+                printerId,
+                requiredJsonString(body, "printFileId"),
+                optionalJsonString(body, "targetFilename", null));
+
+        sendJson(exchange, 200, sdCardUploadResultJson(result));
+    }
+
+    private void handlePrinterSdCardFiles(HttpExchange exchange, String printerId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        SdCardFileList fileList = sdCardService.listFiles(node);
+        for (SdCardFile file : fileList.files()) {
+            printerSdFileService.registerListedFile(printerId, file);
+        }
+        sendJson(exchange, 200, sdCardFileListJson(fileList));
+    }
+
+    private void handlePrinterEvents(HttpExchange exchange, String printerId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        List<PrinterEvent> events = printerEventStore.findRecentByPrinterId(
+                printerId,
+                RuntimeDefaults.DEFAULT_RECENT_SNAPSHOT_LIMIT);
+
+        sendJson(exchange, 200, printerEventsJson(events));
+    }
+
+    private String monitoringRulesJson(MonitoringRules monitoringRules) {
+        return "{"
+                + "\"pollIntervalSeconds\":" + monitoringRules.pollIntervalSeconds() + ","
+                + "\"snapshotMinimumIntervalSeconds\":" + monitoringRules.snapshotMinimumIntervalSeconds() + ","
+                + "\"temperatureDeltaThreshold\":" + formatDouble(monitoringRules.temperatureDeltaThreshold()) + ","
+                + "\"eventDeduplicationWindowSeconds\":" + monitoringRules.eventDeduplicationWindowSeconds() + ","
+                + "\"errorPersistenceBehavior\":\"" + escapeJson(monitoringRules.errorPersistenceBehavior().name())
+                + "\""
+                + "}";
+    }
+
+    private String printFileSettingsJson(PrintFileSettings settings) {
+        return "{"
+                + "\"storageDirectory\":\"" + escapeJson(settings.storageDirectory()) + "\""
+                + "}";
+    }
+
+    private String commandExecutionJson(PrinterCommandService.CommandExecutionResult result) {
+        return "{"
+                + "\"printerId\":\"" + escapeJson(result.printerId()) + "\","
+                + "\"command\":\"" + escapeJson(result.command()) + "\","
+                + "\"sentCommand\":\"" + escapeJson(result.sentCommand()) + "\","
+                + "\"response\":" + nullableString(result.response())
+                + "}";
+    }
+
+    private String sdCardFileListJson(SdCardFileList fileList) {
+        StringBuilder json = new StringBuilder();
+        json.append("{")
+                .append("\"printerId\":\"").append(escapeJson(fileList.printerId())).append("\",")
+                .append("\"files\":[");
+
+        boolean first = true;
+
+        for (SdCardFile file : fileList.files()) {
+            if (!first) {
+                json.append(",");
+            }
+
+            json.append("{")
+                    .append("\"filename\":\"").append(escapeJson(file.filename())).append("\",")
+                    .append("\"sizeBytes\":").append(nullableLong(file.sizeBytes())).append(",")
+                    .append("\"rawLine\":\"").append(escapeJson(file.rawLine())).append("\"")
+                    .append("}");
+            first = false;
+        }
+
+        json.append("],")
+                .append("\"rawResponse\":\"").append(escapeJson(fileList.rawResponse())).append("\"")
+                .append("}");
+        return json.toString();
+    }
+
+    private String printJobsJson(List<PrintJob> jobs) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"jobs\":[");
+
+        boolean first = true;
+
+        for (PrintJob job : jobs) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append(printJobJson(job));
+            first = false;
+        }
+
+        json.append("]}");
+        return json.toString();
+    }
+
+    private String printFilesJson(List<PrintFile> printFiles) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"printFiles\":[");
+
+        boolean first = true;
+
+        for (PrintFile printFile : printFiles) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append(printFileJson(printFile));
+            first = false;
+        }
+
+        json.append("]}");
+        return json.toString();
+    }
+
+    private String printerSdFilesJson(List<PrinterSdFile> files) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"printerSdFiles\":[");
+
+        boolean first = true;
+
+        for (PrinterSdFile file : files) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append(printerSdFileJson(file));
+            first = false;
+        }
+
+        json.append("]}");
+        return json.toString();
+    }
+
+    private String printerSdFileJson(PrinterSdFile file) {
+        return "{"
+                + "\"id\":\"" + escapeJson(file.id()) + "\","
+                + "\"printerId\":\"" + escapeJson(file.printerId()) + "\","
+                + "\"firmwarePath\":\"" + escapeJson(file.firmwarePath()) + "\","
+                + "\"displayName\":\"" + escapeJson(file.displayName()) + "\","
+                + "\"sizeBytes\":" + nullableLong(file.sizeBytes()) + ","
+                + "\"rawLine\":\"" + escapeJson(file.rawLine()) + "\","
+                + "\"printFileId\":" + nullableString(file.printFileId()) + ","
+                + "\"enabled\":" + file.enabled() + ","
+                + "\"createdAt\":\"" + escapeJson(file.createdAt().toString()) + "\","
+                + "\"updatedAt\":\"" + escapeJson(file.updatedAt().toString()) + "\""
+                + "}";
+    }
+
+    private String printFileJson(PrintFile printFile) {
+        return "{"
+                + "\"id\":\"" + escapeJson(printFile.id()) + "\","
+                + "\"originalFilename\":\"" + escapeJson(printFile.originalFilename()) + "\","
+                + "\"path\":\"" + escapeJson(printFile.path()) + "\","
+                + "\"sizeBytes\":" + printFile.sizeBytes() + ","
+                + "\"mediaType\":\"" + escapeJson(printFile.mediaType()) + "\","
+                + "\"createdAt\":\"" + escapeJson(printFile.createdAt().toString()) + "\""
+                + "}";
+    }
+
+    private String printJobJson(PrintJob job) {
+        return "{"
+                + "\"id\":\"" + escapeJson(job.id()) + "\","
+                + "\"name\":\"" + escapeJson(job.name()) + "\","
+                + "\"type\":\"" + escapeJson(job.type().name()) + "\","
+                + "\"state\":\"" + escapeJson(job.state().name()) + "\","
+                + "\"printerId\":" + nullableString(job.printerId()) + ","
+                + "\"printFileId\":" + nullableString(job.printFileId()) + ","
+                + "\"printerSdFileId\":" + nullableString(job.printerSdFileId()) + ","
+                + "\"targetTemperature\":" + nullableNumber(job.targetTemperature()) + ","
+                + "\"fanSpeed\":" + nullableInteger(job.fanSpeed()) + ","
+                + "\"failureReason\":" + nullableString(job.failureReason()) + ","
+                + "\"failureDetail\":" + nullableString(job.failureDetail()) + ","
+                + "\"createdAt\":\"" + escapeJson(job.createdAt().toString()) + "\","
+                + "\"updatedAt\":\"" + escapeJson(job.updatedAt().toString()) + "\","
+                + "\"startedAt\":" + nullableString(job.startedAt() == null ? null : job.startedAt().toString()) + ","
+                + "\"finishedAt\":" + nullableString(job.finishedAt() == null ? null : job.finishedAt().toString())
+                + "}";
+    }
+
+    private String jobStartJson(AsyncPrintJobExecutor.StartResult result) {
+        return "{"
+                + "\"job\":" + printJobJson(result.job()) + ","
+                + "\"execution\":{"
+                + "\"accepted\":" + result.accepted() + ","
+                + "\"success\":" + result.accepted() + ","
+                + "\"wireCommand\":null,"
+                + "\"response\":null,"
+                + "\"outcome\":" + nullableString(result.accepted() ? "QUEUED" : "REJECTED") + ","
+                + "\"failureReason\":" + nullableString(
+                        result.failureReason() == null ? null : result.failureReason().name())
+                + ","
+                + "\"failureDetail\":" + nullableString(result.detail())
+                + "}"
+                + "}";
+    }
+
+    private String printerEventsJson(List<PrinterEvent> events) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"events\":[");
+
+        boolean first = true;
+
+        for (PrinterEvent event : events) {
+            if (!first) {
+                json.append(",");
+            }
+
+            json.append("{")
+                    .append("\"id\":").append(event.id()).append(",")
+                    .append("\"printerId\":").append(nullableString(event.printerId())).append(",")
+                    .append("\"jobId\":").append(nullableString(event.jobId())).append(",")
+                    .append("\"eventType\":\"").append(escapeJson(event.eventType())).append("\",")
+                    .append("\"message\":").append(nullableString(event.message())).append(",")
+                    .append("\"createdAt\":\"").append(escapeJson(event.createdAt().toString())).append("\"")
+                    .append("}");
+
+            first = false;
+        }
+
+        json.append("]}");
+        return json.toString();
+    }
+
+    private String printersJson() {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"printers\":[");
+
+        boolean first = true;
+
+        for (PrinterRuntimeNode node : printerRegistry.all()) {
+            if (!first) {
+                json.append(",");
+            }
+
+            json.append(printerJson(node));
+            first = false;
+        }
+
+        json.append("]}");
+
+        return json.toString();
+    }
+
+    private String printerJson(PrinterRuntimeNode node) {
+        PrinterSnapshot snapshot = stateCache.findByPrinterId(node.id()).orElse(null);
+
+        return "{"
+                + "\"id\":\"" + escapeJson(node.id()) + "\","
+                + "\"displayName\":\"" + escapeJson(node.displayName()) + "\","
+                + "\"name\":\"" + escapeJson(node.displayName()) + "\","
+                + "\"portName\":\"" + escapeJson(node.portName()) + "\","
+                + "\"mode\":\"" + escapeJson(node.mode()) + "\","
+                + "\"enabled\":" + node.enabled() + ","
+                + "\"state\":\"" + (snapshot == null ? "UNKNOWN" : snapshot.state()) + "\","
+                + "\"hotendTemperature\":" + nullableNumber(snapshot == null ? null : snapshot.hotendTemperature())
+                + ","
+                + "\"bedTemperature\":" + nullableNumber(snapshot == null ? null : snapshot.bedTemperature()) + ","
+                + "\"lastResponse\":" + nullableString(snapshot == null ? null : snapshot.lastResponse()) + ","
+                + "\"errorMessage\":" + nullableString(snapshot == null ? null : snapshot.errorMessage()) + ","
+                + "\"updatedAt\":" + nullableString(snapshot == null ? null : String.valueOf(snapshot.updatedAt()))
+                + "}";
+    }
+
+    private String snapshotJson(PrinterSnapshot snapshot) {
+        if (snapshot == null) {
+            return "{"
+                    + "\"state\":\"UNKNOWN\","
+                    + "\"hotendTemperature\":null,"
+                    + "\"bedTemperature\":null,"
+                    + "\"lastResponse\":null,"
+                    + "\"errorMessage\":null,"
+                    + "\"updatedAt\":null"
+                    + "}";
+        }
+
+        return "{"
+                + "\"state\":\"" + snapshot.state() + "\","
+                + "\"hotendTemperature\":" + nullableNumber(snapshot.hotendTemperature()) + ","
+                + "\"bedTemperature\":" + nullableNumber(snapshot.bedTemperature()) + ","
+                + "\"lastResponse\":" + nullableString(snapshot.lastResponse()) + ","
+                + "\"errorMessage\":" + nullableString(snapshot.errorMessage()) + ","
+                + "\"updatedAt\":" + nullableString(String.valueOf(snapshot.updatedAt()))
+                + "}";
+    }
+
+    private void sendJson(HttpExchange exchange, int statusCode, String body) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+
+        Headers headers = exchange.getResponseHeaders();
+        headers.set("Content-Type", "application/json; charset=utf-8");
+
+        exchange.sendResponseHeaders(statusCode, bytes.length);
+
+        try (OutputStream outputStream = exchange.getResponseBody()) {
+            outputStream.write(bytes);
+        }
+    }
+
+    private String readBody(HttpExchange exchange) throws IOException {
+        return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+    }
+
+    private byte[] readBodyBytes(HttpExchange exchange) throws IOException {
+        return exchange.getRequestBody().readAllBytes();
+    }
+
+    private String errorJson(String message) {
+        return "{\"error\":" + nullableString(message) + "}";
+    }
+
+    private String nullableNumber(Double value) {
+        if (value == null) {
+            return "null";
+        }
+
+        return formatDouble(value);
+    }
+
+    private String nullableInteger(Integer value) {
+        if (value == null) {
+            return "null";
+        }
+
+        return String.valueOf(value);
+    }
+
+    private String nullableLong(Long value) {
+        if (value == null) {
+            return "null";
+        }
+
+        return String.valueOf(value);
+    }
+
+    private String formatDouble(double value) {
+        return String.format(Locale.ROOT, "%.2f", value);
+    }
+
+    private String nullableString(String value) {
+        if (value == null) {
+            return "null";
+        }
+
+        return "\"" + escapeJson(value) + "\"";
+    }
+
+    private String requiredJsonString(String body, String fieldName) {
+        String value = optionalJsonString(body, fieldName, null);
+
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank(fieldName));
+        }
+
+        return value.trim();
+    }
+
+    private String resolveJobName(
+            String requestedName,
+            JobType type,
+            PrintFile printFile,
+            PrinterSdFile printerSdFile) {
+        if (requestedName != null && !requestedName.isBlank()) {
+            return requestedName.trim();
+        }
+
+        if (type == JobType.PRINT_FILE && printerSdFile != null) {
+            return "Print " + printerSdFile.displayName();
+        }
+
+        if (type == JobType.PRINT_FILE && printFile != null) {
+            return "Print " + printFile.originalFilename();
+        }
+
+        throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("name"));
+    }
+
+    private String optionalJsonString(String body, String fieldName, String fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*\"([^\"]*)\"");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return matcher.group(1);
+    }
+
+    private String queryParameter(String rawQuery, String name) {
+        if (rawQuery == null || rawQuery.isBlank()) {
+            return null;
+        }
+
+        String prefix = name + "=";
+        String[] parts = rawQuery.split("&");
+
+        for (String part : parts) {
+            if (part.startsWith(prefix)) {
+                return URLDecoder.decode(part.substring(prefix.length()), StandardCharsets.UTF_8);
+            }
+        }
+
+        return null;
+    }
+
+    private boolean optionalJsonBoolean(String body, String fieldName, boolean fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(true|false)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return Boolean.parseBoolean(matcher.group(1));
+    }
+
+    private long optionalJsonLong(String body, String fieldName, long fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return Long.parseLong(matcher.group(1));
+    }
+
+    private Long optionalJsonLongObject(String body, String fieldName) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return null;
+        }
+
+        return Long.parseLong(matcher.group(1));
+    }
+
+    private int optionalJsonInteger(String body, String fieldName, int fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return Integer.parseInt(matcher.group(1));
+    }
+
+    private Integer optionalJsonIntegerObject(String body, String fieldName) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return null;
+        }
+
+        return Integer.parseInt(matcher.group(1));
+    }
+
+    private double optionalJsonDouble(String body, String fieldName, double fallback) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return fallback;
+        }
+
+        return Double.parseDouble(matcher.group(1));
+    }
+
+    private Double optionalJsonDoubleObject(String body, String fieldName) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return null;
+        }
+
+        return Double.parseDouble(matcher.group(1));
+    }
+
+    private MonitoringRules.ErrorPersistenceBehavior optionalJsonErrorPersistenceBehavior(
+            String body,
+            String fieldName,
+            MonitoringRules.ErrorPersistenceBehavior fallback) {
+        String value = optionalJsonString(body, fieldName, null);
+
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+
+        return MonitoringRules.parseErrorPersistenceBehavior(value);
+    }
+
+    private JobType parseJobType(String value) {
+        try {
+            return JobType.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(OperationMessages.invalidEnumField("type", value), exception);
+        }
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+    }
+
+    private void handleDashboard(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/dashboard".equals(path) || "/dashboard/".equals(path)) {
+            sendResource(exchange, "/dashboard/index.html", "text/html; charset=utf-8");
+            return;
+        }
+
+        if (!path.startsWith("/dashboard/")) {
+            sendJson(exchange, 404, errorJson(OperationMessages.DASHBOARD_RESOURCE_NOT_FOUND));
+            return;
+        }
+
+        String relativePath = path.substring("/dashboard/".length());
+
+        if (relativePath.isBlank() || relativePath.contains("..")) {
+            sendJson(exchange, 404, errorJson(OperationMessages.DASHBOARD_RESOURCE_NOT_FOUND));
+            return;
+        }
+
+        String resourcePath = "/dashboard/" + relativePath;
+        String contentType = detectDashboardContentType(resourcePath);
+
+        sendResource(exchange, resourcePath, contentType);
+    }
+
+    private String detectDashboardContentType(String resourcePath) {
+        if (resourcePath.endsWith(".html")) {
+            return "text/html; charset=utf-8";
+        }
+
+        if (resourcePath.endsWith(".css")) {
+            return "text/css; charset=utf-8";
+        }
+
+        if (resourcePath.endsWith(".js")) {
+            return "application/javascript; charset=utf-8";
+        }
+
+        return "application/octet-stream";
+    }
+
+    private void sendResource(
+            HttpExchange exchange,
+            String resourcePath,
+            String contentType) throws IOException {
+        try (InputStream inputStream = RemoteApiServer.class.getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(resourcePath)));
+                return;
+            }
+
+            byte[] bytes = inputStream.readAllBytes();
+
+            exchange.getResponseHeaders().set("Content-Type", contentType);
+            exchange.sendResponseHeaders(200, bytes.length);
+
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write(bytes);
+            }
+        }
+    }
+
+    private String printJobExecutionStepsJson(List<PrintJobExecutionStep> steps) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"executionSteps\":[");
+
+        boolean first = true;
+
+        for (PrintJobExecutionStep step : steps) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append(printJobExecutionStepJson(step));
+            first = false;
+        }
+
+        json.append("]}");
+        return json.toString();
+    }
+
+    private String sdCardUploadResultJson(SdCardUploadService.UploadResult result) {
+    return "{"
+            + "\"printerId\":\"" + escapeJson(result.printerId()) + "\","
+            + "\"printFileId\":\"" + escapeJson(result.printFileId()) + "\","
+            + "\"originalFilename\":\"" + escapeJson(result.originalFilename()) + "\","
+            + "\"requestedTargetFilename\":\"" + escapeJson(result.requestedTargetFilename()) + "\","
+            + "\"linkedFirmwarePath\":\"" + escapeJson(result.linkedFirmwarePath()) + "\","
+            + "\"printerSdFileId\":\"" + escapeJson(result.printerSdFileId()) + "\","
+            + "\"uploadedLineCount\":" + result.uploadedLineCount() + ","
+            + "\"success\":" + result.success() + ","
+            + "\"detail\":" + nullableString(result.detail())
+            + "}";
+}
+
+
+    private String printJobExecutionStepJson(PrintJobExecutionStep step) {
+        return "{"
+                + "\"id\":" + step.id() + ","
+                + "\"jobId\":\"" + escapeJson(step.jobId()) + "\","
+                + "\"stepIndex\":" + step.stepIndex() + ","
+                + "\"stepName\":\"" + escapeJson(step.stepName()) + "\","
+                + "\"wireCommand\":" + nullableString(step.wireCommand()) + ","
+                + "\"response\":" + nullableString(step.response()) + ","
+                + "\"outcome\":\"" + escapeJson(step.outcome()) + "\","
+                + "\"success\":" + step.success() + ","
+                + "\"failureReason\":" + nullableString(step.failureReason()) + ","
+                + "\"failureDetail\":" + nullableString(step.failureDetail()) + ","
+                + "\"createdAt\":\"" + escapeJson(step.createdAt().toString()) + "\""
+                + "}";
+    }
+
+    private void rollbackRegister(String printerId) {
+        try {
+            monitoringScheduler.stopMonitoring(printerId);
+            printerRegistry.remove(printerId);
+            stateCache.remove(printerId);
+        } catch (Exception exception) {
+            System.err.println(OperationMessages.failedToRollbackPrinterRegistration(
+                    printerId,
+                    safeMessage(exception)));
+        }
+    }
+
+    private String safeMessage(Exception exception) {
+        if (exception == null) {
+            return OperationMessages.UNKNOWN_API_ERROR;
+        }
+
+        return OperationMessages.safeDetail(
+                exception.getMessage(),
+                OperationMessages.UNKNOWN_API_ERROR);
+    }
+
+    @FunctionalInterface
+    private interface ExchangeHandler {
+        void handle(HttpExchange exchange) throws IOException;
+    }
+}
+
+===== src/main/java/printerhub/Main.java =====
+package printerhub;
+
+import printerhub.api.RemoteApiServer;
+import printerhub.command.PrinterCommandService;
+import printerhub.command.SdCardService;
+import printerhub.config.RuntimeDefaults;
+import printerhub.job.AsyncPrintJobExecutor;
+import printerhub.job.PrintFileService;
+import printerhub.job.PrintJobExecutionService;
+import printerhub.job.PrintJobService;
+import printerhub.job.PrinterSdFileService;
+import printerhub.job.PrinterActionGuard;
+import printerhub.job.PrinterActionMapper;
+import printerhub.monitoring.PrinterMonitoringScheduler;
+import printerhub.persistence.DatabaseInitializer;
+import printerhub.persistence.MonitoringRulesStore;
+import printerhub.persistence.PrintFileSettingsStore;
+import printerhub.persistence.PrintFileStore;
+import printerhub.persistence.PrintJobStore;
+import printerhub.persistence.PrinterConfigurationStore;
+import printerhub.persistence.PrinterEventStore;
+import printerhub.persistence.PrintJobExecutionStepStore;
+import printerhub.persistence.PrinterSdFileStore;
+import printerhub.runtime.PrinterHubRuntime;
+import printerhub.runtime.PrinterRegistry;
+import printerhub.runtime.PrinterRuntimeStateCache;
+import printerhub.command.SdCardUploadService;
+import java.util.concurrent.CountDownLatch;
+
+public final class Main {
+
+        private Main() {
+        }
+
+        public static void main(String[] args) throws InterruptedException {
+                try {
+                        int apiPort = readIntProperty(
+                                        RuntimeDefaults.API_PORT_PROPERTY,
+                                        RuntimeDefaults.DEFAULT_API_PORT);
+
+                        PrinterRegistry printerRegistry = new PrinterRegistry();
+                        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+                        DatabaseInitializer databaseInitializer = new DatabaseInitializer();
+                        PrinterConfigurationStore printerConfigurationStore = new PrinterConfigurationStore();
+                        MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
+                        PrintFileSettingsStore printFileSettingsStore = new PrintFileSettingsStore();
+                        PrinterEventStore printerEventStore = new PrinterEventStore();
+                        PrintFileStore printFileStore = new PrintFileStore();
+                        PrinterSdFileStore printerSdFileStore = new PrinterSdFileStore();
+                        PrintJobStore printJobStore = new PrintJobStore();
+
+                        PrinterCommandService printerCommandService = new PrinterCommandService(printerEventStore);
+                        SdCardService sdCardService = new SdCardService(printerEventStore);
+
+                        PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
+                                        printerRegistry,
+                                        stateCache);
+
+                        PrintJobService printJobService = new PrintJobService(
+                                        printJobStore,
+                                        printerEventStore);
+                        PrintFileService printFileService = new PrintFileService(
+                                        printFileStore,
+                                        printFileSettingsStore,
+                                        java.time.Clock.systemUTC());
+                        PrinterSdFileService printerSdFileService = new PrinterSdFileService(
+                                        printerSdFileStore,
+                                        printFileStore);
+
+                        PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+
+                        SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                                        printerRegistry,
+                                        monitoringScheduler,
+                                        printerActionGuard,
+                                        printFileService,
+                                        sdCardService,
+                                        printerSdFileService,
+                                        printerEventStore);
+
+                        PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
+                                        printJobService,
+                                        printerRegistry,
+                                        monitoringScheduler,
+                                        printerActionGuard,
+                                        new PrinterActionMapper(),
+                                        new PrintJobExecutionStepStore());
+
+                        AsyncPrintJobExecutor asyncPrintJobExecutor = new AsyncPrintJobExecutor(
+                                        printJobService,
+                                        printerRegistry,
+                                        printerActionGuard,
+                                        printJobExecutionService);
+
+                        RemoteApiServer apiServer = new RemoteApiServer(
+                                        apiPort,
+                                        printerRegistry,
+                                        stateCache,
+                                        monitoringScheduler,
+                                        printerConfigurationStore,
+                                        monitoringRulesStore,
+                                        printFileSettingsStore,
+                                        printerEventStore,
+                                        printerCommandService,
+                                        sdCardService,
+                                        sdCardUploadService,
+                                        printFileService,
+                                        printerSdFileService,
+                                        printJobService,
+                                        asyncPrintJobExecutor,
+                                        new PrintJobExecutionStepStore());
+
+                        PrinterHubRuntime runtime = new PrinterHubRuntime(
+                                        databaseInitializer,
+                                        printerConfigurationStore,
+                                        monitoringRulesStore,
+                                        printerRegistry,
+                                        stateCache,
+                                        monitoringScheduler,
+                                        apiServer);
+
+                        Runtime.getRuntime().addShutdownHook(new Thread(runtime::close));
+
+                        runtime.start();
+
+                        System.out.println(OperationMessages.localRuntimeStarted());
+                        System.out.println(OperationMessages.healthEndpoint(apiPort));
+                        System.out.println(OperationMessages.printersEndpoint(apiPort));
+                        System.out.println(OperationMessages.monitoringSettingsEndpoint(apiPort));
+
+                        new CountDownLatch(1).await();
+                } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        System.err.println(OperationMessages.runtimeStartupFailed(
+                                        OperationMessages.safeDetail(
+                                                        exception.getMessage(),
+                                                        OperationMessages.UNKNOWN_STARTUP_ERROR)));
+                        throw exception;
+                } catch (IllegalArgumentException exception) {
+                        System.err.println(OperationMessages.runtimeStartupFailed(
+                                        OperationMessages.safeDetail(
+                                                        exception.getMessage(),
+                                                        OperationMessages.UNKNOWN_STARTUP_ERROR)));
+                        System.exit(RuntimeDefaults.ERROR_EXIT_CODE);
+                } catch (Exception exception) {
+                        System.err.println(OperationMessages.runtimeStartupFailed(
+                                        OperationMessages.safeDetail(
+                                                        exception.getMessage(),
+                                                        OperationMessages.UNKNOWN_STARTUP_ERROR)));
+                        exception.printStackTrace(System.err);
+                        System.exit(RuntimeDefaults.ERROR_EXIT_CODE);
+                }
+        }
+
+        private static int readIntProperty(String key, int defaultValue) {
+                String value = System.getProperty(key);
+
+                if (value == null || value.isBlank()) {
+                        return defaultValue;
+                }
+
+                try {
+                        return Integer.parseInt(value);
+                } catch (NumberFormatException exception) {
+                        throw new IllegalArgumentException(
+                                        OperationMessages.invalidIntegerSystemProperty(key, value),
+                                        exception);
+                }
+        }
+}
+
+===== src/main/java/printerhub/OperationMessages.java =====
+package printerhub;
+
+public final class OperationMessages {
+
+    private OperationMessages() {
+    }
+
+    public static final String ERROR_PREFIX = "[ERROR] ";
+    public static final String INFO_PREFIX = "[INFO] ";
+
+    public static final String MONITORING_SCHEDULER_MUST_NOT_BE_NULL = "monitoringScheduler must not be null";
+    public static final String MONITORING_RULES_STORE_MUST_NOT_BE_NULL = "monitoringRulesStore must not be null";
+    public static final String COMMAND_SERVICE_MUST_NOT_BE_NULL = "printerCommandService must not be null";
+
+    public static final String FAILED_TO_SAVE_PRINTER_CONFIGURATION = "Failed to save printer configuration";
+    public static final String FAILED_TO_LOAD_PRINTER_CONFIGURATION = "Failed to load printer configuration";
+    public static final String FAILED_TO_CHECK_PRINTER_CONFIGURATION = "Failed to check printer configuration";
+    public static final String FAILED_TO_DELETE_PRINTER_CONFIGURATION = "Failed to delete printer configuration";
+    public static final String FAILED_TO_UPDATE_PRINTER_ENABLED_FLAG = "Failed to update printer enabled flag";
+
+    public static final String DATABASE_INITIALIZER_MUST_NOT_BE_NULL = "databaseInitializer must not be null";
+    public static final String API_SERVER_MUST_NOT_BE_NULL = "apiServer must not be null";
+
+    public static final String NODE_MUST_NOT_BE_NULL = "node must not be null";
+    public static final String STATE_CACHE_MUST_NOT_BE_NULL = "stateCache must not be null";
+    public static final String SNAPSHOT_STORE_MUST_NOT_BE_NULL = "snapshotStore must not be null";
+    public static final String EVENT_STORE_MUST_NOT_BE_NULL = "eventStore must not be null";
+    public static final String CLOCK_MUST_NOT_BE_NULL = "clock must not be null";
+    public static final String STATUS_COMMAND_MUST_NOT_BE_BLANK = "statusCommand must not be blank";
+    public static final String PRINTER_REGISTRY_MUST_NOT_BE_NULL = "printerRegistry must not be null";
+    public static final String PRINTER_CONFIGURATION_STORE_MUST_NOT_BE_NULL = "printerConfigurationStore must not be null";
+    public static final String PRINTER_ID_MUST_NOT_BE_BLANK = "printerId must not be blank";
+    public static final String SNAPSHOT_MUST_NOT_BE_NULL = "snapshot must not be null";
+    public static final String PORT_MUST_BE_IN_VALID_RANGE = "port must be between 1 and 65535";
+    public static final String PORT_NAME_MUST_NOT_BE_BLANK = "portName must not be blank";
+    public static final String PORT_ADAPTER_MUST_NOT_BE_NULL = "portAdapter must not be null";
+    public static final String COMMAND_MUST_NOT_BE_BLANK = "command must not be blank";
+    public static final String PRINTER_EVENT_MUST_NOT_BE_NULL = "printer event must not be null";
+    public static final String MONITORING_RULES_MUST_NOT_BE_NULL = "monitoringRules must not be null";
+    public static final String INTERVAL_SECONDS_MUST_BE_GREATER_THAN_ZERO = "intervalSeconds must be greater than zero";
+
+    public static final String POLL_INTERVAL_SECONDS_MUST_BE_GREATER_THAN_ZERO = "pollIntervalSeconds must be greater than zero";
+    public static final String SNAPSHOT_MINIMUM_INTERVAL_SECONDS_MUST_NOT_BE_NEGATIVE = "snapshotMinimumIntervalSeconds must not be negative";
+    public static final String TEMPERATURE_DELTA_THRESHOLD_MUST_NOT_BE_NEGATIVE = "temperatureDeltaThreshold must not be negative";
+    public static final String EVENT_DEDUPLICATION_WINDOW_SECONDS_MUST_NOT_BE_NEGATIVE = "eventDeduplicationWindowSeconds must not be negative";
+    public static final String ERROR_PERSISTENCE_BEHAVIOR_MUST_NOT_BE_NULL = "errorPersistenceBehavior must not be null";
+    public static final String TARGET_TEMPERATURE_MUST_NOT_BE_NEGATIVE = "targetTemperature must not be negative";
+
+    public static final String EVENT_PRINTER_POLLED = "PRINTER_POLLED";
+    public static final String EVENT_PRINTER_DISABLED = "PRINTER_DISABLED";
+    public static final String EVENT_PRINTER_TIMEOUT = "PRINTER_TIMEOUT";
+    public static final String EVENT_PRINTER_DISCONNECTED = "PRINTER_DISCONNECTED";
+    public static final String EVENT_PRINTER_ERROR = "PRINTER_ERROR";
+    public static final String EVENT_COMMAND_EXECUTED = "COMMAND_EXECUTED";
+    public static final String EVENT_COMMAND_FAILED = "COMMAND_FAILED";
+    public static final String EVENT_SD_CARD_FILES_LISTED = "SD_CARD_FILES_LISTED";
+    public static final String EVENT_SD_CARD_FILE_LIST_FAILED = "SD_CARD_FILE_LIST_FAILED";
+
+    public static final String PRINTER_NODE_DISABLED = "Printer node is disabled.";
+    public static final String PRINTER_POLL_COMPLETED_SUCCESSFULLY = "Printer poll completed successfully.";
+    public static final String PRINTER_RETURNED_ERROR_RESPONSE = "Printer returned error response.";
+    public static final String UNKNOWN_PRINTER_MONITORING_ERROR = "Unknown printer monitoring error.";
+    public static final String UNKNOWN_API_ERROR = "Unexpected API error.";
+    public static final String INTERNAL_SERVER_ERROR = "internal_server_error";
+    public static final String UNKNOWN_COMMAND_EXECUTION_ERROR = "Unknown command execution error.";
+
+    public static final String METHOD_NOT_ALLOWED = "method_not_allowed";
+    public static final String PRINTER_NOT_FOUND = "printer_not_found";
+    public static final String PRINTER_ENDPOINT_NOT_FOUND = "printer_endpoint_not_found";
+    public static final String DASHBOARD_RESOURCE_NOT_FOUND = "dashboard_resource_not_found";
+
+    public static final String API_SERVER_STOPPED = "API server stopped";
+    public static final String API_OPERATION_FAILED = "API operation failed";
+    public static final String UNEXPECTED_API_ERROR = "Unexpected API error";
+
+    public static final String FAILED_TO_SAVE_PRINTER_SNAPSHOT = "Failed to save printer snapshot";
+    public static final String FAILED_TO_LOAD_PRINTER_SNAPSHOTS = "Failed to load printer snapshots";
+    public static final String FAILED_TO_CHECK_LATEST_PRINTER_SNAPSHOT = "Failed to check latest printer snapshot";
+    public static final String INVALID_STORED_PRINTER_SNAPSHOT_STATE = "Invalid stored printer snapshot state";
+    public static final String INVALID_STORED_PRINTER_SNAPSHOT_TIMESTAMP = "Invalid stored printer snapshot timestamp";
+    public static final String FAILED_TO_SAVE_PRINTER_EVENT = "Failed to save printer event";
+    public static final String FAILED_TO_LOAD_PRINTER_EVENTS = "Failed to load printer events";
+
+    public static final String FAILED_TO_LOAD_MONITORING_RULES = "Failed to load monitoring rules";
+    public static final String FAILED_TO_SAVE_MONITORING_RULES = "Failed to save monitoring rules";
+    public static final String FAILED_TO_LOAD_PRINT_FILE_SETTINGS = "Failed to load print file settings";
+    public static final String FAILED_TO_SAVE_PRINT_FILE_SETTINGS = "Failed to save print file settings";
+
+    public static final String SERIAL_CONNECTION_IS_NOT_OPEN = "Serial port is not open.";
+    public static final String INTERRUPTED_WHILE_READING_RESPONSE = "Interrupted while reading response from serial port.";
+
+    public static final String PRINTER_PORT_MUST_NOT_BE_NULL = "printerPort must not be null";
+    public static final String UNKNOWN_RUNTIME_CLOSE_ERROR = "Unknown runtime close error";
+
+    public static final String UNKNOWN_STARTUP_ERROR = "Unknown startup error";
+    public static final String UPDATED_AT_MUST_NOT_BE_NULL = "updatedAt must not be null";
+
+    public static final String DATABASE_FILE_MUST_NOT_BE_BLANK = "database file must not be blank";
+    public static final String FAILED_TO_INITIALIZE_DATABASE_SCHEMA = "Failed to initialize database schema";
+
+    public static final String TEMPERATURE_THRESHOLD_MUST_NOT_BE_NEGATIVE = "temperatureThreshold must not be negative";
+    public static final String MIN_INTERVAL_SECONDS_MUST_NOT_BE_NEGATIVE = "minIntervalSeconds must not be negative";
+
+    public static final String INVALID_PRINTER_MODE = "mode must be one of: real, sim, simulated, sim-disconnected, sim-timeout, sim-error";
+
+    public static final String SIMULATED_PRINTER_FAILURE_RESPONSE = "Error: Simulated printer failure";
+
+    public static final String EVENT_TYPE_MUST_NOT_BE_BLANK = "eventType must not be blank";
+    public static final String CREATED_AT_MUST_NOT_BE_NULL = "createdAt must not be null";
+    public static final String SHUTDOWN_SIGNAL_MUST_NOT_BE_NULL = "shutdownSignal must not be null";
+
+    public static final String DEDUP_WINDOW_MUST_NOT_BE_NULL = "dedupWindow must not be null";
+    public static final String DEDUP_WINDOW_MUST_NOT_BE_NEGATIVE = "dedupWindow must not be negative";
+    public static final String EVENT_MESSAGE_MUST_NOT_BE_BLANK = "eventMessage must not be blank";
+    public static final String MONITORING_EVENT_POLICY_MUST_NOT_BE_NULL = "monitoringEventPolicy must not be null";
+
+    public static final String PRINT_JOB_STORE_MUST_NOT_BE_NULL = "printJobStore must not be null";
+    public static final String PRINT_JOB_SERVICE_MUST_NOT_BE_NULL = "printJobService must not be null";
+    public static final String PRINT_JOB_EXECUTION_SERVICE_MUST_NOT_BE_NULL = "printJobExecutionService must not be null";
+    public static final String PRINTER_ACTION_GUARD_MUST_NOT_BE_NULL = "printerActionGuard must not be null";
+    public static final String PRINTER_ACTION_MAPPER_MUST_NOT_BE_NULL = "printerActionMapper must not be null";
+
+    public static final String JOB_ID_MUST_NOT_BE_BLANK = "jobId must not be blank";
+    public static final String JOB_NAME_MUST_NOT_BE_BLANK = "jobName must not be blank";
+    public static final String JOB_TYPE_MUST_NOT_BE_NULL = "jobType must not be null";
+    public static final String JOB_STATE_MUST_NOT_BE_NULL = "jobState must not be null";
+    public static final String ACTION_TYPE_MUST_NOT_BE_NULL = "actionType must not be null";
+
+    public static final String JOB_NOT_FOUND = "job_not_found";
+    public static final String JOB_ENDPOINT_NOT_FOUND = "job_endpoint_not_found";
+    public static final String INVALID_JOB_STATE = "invalid_job_state";
+    public static final String PRINTER_BUSY = "printer_busy";
+    public static final String PRECONDITION_FAILED = "precondition_failed";
+
+    public static final String FAILED_TO_SAVE_PRINT_JOB = "Failed to save print job";
+    public static final String FAILED_TO_LOAD_PRINT_JOB = "Failed to load print job";
+    public static final String FAILED_TO_LOAD_PRINT_JOBS = "Failed to load print jobs";
+    public static final String FAILED_TO_UPDATE_PRINT_JOB = "Failed to update print job";
+    public static final String FAILED_TO_DELETE_PRINT_JOB = "Failed to delete print job";
+    public static final String FAILED_TO_SAVE_PRINT_FILE = "Failed to save print file";
+    public static final String FAILED_TO_LOAD_PRINT_FILE = "Failed to load print file";
+    public static final String FAILED_TO_LOAD_PRINT_FILES = "Failed to load print files";
+    public static final String FAILED_TO_SAVE_PRINTER_SD_FILE = "Failed to save printer SD file";
+    public static final String FAILED_TO_LOAD_PRINTER_SD_FILE = "Failed to load printer SD file";
+    public static final String FAILED_TO_LOAD_PRINTER_SD_FILES = "Failed to load printer SD files";
+    public static final String FAILED_TO_STORE_UPLOADED_PRINT_FILE = "failed_to_store_uploaded_print_file";
+    public static final String FAILED_TO_READ_PRINT_FILE_CONTENT = "failed_to_read_print_file_content";
+    public static final String PRINT_FILE_NOT_FOUND = "print_file_not_found";
+    public static final String PRINTER_SD_FILE_NOT_FOUND = "printer_sd_file_not_found";
+    public static final String PRINTER_SD_FILE_DISABLED = "printer_sd_file_disabled";
+    public static final String PRINTER_SD_FILE_ID_MUST_NOT_BE_BLANK = "printerSdFileId must not be blank";
+    public static final String PRINTER_SD_FILE_PATH_MUST_NOT_BE_BLANK = "firmwarePath must not be blank";
+    public static final String PRINT_FILE_ID_MUST_NOT_BE_BLANK = "printFileId must not be blank";
+    public static final String PRINT_FILE_PATH_MUST_NOT_BE_BLANK = "path must not be blank";
+    public static final String PRINT_FILE_STORAGE_DIRECTORY_MUST_NOT_BE_BLANK = "printFileStorageDirectory must not be blank";
+    public static final String PRINT_FILE_FILENAME_MUST_NOT_BE_BLANK = "filename must not be blank";
+    public static final String UNSUPPORTED_PRINT_FILE_TYPE = "unsupported_print_file_type";
+    public static final String PRINT_FILE_MUST_EXIST = "print_file_must_exist";
+    public static final String PRINT_FILE_MUST_BE_READABLE = "print_file_must_be_readable";
+    public static final String PRINT_FILE_MUST_BE_REGULAR_FILE = "print_file_must_be_regular_file";
+    public static final String FAILED_TO_LIST_SD_CARD_FILES = "failed_to_list_sd_card_files";
+
+    public static final String EVENT_JOB_CREATED = "JOB_CREATED";
+    public static final String EVENT_JOB_ASSIGNED = "JOB_ASSIGNED";
+    public static final String EVENT_JOB_STARTED = "JOB_STARTED";
+    public static final String EVENT_JOB_EXECUTION_QUEUED = "JOB_EXECUTION_QUEUED";
+    public static final String EVENT_JOB_EXECUTION_STARTED = "JOB_EXECUTION_STARTED";
+    public static final String EVENT_JOB_EXECUTION_IN_PROGRESS = "JOB_EXECUTION_IN_PROGRESS";
+    public static final String EVENT_JOB_EXECUTION_SUCCEEDED = "JOB_EXECUTION_SUCCEEDED";
+    public static final String EVENT_JOB_EXECUTION_FAILED = "JOB_EXECUTION_FAILED";
+    public static final String EVENT_JOB_COMPLETED = "JOB_COMPLETED";
+    public static final String EVENT_JOB_FAILED = "JOB_FAILED";
+    public static final String EVENT_JOB_CANCELLED = "JOB_CANCELLED";
+
+    public static String simulatedPrinterDisconnected(String portName) {
+        return "Simulated printer is disconnected: " + portName;
+    }
+
+    public static String simulatedPrinterNotConnected(String portName) {
+        return "Simulated printer is not connected: " + portName;
+    }
+
+    public static String databaseInitialized(String databaseFile) {
+        return "[PrinterHub] Database initialized: " + databaseFile;
+    }
+
+    public static String failedToOpenDatabaseConnection(String databaseFile) {
+        return "Failed to open database connection for file '" + databaseFile + "'";
+    }
+
+    public static String runtimeStartupFailed(String detail) {
+        return "[PrinterHub] Runtime startup failed: " + detail;
+    }
+
+    public static String localRuntimeStarted() {
+        return "[PrinterHub] Local runtime started";
+    }
+
+    public static String healthEndpoint(int apiPort) {
+        return "[PrinterHub] Health:   http://localhost:" + apiPort + "/health";
+    }
+
+    public static String printersEndpoint(int apiPort) {
+        return "[PrinterHub] Printers: http://localhost:" + apiPort + "/printers";
+    }
+
+    public static String monitoringSettingsEndpoint(int apiPort) {
+        return "[PrinterHub] Settings: http://localhost:" + apiPort + "/settings/monitoring";
+    }
+
+    public static String invalidIntegerSystemProperty(String key, String value) {
+        return "Invalid integer system property '" + key + "': " + value;
+    }
+
+    public static String invalidLongSystemProperty(String key, String value) {
+        return "Invalid long system property '" + key + "': " + value;
+    }
+
+    public static String failedToDisconnectPrinterNode(String printerId, String detail) {
+        return "[PrinterHub] Failed to disconnect printer node '" + printerId + "': " + detail;
+    }
+
+    public static String failedToCloseSerialPort(String portName, String detail) {
+        return "[PrinterHub] Failed to close serial port '" + portName + "': " + detail;
+    }
+
+    public static String failedToCloseResource(String resourceName, String detail) {
+        return "[PrinterHub] Failed to close " + resourceName + ": " + detail;
+    }
+
+    public static String noResponseForCommand(String command) {
+        return "No response for command " + command;
+    }
+
+    public static String failedToPersistSnapshot(String printerId, String detail) {
+        return "[PrinterHub] Failed to persist snapshot for " + printerId + ": " + detail;
+    }
+
+    public static String failedToPersistEvent(String printerId, String detail) {
+        return "[PrinterHub] Failed to persist event for " + printerId + ": " + detail;
+    }
+
+    public static String failedToStartApiServer(int port) {
+        return "Failed to start API server on port " + port;
+    }
+
+    public static String apiServerStarted(int port) {
+        return "[PrinterHub] API server started on port " + port;
+    }
+
+    public static String apiServerStopped() {
+        return "[PrinterHub] " + API_SERVER_STOPPED;
+    }
+
+    public static String apiOperationFailed(String detail) {
+        return "[PrinterHub] " + API_OPERATION_FAILED + ": " + detail;
+    }
+
+    public static String unexpectedApiError(String detail) {
+        return "[PrinterHub] " + UNEXPECTED_API_ERROR + ": " + detail;
+    }
+
+    public static String resourceNotFound(String resourcePath) {
+        return "resource_not_found: " + resourcePath;
+    }
+
+    public static String fieldMustNotBeBlank(String fieldName) {
+        return fieldName + " must not be blank";
+    }
+
+    public static String invalidEnumField(String fieldName, String value) {
+        return "Invalid value for " + fieldName + ": " + value;
+    }
+
+    public static String invalidPrinterCommand(String value) {
+        return "Invalid printer command: " + value;
+    }
+
+    public static String targetTemperatureRequired(String commandName) {
+        return "targetTemperature is required for command " + commandName;
+    }
+
+    public static String failedToOpenSerialPort(String portName) {
+        return "Failed to open serial port '" + portName + "'. "
+                + "Possible causes: device path is wrong, permission is missing, "
+                + "or the port is already in use.";
+    }
+
+    public static String failedToInitializeSerialStreams(String portName) {
+        return "Failed to initialize serial streams for port: " + portName;
+    }
+
+    public static String failedToSendCommand(String command, String portName) {
+        return "Failed to send command '" + command + "' to " + portName;
+    }
+
+    public static String noResponseForCommandOnPort(String command, String portName) {
+        return "No response for command '" + command + "' on " + portName;
+    }
+
+    public static String interruptedWhileReadingResponse(String portName) {
+        return "Interrupted while reading response from " + portName;
+    }
+
+    public static String noResponseWithinTimeout(int timeoutMs) {
+        return "No response received from printer within " + timeoutMs + " ms.";
+    }
+
+    public static String invalidStoredPrinterSnapshotState(String storedState) {
+        return INVALID_STORED_PRINTER_SNAPSHOT_STATE + ": " + storedState;
+    }
+
+    public static String invalidStoredPrinterSnapshotTimestamp(String storedTimestamp) {
+        return INVALID_STORED_PRINTER_SNAPSHOT_TIMESTAMP + ": " + storedTimestamp;
+    }
+
+    public static String printerUpdateRestoreFailed(String printerId) {
+        return "Printer update failed and previous runtime state could not be restored for " + printerId + ".";
+    }
+
+    public static String failedToRollbackPrinterRegistration(String printerId, String detail) {
+        return "[PrinterHub] Failed to roll back printer registration for "
+                + printerId + ": " + detail;
+    }
+
+    public static String failedToRestorePrinterAfterPut(String printerId, String detail) {
+        return "[PrinterHub] Failed to restore printer after PUT failure for "
+                + printerId + ": " + detail;
+    }
+
+    public static String failedToRestorePrinterAfterDelete(String printerId, String detail) {
+        return "[PrinterHub] Failed to restore printer after DELETE failure for "
+                + printerId + ": " + detail;
+    }
+
+    public static String invalidErrorPersistenceBehavior(String value) {
+        return "Invalid errorPersistenceBehavior: " + value;
+    }
+
+    public static String commandExecuted(String wireCommand) {
+        return "Manual command executed: " + wireCommand;
+    }
+
+    public static String commandFailed(String wireCommand, String detail) {
+        return "Manual command failed: " + wireCommand + " -> " + detail;
+    }
+
+    public static String sdCardFilesListed(int count) {
+        return "SD card files listed: " + count;
+    }
+
+    public static String sdCardFileListFailed(String detail) {
+        return "SD card file list failed: " + detail;
+    }
+
+    public static String safeDetail(String detail, String fallback) {
+        if (detail == null || detail.isBlank()) {
+            return fallback;
+        }
+
+        return detail;
+    }
+}
+
+===== src/main/java/printerhub/job/PrintFileService.java =====
+package printerhub.job;
+
+import printerhub.OperationMessages;
+import printerhub.persistence.PrintFileSettingsStore;
+import printerhub.persistence.PrintFileStore;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+
+public final class PrintFileService {
+
+    public static final String GCODE_MEDIA_TYPE = "text/x.gcode";
+
+    private final PrintFileStore printFileStore;
+    private final PrintFileSettingsStore printFileSettingsStore;
+    private final Clock clock;
+
+    public PrintFileService(PrintFileStore printFileStore) {
+        this(printFileStore, new PrintFileSettingsStore(), Clock.systemUTC());
+    }
+
+    public PrintFileService(PrintFileStore printFileStore, Clock clock) {
+        this(printFileStore, new PrintFileSettingsStore(), clock);
+    }
+
+    public PrintFileService(
+            PrintFileStore printFileStore,
+            PrintFileSettingsStore printFileSettingsStore,
+            Clock clock) {
+        if (printFileStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileStore"));
+        }
+        if (printFileSettingsStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileSettingsStore"));
+        }
+        if (clock == null) {
+            throw new IllegalArgumentException(OperationMessages.CLOCK_MUST_NOT_BE_NULL);
+        }
+
+        this.printFileStore = printFileStore;
+        this.printFileSettingsStore = printFileSettingsStore;
+        this.clock = clock;
+    }
+
+    public PrintFile registerHostFile(String pathValue) {
+        if (pathValue == null || pathValue.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_PATH_MUST_NOT_BE_BLANK);
+        }
+
+        Path path = Path.of(pathValue.trim()).toAbsolutePath().normalize();
+        String filename = path.getFileName() == null ? "" : path.getFileName().toString();
+
+        if (!filename.toLowerCase(java.util.Locale.ROOT).endsWith(".gcode")) {
+            throw new IllegalArgumentException(OperationMessages.UNSUPPORTED_PRINT_FILE_TYPE);
+        }
+        if (!Files.exists(path)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_EXIST);
+        }
+        if (!Files.isRegularFile(path)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_BE_REGULAR_FILE);
+        }
+        if (!Files.isReadable(path)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_BE_READABLE);
+        }
+
+        return savePrintFile(path, filename);
+    }
+
+    public PrintFile storeUploadedFile(String originalFilename, byte[] content) {
+        String filename = sanitizeFilename(originalFilename);
+
+        if (!filename.toLowerCase(Locale.ROOT).endsWith(".gcode")) {
+            throw new IllegalArgumentException(OperationMessages.UNSUPPORTED_PRINT_FILE_TYPE);
+        }
+        if (content == null) {
+            content = new byte[0];
+        }
+
+        Path storageDirectory = Path.of(printFileSettingsStore.load().storageDirectory())
+                .toAbsolutePath()
+                .normalize();
+        String storedFilename = UUID.randomUUID() + "-" + filename;
+        Path storedPath = storageDirectory.resolve(storedFilename).normalize();
+
+        if (!storedPath.startsWith(storageDirectory)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_FILENAME_MUST_NOT_BE_BLANK);
+        }
+
+        try {
+            Files.createDirectories(storageDirectory);
+            Files.write(storedPath, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        } catch (IOException exception) {
+            throw new IllegalStateException(OperationMessages.FAILED_TO_STORE_UPLOADED_PRINT_FILE, exception);
+        }
+
+        return savePrintFile(storedPath, filename);
+    }
+
+    public String readContent(String printFileId) {
+        PrintFile printFile = findById(printFileId)
+                .orElseThrow(() -> new IllegalArgumentException(OperationMessages.PRINT_FILE_NOT_FOUND));
+
+        try {
+            return Files.readString(Path.of(printFile.path()), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new IllegalStateException(OperationMessages.FAILED_TO_READ_PRINT_FILE_CONTENT, exception);
+        }
+    }
+
+    public Optional<PrintFile> findById(String printFileId) {
+        return printFileStore.findById(printFileId);
+    }
+
+    public List<PrintFile> findAll() {
+        return printFileStore.findAll();
+    }
+
+    private String sanitizeFilename(String originalFilename) {
+        if (originalFilename == null || originalFilename.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_FILENAME_MUST_NOT_BE_BLANK);
+        }
+
+        String filename = Path.of(originalFilename.trim()).getFileName().toString();
+        filename = filename.replaceAll("[^A-Za-z0-9._-]", "_");
+
+        if (filename.isBlank() || ".".equals(filename) || "..".equals(filename)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_FILENAME_MUST_NOT_BE_BLANK);
+        }
+
+        return filename;
+    }
+
+    private PrintFile savePrintFile(Path path, String originalFilename) {
+        if (!Files.exists(path)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_EXIST);
+        }
+        if (!Files.isRegularFile(path)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_BE_REGULAR_FILE);
+        }
+        if (!Files.isReadable(path)) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_BE_READABLE);
+        }
+
+        long sizeBytes;
+
+        try {
+            sizeBytes = Files.size(path);
+        } catch (IOException exception) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_MUST_BE_READABLE, exception);
+        }
+
+        PrintFile printFile = new PrintFile(
+                UUID.randomUUID().toString(),
+                originalFilename,
+                path.toString(),
+                sizeBytes,
+                GCODE_MEDIA_TYPE,
+                Instant.now(clock));
+
+        printFileStore.save(printFile);
+        return printFile;
+    }
+}
+
+===== src/main/java/printerhub/job/PrinterActionGuard.java =====
+package printerhub.job;
+
+import printerhub.OperationMessages;
+import printerhub.runtime.PrinterRuntimeNode;
+
+public final class PrinterActionGuard {
+
+    private static final int MAX_FAN_SPEED = 255;
+
+    public GuardDecision validateForExecution(
+            PrintJob job,
+            PrinterRuntimeNode node) {
+        if (job == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("job"));
+        }
+        if (node == null) {
+            throw new IllegalArgumentException(OperationMessages.NODE_MUST_NOT_BE_NULL);
+        }
+
+        if (!node.enabled()) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.PRINTER_DISABLED,
+                    OperationMessages.PRINTER_NODE_DISABLED);
+        }
+
+        if (node.executionInProgress()) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.PRINTER_BUSY,
+                    OperationMessages.PRINTER_BUSY);
+        }
+
+        if (job.printerId() == null || job.printerId().isBlank()) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.PRECONDITION_FAILED,
+                    OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
+        }
+
+        if (!job.printerId().equals(node.id())) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.PRECONDITION_FAILED,
+                    "Job printerId does not match runtime printer node.");
+        }
+
+        return switch (job.type()) {
+            case READ_TEMPERATURE,
+                    READ_POSITION,
+                    READ_FIRMWARE_INFO,
+                    HOME_AXES,
+                    PRINT_FILE,
+                    TURN_FAN_OFF ->
+                GuardDecision.allow();
+
+            case SET_NOZZLE_TEMPERATURE,
+                    SET_BED_TEMPERATURE ->
+                validateTargetTemperature(job.targetTemperature());
+
+            case SET_FAN_SPEED -> validateFanSpeed(job.fanSpeed());
+        };
+    }
+
+    private GuardDecision validateTargetTemperature(Double targetTemperature) {
+        if (targetTemperature == null) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.INVALID_PARAMETER,
+                    "targetTemperature is required for this job type.");
+        }
+
+        if (targetTemperature < 0) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.INVALID_PARAMETER,
+                    OperationMessages.TARGET_TEMPERATURE_MUST_NOT_BE_NEGATIVE);
+        }
+
+        return GuardDecision.allow();
+    }
+
+    private GuardDecision validateFanSpeed(Integer fanSpeed) {
+        if (fanSpeed == null) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.INVALID_PARAMETER,
+                    "fanSpeed is required for this job type.");
+        }
+
+        if (fanSpeed < 0 || fanSpeed > MAX_FAN_SPEED) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.INVALID_PARAMETER,
+                    "fanSpeed must be between 0 and 255.");
+        }
+
+        return GuardDecision.allow();
+    }
+
+    public GuardDecision validateForSdUpload(PrinterRuntimeNode node) {
+        if (node == null) {
+            throw new IllegalArgumentException(OperationMessages.NODE_MUST_NOT_BE_NULL);
+        }
+
+        if (!node.enabled()) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.PRINTER_DISABLED,
+                    OperationMessages.PRINTER_NODE_DISABLED);
+        }
+
+        if (node.executionInProgress()) {
+            return GuardDecision.allowReject(
+                    JobFailureReason.PRINTER_BUSY,
+                    OperationMessages.PRINTER_BUSY);
+        }
+
+        return GuardDecision.allow();
+    }
+
+    public record GuardDecision(
+            boolean allowed,
+            JobFailureReason failureReason,
+            String detail) {
+        public static GuardDecision allow() {
+            return new GuardDecision(true, null, null);
+        }
+
+        public static GuardDecision allowReject(
+                JobFailureReason failureReason,
+                String detail) {
+            return new GuardDecision(false, failureReason, detail);
+        }
+    }
+}
+
+===== src/main/java/printerhub/job/PrinterSdFileService.java =====
+package printerhub.job;
+
+import printerhub.OperationMessages;
+import printerhub.command.SdCardFile;
+import printerhub.persistence.PrintFileStore;
+import printerhub.persistence.PrinterSdFileStore;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+public final class PrinterSdFileService {
+
+    private final PrinterSdFileStore printerSdFileStore;
+    private final PrintFileStore printFileStore;
+    private final Clock clock;
+
+    public PrinterSdFileService(
+            PrinterSdFileStore printerSdFileStore,
+            PrintFileStore printFileStore) {
+        this(printerSdFileStore, printFileStore, Clock.systemUTC());
+    }
+
+    public PrinterSdFileService(
+            PrinterSdFileStore printerSdFileStore,
+            PrintFileStore printFileStore,
+            Clock clock) {
+        if (printerSdFileStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printerSdFileStore"));
+        }
+        if (printFileStore == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileStore"));
+        }
+        if (clock == null) {
+            throw new IllegalArgumentException(OperationMessages.CLOCK_MUST_NOT_BE_NULL);
+        }
+
+        this.printerSdFileStore = printerSdFileStore;
+        this.printFileStore = printFileStore;
+        this.clock = clock;
+    }
+
+    public PrinterSdFile register(
+            String printerId,
+            String firmwarePath,
+            String displayName,
+            Long sizeBytes,
+            String rawLine,
+            String printFileId) {
+        validatePrinterId(printerId);
+        if (firmwarePath == null || firmwarePath.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_SD_FILE_PATH_MUST_NOT_BE_BLANK);
+        }
+
+        if (printFileId != null && !printFileId.isBlank() && printFileStore.findById(printFileId).isEmpty()) {
+            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_NOT_FOUND);
+        }
+
+        String normalizedPrinterId = printerId.trim();
+        String normalizedFirmwarePath = firmwarePath.trim();
+        Optional<PrinterSdFile> existingFile =
+                printerSdFileStore.findByPrinterIdAndFirmwarePath(normalizedPrinterId, normalizedFirmwarePath);
+        Instant now = Instant.now(clock);
+        PrinterSdFile file = new PrinterSdFile(
+                existingFile.map(PrinterSdFile::id).orElseGet(() -> UUID.randomUUID().toString()),
+                normalizedPrinterId,
+                normalizedFirmwarePath,
+                displayName,
+                sizeBytes,
+                rawLine,
+                printFileId == null || printFileId.isBlank()
+                        ? existingFile.map(PrinterSdFile::printFileId).orElse(null)
+                        : printFileId,
+                existingFile.map(PrinterSdFile::enabled).orElse(true),
+                existingFile.map(PrinterSdFile::createdAt).orElse(now),
+                now);
+
+        printerSdFileStore.save(file);
+        return file;
+    }
+
+    public PrinterSdFile registerListedFile(String printerId, SdCardFile listedFile) {
+        if (listedFile == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("sdCardFile"));
+        }
+
+        return register(
+                printerId,
+                listedFile.filename(),
+                listedFile.filename(),
+                listedFile.sizeBytes(),
+                listedFile.rawLine(),
+                null);
+    }
+
+    public Optional<PrinterSdFile> findById(String id) {
+        return printerSdFileStore.findById(id);
+    }
+
+    public PrinterSdFile setEnabled(String id, boolean enabled) {
+        PrinterSdFile existingFile = printerSdFileStore.findById(id)
+                .orElseThrow(() -> new IllegalStateException(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+        Instant now = Instant.now(clock);
+        PrinterSdFile updatedFile = new PrinterSdFile(
+                existingFile.id(),
+                existingFile.printerId(),
+                existingFile.firmwarePath(),
+                existingFile.displayName(),
+                existingFile.sizeBytes(),
+                existingFile.rawLine(),
+                existingFile.printFileId(),
+                enabled,
+                existingFile.createdAt(),
+                now);
+
+        printerSdFileStore.save(updatedFile);
+        return updatedFile;
+    }
+
+    public List<PrinterSdFile> findByPrinterId(String printerId) {
+        validatePrinterId(printerId);
+        return printerSdFileStore.findByPrinterId(printerId);
+    }
+
+    public List<PrinterSdFile> findAll() {
+        return printerSdFileStore.findAll();
+    }
+
+    private void validatePrinterId(String printerId) {
+        if (printerId == null || printerId.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
+        }
+    }
+
+    public Optional<PrinterSdFile> findByPrinterIdAndFirmwarePath(String printerId, String firmwarePath) {
+    validatePrinterId(printerId);
+
+    if (firmwarePath == null || firmwarePath.isBlank()) {
+        throw new IllegalArgumentException(OperationMessages.PRINTER_SD_FILE_PATH_MUST_NOT_BE_BLANK);
+    }
+
+    return printerSdFileStore.findByPrinterIdAndFirmwarePath(printerId.trim(), firmwarePath.trim());
+}
+}
+

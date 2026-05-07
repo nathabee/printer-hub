@@ -148,8 +148,7 @@ class AsyncPrintJobExecutorTest {
     private AsyncPrintJobExecutor createExecutor(
             PrintJobService jobService,
             PrinterRegistry registry,
-            PrinterMonitoringScheduler scheduler
-    ) {
+            PrinterMonitoringScheduler scheduler) {
         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
         PrintJobExecutionService executionService = new PrintJobExecutionService(
                 jobService,
@@ -198,6 +197,11 @@ class AsyncPrintJobExecutorTest {
 
         private BlockingPrinterPort(String response) {
             this.response = response;
+        }
+
+        @Override
+        public String sendRawLine(String line) {
+            return "ok";
         }
 
         @Override

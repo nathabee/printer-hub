@@ -15,6 +15,7 @@ public final class DatabaseInitializer {
                 Statement statement = connection.createStatement()
         ) {
             createPrintFilesTable(statement);
+            createPrinterSdFilesTable(statement);
             createPrintJobsTable(statement);
             createPrintJobExecutionStepsTable(statement);
             createPrinterSnapshotsTable(statement);
@@ -23,6 +24,8 @@ public final class DatabaseInitializer {
             createMonitoringRulesTable(statement);
             createPrintFileSettingsTable(statement);
             ensureColumn(connection, "print_jobs", "print_file_id", "TEXT");
+            ensureColumn(connection, "print_jobs", "printer_sd_file_id", "TEXT");
+            ensureColumn(connection, "printer_sd_files", "enabled", "INTEGER NOT NULL DEFAULT 1");
 
             System.out.println(OperationMessages.databaseInitialized(DatabaseConfig.databaseFile()));
         } catch (SQLException exception) {
@@ -45,6 +48,26 @@ public final class DatabaseInitializer {
         statement.execute(sql);
     }
 
+    private void createPrinterSdFilesTable(Statement statement) throws SQLException {
+        String sql = """
+                CREATE TABLE IF NOT EXISTS printer_sd_files (
+                    id TEXT PRIMARY KEY,
+                    printer_id TEXT NOT NULL,
+                    firmware_path TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    size_bytes INTEGER,
+                    raw_line TEXT,
+                    print_file_id TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(printer_id, firmware_path)
+                );
+                """;
+
+        statement.execute(sql);
+    }
+
     private void createPrintJobsTable(Statement statement) throws SQLException {
         String sql = """
                 CREATE TABLE IF NOT EXISTS print_jobs (
@@ -54,6 +77,7 @@ public final class DatabaseInitializer {
                     state TEXT NOT NULL,
                     printer_id TEXT,
                     print_file_id TEXT,
+                    printer_sd_file_id TEXT,
                     target_temperature REAL,
                     fan_speed INTEGER,
                     failure_reason TEXT,
