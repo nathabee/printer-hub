@@ -565,6 +565,28 @@ textarea:focus {
   border-radius: 14px;
 }
 
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
 .event-header {
   display: flex;
   justify-content: space-between;
@@ -572,6 +594,8 @@ textarea:focus {
   align-items: start;
   margin-bottom: 0.4rem;
 }
+
+
 
 .form-grid {
   display: grid;

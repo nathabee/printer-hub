@@ -7,12 +7,14 @@ import printerhub.OperatorMessageReportWriter;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.command.PrinterCommandService;
+import printerhub.command.SdCardService;
 import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
 import printerhub.job.PrinterActionGuard;
 import printerhub.job.PrinterActionMapper;
+import printerhub.job.PrinterSdFileService;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
@@ -22,6 +24,7 @@ import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.persistence.PrintJobExecutionStepStore;
+import printerhub.persistence.PrinterSdFileStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNodeFactory;
 import printerhub.runtime.PrinterRuntimeStateCache;
@@ -351,6 +354,39 @@ class RemoteApiServerTest {
 
             assertEquals(400, response.statusCode());
             assertEquals("{\"error\":\"Invalid printer command: G0\"}", response.body());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void getPrinterSdCardFilesListsSimulatedFiles() throws Exception {
+        TestContext context = createContext("printer-sd-card-files.db");
+
+        try {
+            context.configurationStore.save(
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+            context.printerRegistry.register(
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+
+            HttpResponse<String> response = context.get("/printers/printer-1/sd-card/files");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"printerId\":\"printer-1\""));
+            assertTrue(response.body().contains("\"filename\":\"CUBE.GCO\""));
+            assertTrue(response.body().contains("\"sizeBytes\":12345"));
+            assertTrue(response.body().contains("\"filename\":\"BENCHY.GCO\""));
+            assertTrue(response.body().contains("\"rawResponse\":\"Begin file list\\n"));
+
+            HttpResponse<String> registeredResponse = context.get("/printer-sd-files?printerId=printer-1");
+            assertEquals(200, registeredResponse.statusCode());
+            assertTrue(registeredResponse.body().contains("\"firmwarePath\":\"CUBE.GCO\""));
+            assertTrue(registeredResponse.body().contains("\"firmwarePath\":\"BENCHY.GCO\""));
+
+            HttpResponse<String> eventsResponse = context.get("/printers/printer-1/events");
+
+            assertEquals(200, eventsResponse.statusCode());
+            assertTrue(eventsResponse.body().contains("\"eventType\":\"SD_CARD_FILES_LISTED\""));
         } finally {
             context.close();
         }
@@ -728,7 +764,9 @@ class RemoteApiServerTest {
 
         int port = findFreePort();
 
-        PrintFileService printFileService = new PrintFileService(new PrintFileStore());
+        PrintFileStore printFileStore = new PrintFileStore();
+        PrintFileService printFileService = new PrintFileService(printFileStore);
+        PrinterSdFileService printerSdFileService = new PrinterSdFileService(new PrinterSdFileStore(), printFileStore);
         PrintJobStore printJobStore = new PrintJobStore();
 
         PrintJobService printJobService = new PrintJobService(
@@ -761,7 +799,9 @@ class RemoteApiServerTest {
                 printFileSettingsStore,
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
+                new SdCardService(printerEventStore),
                 printFileService,
+                printerSdFileService,
                 printJobService,
                 asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());
@@ -934,17 +974,20 @@ class RemoteApiServerTest {
             String printFileId = extractJsonString(fileResponse.body(), "id");
             assertNotNull(printFileId);
 
+            String printerSdFileId = registerPrinterSdFile(context, "printer-1", "BENCHY.GCO", "benchy.gcode", printFileId);
+
             HttpResponse<String> response = context.request(
                     "POST",
                     "/jobs",
-                    "{\"name\":\"Print benchy\",\"type\":\"PRINT_FILE\",\"printerId\":\"printer-1\",\"printFileId\":\""
-                            + printFileId
+                    "{\"name\":\"Print benchy\",\"type\":\"PRINT_FILE\",\"printerId\":\"printer-1\",\"printerSdFileId\":\""
+                            + printerSdFileId
                             + "\"}");
 
             assertEquals(201, response.statusCode());
             assertTrue(response.body().contains("\"name\":\"Print benchy\""));
             assertTrue(response.body().contains("\"type\":\"PRINT_FILE\""));
             assertTrue(response.body().contains("\"printFileId\":\"" + printFileId + "\""));
+            assertTrue(response.body().contains("\"printerSdFileId\":\"" + printerSdFileId + "\""));
         } finally {
             context.close();
         }
@@ -967,17 +1010,48 @@ class RemoteApiServerTest {
             String printFileId = extractJsonString(fileResponse.body(), "id");
             assertNotNull(printFileId);
 
+            String printerSdFileId = registerPrinterSdFile(context, "printer-1", "CUBE.GCO", "cube.gcode", printFileId);
+
             HttpResponse<String> response = context.request(
                     "POST",
                     "/jobs",
-                    "{\"type\":\"PRINT_FILE\",\"printerId\":\"printer-1\",\"printFileId\":\""
-                            + printFileId
+                    "{\"type\":\"PRINT_FILE\",\"printerId\":\"printer-1\",\"printerSdFileId\":\""
+                            + printerSdFileId
                             + "\"}");
 
             assertEquals(201, response.statusCode());
             assertTrue(response.body().contains("\"name\":\"Print cube.gcode\""));
             assertTrue(response.body().contains("\"type\":\"PRINT_FILE\""));
             assertTrue(response.body().contains("\"printFileId\":\"" + printFileId + "\""));
+            assertTrue(response.body().contains("\"printerSdFileId\":\"" + printerSdFileId + "\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postJobsRejectsDisabledPrinterSdFileTarget() throws Exception {
+        TestContext context = createContext("jobs-post-disabled-printer-sd-file.db");
+
+        try {
+            String printerSdFileId = registerPrinterSdFile(context, "printer-1", "OLD.GCO", "old.gcode", null);
+
+            HttpResponse<String> disableResponse = context.request(
+                    "POST",
+                    "/printer-sd-files/" + printerSdFileId + "/disable",
+                    "");
+            assertEquals(200, disableResponse.statusCode());
+            assertTrue(disableResponse.body().contains("\"enabled\":false"));
+
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/jobs",
+                    "{\"type\":\"PRINT_FILE\",\"printerId\":\"printer-1\",\"printerSdFileId\":\""
+                            + printerSdFileId
+                            + "\"}");
+
+            assertEquals(400, response.statusCode());
+            assertEquals("{\"error\":\"printer_sd_file_disabled\"}", response.body());
         } finally {
             context.close();
         }
@@ -1262,7 +1336,9 @@ class RemoteApiServerTest {
         PrinterConfigurationStore configurationStore = new PrinterConfigurationStore();
         MonitoringRulesStore monitoringRulesStore = new MonitoringRulesStore();
         PrinterEventStore printerEventStore = new PrinterEventStore();
-        PrintFileService printFileService = new PrintFileService(new PrintFileStore());
+        PrintFileStore printFileStore = new PrintFileStore();
+        PrintFileService printFileService = new PrintFileService(printFileStore);
+        PrinterSdFileService printerSdFileService = new PrinterSdFileService(new PrinterSdFileStore(), printFileStore);
         PrintJobStore printJobStore = new PrintJobStore();
 
         PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(
@@ -1301,7 +1377,9 @@ class RemoteApiServerTest {
                 new PrintFileSettingsStore(),
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
+                new SdCardService(printerEventStore),
                 printFileService,
+                printerSdFileService,
                 printJobService,
                 asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());
@@ -1332,6 +1410,29 @@ class RemoteApiServerTest {
         }
 
         return matcher.group(1);
+    }
+
+    private String registerPrinterSdFile(
+            TestContext context,
+            String printerId,
+            String firmwarePath,
+            String displayName,
+            String printFileId) throws Exception {
+        String printFileJson = printFileId == null ? "" : ",\"printFileId\":\"" + printFileId + "\"";
+        HttpResponse<String> response = context.request(
+                "POST",
+                "/printer-sd-files",
+                "{\"printerId\":\"" + printerId
+                        + "\",\"firmwarePath\":\"" + firmwarePath
+                        + "\",\"displayName\":\"" + displayName
+                        + "\""
+                        + printFileJson
+                        + "}");
+
+        assertEquals(201, response.statusCode());
+        String printerSdFileId = extractJsonString(response.body(), "id");
+        assertNotNull(printerSdFileId);
+        return printerSdFileId;
     }
 
     private String waitForJobState(TestContext context, String jobId, String expectedState) throws Exception {
@@ -1367,7 +1468,9 @@ class RemoteApiServerTest {
         PrintJobService printJobService = new PrintJobService(
                 printJobStore,
                 printerEventStore);
-        PrintFileService printFileService = new PrintFileService(new PrintFileStore());
+        PrintFileStore printFileStore = new PrintFileStore();
+        PrintFileService printFileService = new PrintFileService(printFileStore);
+        PrinterSdFileService printerSdFileService = new PrinterSdFileService(new PrinterSdFileStore(), printFileStore);
 
         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
 
@@ -1395,7 +1498,9 @@ class RemoteApiServerTest {
                 new PrintFileSettingsStore(),
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
+                new SdCardService(printerEventStore),
                 printFileService,
+                printerSdFileService,
                 printJobService,
                 asyncPrintJobExecutor,
                 new PrintJobExecutionStepStore());

@@ -69,6 +69,14 @@ export async function getPrinterEvents(printerId) {
   return Array.isArray(data.events) ? data.events : [];
 }
 
+export async function getPrinterSdCardFiles(printerId) {
+  const data = await requestJson(`/printers/${encodeURIComponent(printerId)}/sd-card/files`);
+  return {
+    files: Array.isArray(data.files) ? data.files : [],
+    rawResponse: data.rawResponse || ""
+  };
+}
+
 export async function getMonitoringRules() {
   return requestJson("/settings/monitoring");
 }
@@ -105,6 +113,28 @@ export async function getJobs() {
 export async function getPrintFiles() {
   const data = await requestJson("/print-files");
   return Array.isArray(data.printFiles) ? data.printFiles : [];
+}
+
+export async function getPrinterSdFiles(printerId) {
+  const query = printerId ? `?printerId=${encodeURIComponent(printerId)}` : "";
+  const data = await requestJson(`/printer-sd-files${query}`);
+  return Array.isArray(data.printerSdFiles) ? data.printerSdFiles : [];
+}
+
+export async function registerPrinterSdFile(file) {
+  return requestJson("/printer-sd-files", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(file)
+  });
+}
+
+export async function setPrinterSdFileEnabled(printerSdFileId, enabled) {
+  return requestJson(`/printer-sd-files/${encodeURIComponent(printerSdFileId)}/${enabled ? "enable" : "disable"}`, {
+    method: "POST"
+  });
 }
 
 export async function registerPrintFile(path) {

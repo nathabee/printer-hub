@@ -230,7 +230,7 @@ class PrinterMonitoringSchedulerTest {
                                 "SIM_PORT",
                                 "sim",
                                 new TestPrinterPort(),
-                                true);
+                                false);
 
                 registry.register(node);
 

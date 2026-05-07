@@ -158,9 +158,11 @@ PrinterHub
 Selected Printer
 ├── Home
 ├── Print
+├── SD Card
 ├── Prepare
 ├── Control
-└── Info
+├── Info
+└── History
 ```
 
 This structure is designed to stay aligned with the practical logic of operating a printer, while still supporting local runtime administration and diagnostics.

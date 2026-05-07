@@ -63,6 +63,7 @@ Selected-printer navigation:
 Selected Printer
 ├── Home
 ├── Print
+├── SD Card
 ├── Prepare
 ├── Control
 ├── Info
@@ -250,6 +251,27 @@ The Print page also supports registering an already prepared host-side `.gcode` 
 
 ---
 
+### SD Card
+
+Selected Printer / SD Card is the read-only printer-side file inspection area.
+
+It currently supports:
+
+* manual refresh of the printer SD-card file list
+* file names reported by firmware
+* size when available from firmware
+* raw firmware response review
+
+Data source:
+
+```text
+GET /printers/{id}/sd-card/files
+```
+
+Delete, upload-to-printer, and print-start actions are intentionally kept out of this first SD-card page until the real printer command behavior is verified.
+
+---
+
 ### Prepare
 
 Selected Printer / Prepare is the place for preparation-oriented printer actions.
@@ -426,6 +448,7 @@ Important notes:
 | Printers | `GET /printers` |
 | Selected Printer / Home | `GET /printers` |
 | Selected Printer / Print | `GET /jobs`, job action endpoints |
+| Selected Printer / SD Card | `GET /printers/{id}/sd-card/files` |
 | Selected Printer / Prepare | `POST /jobs`, `POST /jobs/{id}/start` |
 | Selected Printer / Control | `POST /printers/{id}/commands` |
 | Selected Printer / Info | `GET /printers`, command/job flows for firmware info |

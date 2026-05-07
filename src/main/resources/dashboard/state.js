@@ -9,6 +9,7 @@ export const PRIMARY_VIEW_IDS = Object.freeze({
 export const PRINTER_VIEW_IDS = Object.freeze({
   HOME: "printer-home",
   PRINT: "printer-print",
+  SD_CARD: "printer-sd-card",
   PREPARE: "printer-prepare",
   CONTROL: "printer-control",
   INFO: "printer-info",
@@ -22,12 +23,14 @@ export const state = {
   printers: [],
   jobs: [],
   printFiles: [],
+  printerSdFiles: [],
   monitoringRules: null,
   printFileSettings: null,
   printerEvents: new Map(),
   jobEvents: new Map(),
   jobExecutionSteps: new Map(),
   jobCardSections: new Map(),
+  printerSdCardFiles: new Map(),
   printerCommandResults: new Map(),
   message: "",
   lastRefreshLabel: "never"
@@ -51,6 +54,10 @@ export function setJobs(jobs) {
 
 export function setPrintFiles(printFiles) {
   state.printFiles = Array.isArray(printFiles) ? printFiles : [];
+}
+
+export function setPrinterSdFiles(files) {
+  state.printerSdFiles = Array.isArray(files) ? files : [];
 }
 
 export function setMonitoringRules(rules) {
@@ -121,6 +128,13 @@ export function getJobsForSelectedPrinter() {
 
 export function setPrinterEvents(printerId, events) {
   state.printerEvents.set(printerId, Array.isArray(events) ? events : []);
+}
+
+export function setPrinterSdCardFiles(printerId, files, rawResponse = "") {
+  state.printerSdCardFiles.set(printerId, {
+    files: Array.isArray(files) ? files : [],
+    rawResponse: rawResponse || ""
+  });
 }
 
 export function setJobEvents(jobId, events) {

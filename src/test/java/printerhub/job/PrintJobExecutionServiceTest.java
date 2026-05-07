@@ -442,6 +442,7 @@ class PrintJobExecutionServiceTest {
                     JobType.PRINT_FILE,
                     "printer-1",
                     "print-file-1",
+                    "printer-sd-file-1",
                     null,
                     null);
 
@@ -462,6 +463,7 @@ class PrintJobExecutionServiceTest {
             PrintJob loaded = store.findById(job.id()).orElseThrow();
             assertEquals(JobState.COMPLETED, loaded.state());
             assertEquals("print-file-1", loaded.printFileId());
+            assertEquals("printer-sd-file-1", loaded.printerSdFileId());
 
             List<PrintJobExecutionStep> steps = stepStore.findByJobId(job.id());
             assertEquals(1, steps.size());

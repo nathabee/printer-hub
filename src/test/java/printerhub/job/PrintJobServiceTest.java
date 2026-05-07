@@ -82,6 +82,30 @@ class PrintJobServiceTest {
     }
 
     @Test
+    void createPrintFileJobRequiresPrinterSdFileReference() {
+        initializeDatabase("job-service-print-file-requires-sd-file.db");
+
+        PrintJobStore store = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        Clock clock = Clock.fixed(Instant.parse("2026-05-04T08:00:00Z"), ZoneOffset.UTC);
+
+        PrintJobService service = new PrintJobService(store, eventStore, clock);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.create(
+                        "Print cube",
+                        JobType.PRINT_FILE,
+                        "printer-1",
+                        "print-file-1",
+                        null,
+                        null,
+                        null));
+
+        assertEquals("printerSdFileId must not be blank", exception.getMessage());
+    }
+
+    @Test
     void markRunningSetsRunningStateAndStartedAt() {
         initializeDatabase("job-service-running.db");
 

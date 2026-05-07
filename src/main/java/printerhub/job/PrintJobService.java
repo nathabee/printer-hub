@@ -50,7 +50,7 @@ public final class PrintJobService {
             String printerId,
             Double targetTemperature,
             Integer fanSpeed) {
-        return create(name, type, printerId, null, targetTemperature, fanSpeed);
+        return create(name, type, printerId, null, null, targetTemperature, fanSpeed);
     }
 
     public PrintJob create(
@@ -60,14 +60,25 @@ public final class PrintJobService {
             String printFileId,
             Double targetTemperature,
             Integer fanSpeed) {
+        return create(name, type, printerId, printFileId, null, targetTemperature, fanSpeed);
+    }
+
+    public PrintJob create(
+            String name,
+            JobType type,
+            String printerId,
+            String printFileId,
+            String printerSdFileId,
+            Double targetTemperature,
+            Integer fanSpeed) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException(OperationMessages.JOB_NAME_MUST_NOT_BE_BLANK);
         }
         if (type == null) {
             throw new IllegalArgumentException(OperationMessages.JOB_TYPE_MUST_NOT_BE_NULL);
         }
-        if (type == JobType.PRINT_FILE && (printFileId == null || printFileId.isBlank())) {
-            throw new IllegalArgumentException(OperationMessages.PRINT_FILE_ID_MUST_NOT_BE_BLANK);
+        if (type == JobType.PRINT_FILE && (printerSdFileId == null || printerSdFileId.isBlank())) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_SD_FILE_ID_MUST_NOT_BE_BLANK);
         }
 
         Instant now = Instant.now(clock);
@@ -78,6 +89,7 @@ public final class PrintJobService {
                 type,
                 printerId,
                 printFileId,
+                printerSdFileId,
                 targetTemperature,
                 fanSpeed,
                 now);

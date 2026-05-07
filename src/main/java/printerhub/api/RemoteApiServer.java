@@ -7,12 +7,17 @@ import printerhub.OperationMessages;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.command.PrinterCommandService;
+import printerhub.command.SdCardFile;
+import printerhub.command.SdCardFileList;
+import printerhub.command.SdCardService;
 import printerhub.config.RuntimeDefaults;
 import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.JobFailureReason;
 import printerhub.job.PrintFile;
 import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionStep;
+import printerhub.job.PrinterSdFile;
+import printerhub.job.PrinterSdFileService;
 import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.job.JobType;
 import printerhub.job.PrintJob;
@@ -55,7 +60,9 @@ public final class RemoteApiServer {
     private final PrintFileSettingsStore printFileSettingsStore;
     private final PrinterEventStore printerEventStore;
     private final PrinterCommandService printerCommandService;
+    private final SdCardService sdCardService;
     private final PrintFileService printFileService;
+    private final PrinterSdFileService printerSdFileService;
     private final PrintJobService printJobService;
     private final AsyncPrintJobExecutor asyncPrintJobExecutor;
     private final PrintJobExecutionStepStore printJobExecutionStepStore;
@@ -72,7 +79,9 @@ public final class RemoteApiServer {
             PrintFileSettingsStore printFileSettingsStore,
             PrinterEventStore printerEventStore,
             PrinterCommandService printerCommandService,
+            SdCardService sdCardService,
             PrintFileService printFileService,
+            PrinterSdFileService printerSdFileService,
             PrintJobService printJobService,
             AsyncPrintJobExecutor asyncPrintJobExecutor,
             PrintJobExecutionStepStore printJobExecutionStepStore) {
@@ -103,8 +112,14 @@ public final class RemoteApiServer {
         if (printerCommandService == null) {
             throw new IllegalArgumentException(OperationMessages.COMMAND_SERVICE_MUST_NOT_BE_NULL);
         }
+        if (sdCardService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("sdCardService"));
+        }
         if (printFileService == null) {
             throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printFileService"));
+        }
+        if (printerSdFileService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printerSdFileService"));
         }
         if (printJobService == null) {
             throw new IllegalArgumentException(OperationMessages.PRINT_JOB_SERVICE_MUST_NOT_BE_NULL);
@@ -125,7 +140,9 @@ public final class RemoteApiServer {
         this.printFileSettingsStore = printFileSettingsStore;
         this.printerEventStore = printerEventStore;
         this.printerCommandService = printerCommandService;
+        this.sdCardService = sdCardService;
         this.printFileService = printFileService;
+        this.printerSdFileService = printerSdFileService;
         this.printJobService = printJobService;
         this.asyncPrintJobExecutor = asyncPrintJobExecutor;
         this.printJobExecutionStepStore = printJobExecutionStepStore;
@@ -143,6 +160,7 @@ public final class RemoteApiServer {
             server.createContext("/health", exchange -> safeHandle(exchange, this::handleHealth));
             server.createContext("/printers", exchange -> safeHandle(exchange, this::handlePrinters));
             server.createContext("/print-files", exchange -> safeHandle(exchange, this::handlePrintFiles));
+            server.createContext("/printer-sd-files", exchange -> safeHandle(exchange, this::handlePrinterSdFiles));
             server.createContext("/jobs", exchange -> safeHandle(exchange, this::handleJobs));
             server.createContext("/settings/monitoring",
                     exchange -> safeHandle(exchange, this::handleMonitoringSettings));
@@ -182,7 +200,8 @@ public final class RemoteApiServer {
             String message = safeMessage(exception);
 
             if (OperationMessages.JOB_NOT_FOUND.equals(message)
-                    || OperationMessages.PRINTER_NOT_FOUND.equals(message)) {
+                    || OperationMessages.PRINTER_NOT_FOUND.equals(message)
+                    || OperationMessages.PRINTER_SD_FILE_NOT_FOUND.equals(message)) {
                 sendJson(exchange, 404, errorJson(message));
                 return;
             }
@@ -340,6 +359,82 @@ public final class RemoteApiServer {
         sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
     }
 
+    private void handlePrinterSdFiles(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/printer-sd-files".equals(path)) {
+            handlePrinterSdFilesRoot(exchange);
+            return;
+        }
+
+        if (path.startsWith("/printer-sd-files/")) {
+            handlePrinterSdFileById(exchange, path);
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+    }
+
+    private void handlePrinterSdFilesRoot(HttpExchange exchange) throws IOException {
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String printerId = queryParameter(exchange.getRequestURI().getRawQuery(), "printerId");
+            List<PrinterSdFile> files = printerId == null || printerId.isBlank()
+                    ? printerSdFileService.findAll()
+                    : printerSdFileService.findByPrinterId(printerId);
+            sendJson(exchange, 200, printerSdFilesJson(files));
+            return;
+        }
+
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            String body = readBody(exchange);
+            PrinterSdFile file = printerSdFileService.register(
+                    requiredJsonString(body, "printerId"),
+                    requiredJsonString(body, "firmwarePath"),
+                    optionalJsonString(body, "displayName", null),
+                    optionalJsonLongObject(body, "sizeBytes"),
+                    optionalJsonString(body, "rawLine", null),
+                    optionalJsonString(body, "printFileId", null));
+            sendJson(exchange, 201, printerSdFileJson(file));
+            return;
+        }
+
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handlePrinterSdFileById(HttpExchange exchange, String path) throws IOException {
+        String remaining = path.substring("/printer-sd-files/".length());
+
+        if (remaining.isBlank()) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+            return;
+        }
+
+        String[] parts = remaining.split("/");
+        String printerSdFileId = parts[0];
+
+        if (parts.length == 1 && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrinterSdFile file = printerSdFileService.findById(printerSdFileId).orElse(null);
+
+            if (file == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+                return;
+            }
+
+            sendJson(exchange, 200, printerSdFileJson(file));
+            return;
+        }
+
+        if (parts.length == 2
+                && ("enable".equals(parts[1]) || "disable".equals(parts[1]))
+                && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrinterSdFile file = printerSdFileService.setEnabled(printerSdFileId, "enable".equals(parts[1]));
+            sendJson(exchange, 200, printerSdFileJson(file));
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+    }
+
     private void handlePrintFileUpload(HttpExchange exchange) throws IOException {
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
@@ -413,29 +508,49 @@ public final class RemoteApiServer {
             JobType type = parseJobType(requiredJsonString(body, "type"));
             String printerId = optionalJsonString(body, "printerId", null);
             String printFileId = optionalJsonString(body, "printFileId", null);
+            String printerSdFileId = optionalJsonString(body, "printerSdFileId", null);
             Double targetTemperature = optionalJsonDoubleObject(body, "targetTemperature");
             Integer fanSpeed = optionalJsonIntegerObject(body, "fanSpeed");
             PrintFile printFile = null;
+            PrinterSdFile printerSdFile = null;
 
             if (type == JobType.PRINT_FILE) {
-                if (printFileId == null || printFileId.isBlank()) {
-                    sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+                if (printerSdFileId == null || printerSdFileId.isBlank()) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
                     return;
                 }
 
-                printFile = printFileService.findById(printFileId).orElse(null);
+                printerSdFile = printerSdFileService.findById(printerSdFileId).orElse(null);
 
-                if (printFile == null) {
-                    sendJson(exchange, 404, errorJson(OperationMessages.PRINT_FILE_NOT_FOUND));
+                if (printerSdFile == null) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
                     return;
+                }
+
+                if (!printerSdFile.enabled()) {
+                    sendJson(exchange, 400, errorJson(OperationMessages.PRINTER_SD_FILE_DISABLED));
+                    return;
+                }
+
+                if (printerId == null || printerId.isBlank()) {
+                    printerId = printerSdFile.printerId();
+                } else if (!printerId.equals(printerSdFile.printerId())) {
+                    sendJson(exchange, 400, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+                    return;
+                }
+
+                printFileId = printerSdFile.printFileId();
+                if (printFileId != null) {
+                    printFile = printFileService.findById(printFileId).orElse(null);
                 }
             }
 
             PrintJob job = printJobService.create(
-                    resolveJobName(optionalJsonString(body, "name", null), type, printFile),
+                    resolveJobName(optionalJsonString(body, "name", null), type, printFile, printerSdFile),
                     type,
                     printerId,
                     printFileId,
+                    printerSdFileId,
                     targetTemperature,
                     fanSpeed);
 
@@ -646,6 +761,11 @@ public final class RemoteApiServer {
 
         if (parts.length == 2 && "commands".equals(parts[1])) {
             handlePrinterCommands(exchange, printerId);
+            return;
+        }
+
+        if (parts.length == 3 && "sd-card".equals(parts[1]) && "files".equals(parts[2])) {
+            handlePrinterSdCardFiles(exchange, printerId);
             return;
         }
 
@@ -866,6 +986,26 @@ public final class RemoteApiServer {
         sendJson(exchange, 200, commandExecutionJson(result));
     }
 
+    private void handlePrinterSdCardFiles(HttpExchange exchange, String printerId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        SdCardFileList fileList = sdCardService.listFiles(node);
+        for (SdCardFile file : fileList.files()) {
+            printerSdFileService.registerListedFile(printerId, file);
+        }
+        sendJson(exchange, 200, sdCardFileListJson(fileList));
+    }
+
     private void handlePrinterEvents(HttpExchange exchange, String printerId) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
@@ -912,6 +1052,33 @@ public final class RemoteApiServer {
                 + "}";
     }
 
+    private String sdCardFileListJson(SdCardFileList fileList) {
+        StringBuilder json = new StringBuilder();
+        json.append("{")
+                .append("\"printerId\":\"").append(escapeJson(fileList.printerId())).append("\",")
+                .append("\"files\":[");
+
+        boolean first = true;
+
+        for (SdCardFile file : fileList.files()) {
+            if (!first) {
+                json.append(",");
+            }
+
+            json.append("{")
+                    .append("\"filename\":\"").append(escapeJson(file.filename())).append("\",")
+                    .append("\"sizeBytes\":").append(nullableLong(file.sizeBytes())).append(",")
+                    .append("\"rawLine\":\"").append(escapeJson(file.rawLine())).append("\"")
+                    .append("}");
+            first = false;
+        }
+
+        json.append("],")
+                .append("\"rawResponse\":\"").append(escapeJson(fileList.rawResponse())).append("\"")
+                .append("}");
+        return json.toString();
+    }
+
     private String printJobsJson(List<PrintJob> jobs) {
         StringBuilder json = new StringBuilder();
         json.append("{\"jobs\":[");
@@ -948,6 +1115,39 @@ public final class RemoteApiServer {
         return json.toString();
     }
 
+    private String printerSdFilesJson(List<PrinterSdFile> files) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"printerSdFiles\":[");
+
+        boolean first = true;
+
+        for (PrinterSdFile file : files) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append(printerSdFileJson(file));
+            first = false;
+        }
+
+        json.append("]}");
+        return json.toString();
+    }
+
+    private String printerSdFileJson(PrinterSdFile file) {
+        return "{"
+                + "\"id\":\"" + escapeJson(file.id()) + "\","
+                + "\"printerId\":\"" + escapeJson(file.printerId()) + "\","
+                + "\"firmwarePath\":\"" + escapeJson(file.firmwarePath()) + "\","
+                + "\"displayName\":\"" + escapeJson(file.displayName()) + "\","
+                + "\"sizeBytes\":" + nullableLong(file.sizeBytes()) + ","
+                + "\"rawLine\":\"" + escapeJson(file.rawLine()) + "\","
+                + "\"printFileId\":" + nullableString(file.printFileId()) + ","
+                + "\"enabled\":" + file.enabled() + ","
+                + "\"createdAt\":\"" + escapeJson(file.createdAt().toString()) + "\","
+                + "\"updatedAt\":\"" + escapeJson(file.updatedAt().toString()) + "\""
+                + "}";
+    }
+
     private String printFileJson(PrintFile printFile) {
         return "{"
                 + "\"id\":\"" + escapeJson(printFile.id()) + "\","
@@ -967,6 +1167,7 @@ public final class RemoteApiServer {
                 + "\"state\":\"" + escapeJson(job.state().name()) + "\","
                 + "\"printerId\":" + nullableString(job.printerId()) + ","
                 + "\"printFileId\":" + nullableString(job.printFileId()) + ","
+                + "\"printerSdFileId\":" + nullableString(job.printerSdFileId()) + ","
                 + "\"targetTemperature\":" + nullableNumber(job.targetTemperature()) + ","
                 + "\"fanSpeed\":" + nullableInteger(job.fanSpeed()) + ","
                 + "\"failureReason\":" + nullableString(job.failureReason()) + ","
@@ -1125,6 +1326,14 @@ public final class RemoteApiServer {
         return String.valueOf(value);
     }
 
+    private String nullableLong(Long value) {
+        if (value == null) {
+            return "null";
+        }
+
+        return String.valueOf(value);
+    }
+
     private String formatDouble(double value) {
         return String.format(Locale.ROOT, "%.2f", value);
     }
@@ -1147,9 +1356,17 @@ public final class RemoteApiServer {
         return value.trim();
     }
 
-    private String resolveJobName(String requestedName, JobType type, PrintFile printFile) {
+    private String resolveJobName(
+            String requestedName,
+            JobType type,
+            PrintFile printFile,
+            PrinterSdFile printerSdFile) {
         if (requestedName != null && !requestedName.isBlank()) {
             return requestedName.trim();
+        }
+
+        if (type == JobType.PRINT_FILE && printerSdFile != null) {
+            return "Print " + printerSdFile.displayName();
         }
 
         if (type == JobType.PRINT_FILE && printFile != null) {
@@ -1210,6 +1427,19 @@ public final class RemoteApiServer {
 
         if (!matcher.find()) {
             return fallback;
+        }
+
+        return Long.parseLong(matcher.group(1));
+    }
+
+    private Long optionalJsonLongObject(String body, String fieldName) {
+        Pattern pattern = Pattern.compile(
+                "\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?[0-9]+)");
+
+        Matcher matcher = pattern.matcher(body);
+
+        if (!matcher.find()) {
+            return null;
         }
 
         return Long.parseLong(matcher.group(1));

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import printerhub.api.RemoteApiServer;
 import printerhub.command.PrinterCommandService;
+import printerhub.command.SdCardService;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.DatabaseInitializer;
 import printerhub.persistence.MonitoringRulesStore;
@@ -13,12 +14,14 @@ import printerhub.persistence.PrintFileStore;
 import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.persistence.PrinterConfigurationStore;
 import printerhub.persistence.PrinterEventStore;
+import printerhub.persistence.PrinterSdFileStore;
 import printerhub.job.AsyncPrintJobExecutor;
 import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionService;
 import printerhub.job.PrintJobService;
 import printerhub.job.PrinterActionGuard;
 import printerhub.job.PrinterActionMapper;
+import printerhub.job.PrinterSdFileService;
 import printerhub.persistence.PrintJobStore;
 
 import java.io.IOException;
@@ -197,7 +200,11 @@ class PrinterHubRuntimeTest {
 
                 int port = findFreePort();
                 PrinterEventStore printerEventStore = new PrinterEventStore();
-                PrintFileService printFileService = new PrintFileService(new PrintFileStore());
+                PrintFileStore printFileStore = new PrintFileStore();
+                PrintFileService printFileService = new PrintFileService(printFileStore);
+                PrinterSdFileService printerSdFileService = new PrinterSdFileService(
+                                new PrinterSdFileStore(),
+                                printFileStore);
                 PrintJobStore printJobStore = new PrintJobStore();
 
                 PrintJobService printJobService = new PrintJobService(
@@ -229,7 +236,9 @@ class PrinterHubRuntimeTest {
                                 new PrintFileSettingsStore(),
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
+                                new SdCardService(printerEventStore),
                                 printFileService,
+                                printerSdFileService,
                                 printJobService,
                                 asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());
@@ -276,7 +285,11 @@ class PrinterHubRuntimeTest {
 
                 int port = findFreePort();
                 PrinterEventStore printerEventStore = new PrinterEventStore();
-                PrintFileService printFileService = new PrintFileService(new PrintFileStore());
+                PrintFileStore printFileStore = new PrintFileStore();
+                PrintFileService printFileService = new PrintFileService(printFileStore);
+                PrinterSdFileService printerSdFileService = new PrinterSdFileService(
+                                new PrinterSdFileStore(),
+                                printFileStore);
                 PrintJobStore printJobStore = new PrintJobStore();
 
                 PrintJobService printJobService = new PrintJobService(
@@ -308,7 +321,9 @@ class PrinterHubRuntimeTest {
                                 new PrintFileSettingsStore(),
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
+                                new SdCardService(printerEventStore),
                                 printFileService,
+                                printerSdFileService,
                                 printJobService,
                                 asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());
@@ -332,7 +347,11 @@ class PrinterHubRuntimeTest {
                         PrinterRuntimeStateCache stateCache,
                         PrinterMonitoringScheduler monitoringScheduler) {
                 PrinterEventStore printerEventStore = new PrinterEventStore();
-                PrintFileService printFileService = new PrintFileService(new PrintFileStore());
+                PrintFileStore printFileStore = new PrintFileStore();
+                PrintFileService printFileService = new PrintFileService(printFileStore);
+                PrinterSdFileService printerSdFileService = new PrinterSdFileService(
+                                new PrinterSdFileStore(),
+                                printFileStore);
                 PrintJobStore printJobStore = new PrintJobStore();
 
                 PrintJobService printJobService = new PrintJobService(
@@ -364,7 +383,9 @@ class PrinterHubRuntimeTest {
                                 new PrintFileSettingsStore(),
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
+                                new SdCardService(printerEventStore),
                                 printFileService,
+                                printerSdFileService,
                                 printJobService,
                                 asyncPrintJobExecutor,
                                 new PrintJobExecutionStepStore());

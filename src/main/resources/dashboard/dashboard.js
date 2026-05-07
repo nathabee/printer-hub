@@ -13,10 +13,14 @@ import {
   getPrintFileSettings,
   getPrintFiles,
   getPrinterEvents,
+  getPrinterSdCardFiles,
+  getPrinterSdFiles,
   getPrinters,
+  registerPrinterSdFile,
   registerPrintFile,
   saveMonitoringRules,
   savePrintFileSettings,
+  setPrinterSdFileEnabled,
   setPrinterEnabled,
   startJob,
   updatePrinter,
@@ -31,6 +35,7 @@ import { renderPrinterHome } from "./views/printer-home.js";
 import { renderPrinterInfo } from "./views/printer-info.js";
 import { renderPrinterPrepare } from "./views/printer-prepare.js";
 import { renderPrinterPrint } from "./views/printer-print.js";
+import { renderPrinterSdCard } from "./views/printer-sd-card.js";
 import { renderSettingsPage } from "./views/settings.js";
 import {
   getJobsForSelectedPrinter,
@@ -46,8 +51,10 @@ import {
   setMonitoringRules,
   setPrintFileSettings,
   setPrintFiles,
+  setPrinterSdFiles,
   setPrinterCommandResult,
   setPrinterEvents,
+  setPrinterSdCardFiles,
   setPrinters,
   setPrimaryView,
   setPrinterView,
@@ -75,10 +82,11 @@ async function refreshAllData(options = {}) {
   const silent = options.silent === true;
 
   try {
-    const [printers, jobs, printFiles, monitoringRules, printFileSettings] = await Promise.all([
+    const [printers, jobs, printFiles, printerSdFiles, monitoringRules, printFileSettings] = await Promise.all([
       getPrinters(),
       getJobs(),
       getPrintFiles(),
+      getPrinterSdFiles(),
       getMonitoringRules(),
       getPrintFileSettings()
     ]);
@@ -86,6 +94,7 @@ async function refreshAllData(options = {}) {
     setPrinters(printers);
     setJobs(jobs);
     setPrintFiles(printFiles);
+    setPrinterSdFiles(printerSdFiles);
     setMonitoringRules(monitoringRules);
     setPrintFileSettings(printFileSettings);
     setLastRefreshLabel(new Date().toLocaleTimeString());
@@ -141,6 +150,7 @@ function renderHeader() {
   const printerTitles = {
     [PRINTER_VIEW_IDS.HOME]: ["Printer Home", `Live machine view for ${printerName}.`],
     [PRINTER_VIEW_IDS.PRINT]: ["Print", `Jobs and future print workflow for ${printerName}.`],
+    [PRINTER_VIEW_IDS.SD_CARD]: ["SD Card", `Printer-side printable files for ${printerName}.`],
     [PRINTER_VIEW_IDS.PREPARE]: ["Prepare", `Preparation actions inspired by the printer display workflow for ${printerName}.`],
     [PRINTER_VIEW_IDS.CONTROL]: ["Control", `Manual machine control and later tuning for ${printerName}.`],
     [PRINTER_VIEW_IDS.INFO]: ["Info", `Technical read-only information for ${printerName}.`],
@@ -215,6 +225,11 @@ function renderPage() {
     return;
   }
 
+  if (state.activePrinterView === PRINTER_VIEW_IDS.SD_CARD) {
+    pageContentElement.innerHTML = renderPrinterSdCard(selectedPrinter);
+    return;
+  }
+
   if (state.activePrinterView === PRINTER_VIEW_IDS.PREPARE) {
     pageContentElement.innerHTML = renderPrinterPrepare(selectedPrinter);
     return;
@@ -275,6 +290,30 @@ function bindGlobalListeners() {
     const printerCommandButton = event.target.closest("[data-printer-command]");
     if (printerCommandButton) {
       await runPrinterCommand(printerCommandButton.dataset.printerId, printerCommandButton.dataset.printerCommand);
+      renderApp();
+      return;
+    }
+
+    const loadSdCardFilesButton = event.target.closest("[data-load-sd-card-files]");
+    if (loadSdCardFilesButton) {
+      await loadPrinterSdCardFilesIntoState(loadSdCardFilesButton.dataset.loadSdCardFiles);
+      renderApp();
+      return;
+    }
+
+    const registerSdCardFileButton = event.target.closest("[data-register-sd-card-file]");
+    if (registerSdCardFileButton) {
+      await handleRegisterSdCardFile(registerSdCardFileButton);
+      renderApp();
+      return;
+    }
+
+    const printerSdFileEnabledButton = event.target.closest("[data-printer-sd-file-enabled]");
+    if (printerSdFileEnabledButton) {
+      await handleSetPrinterSdFileEnabled(
+        printerSdFileEnabledButton.dataset.printerSdFileId,
+        printerSdFileEnabledButton.dataset.printerSdFileEnabled === "true"
+      );
       renderApp();
       return;
     }
@@ -360,6 +399,15 @@ function bindPageListeners() {
       await handleSaveJob(jobForm);
       renderApp();
     });
+
+    const jobPrinterIdInput = jobForm.querySelector("#jobPrinterIdInput");
+    const jobPrinterSdFileIdInput = jobForm.querySelector("#jobPrinterSdFileIdInput");
+
+    if (jobPrinterIdInput && jobPrinterSdFileIdInput) {
+      jobPrinterIdInput.addEventListener("change", () => {
+        jobPrinterSdFileIdInput.innerHTML = buildPrinterSdFileOptions(jobPrinterIdInput.value);
+      });
+    }
   }
 
   const printFileForm = document.getElementById("printFileForm");
@@ -367,6 +415,15 @@ function bindPageListeners() {
     printFileForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       await handleSavePrintFile(printFileForm);
+      renderApp();
+    });
+  }
+
+  const printerSdFileForm = document.getElementById("printerSdFileForm");
+  if (printerSdFileForm) {
+    printerSdFileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await handleSavePrinterSdFile(printerSdFileForm);
       renderApp();
     });
   }
@@ -462,7 +519,7 @@ async function handleSaveJob(form) {
     name: form.querySelector("#jobNameInput").value.trim(),
     type: form.querySelector("#jobTypeInput").value.trim(),
     printerId: emptyToNull(form.querySelector("#jobPrinterIdInput").value),
-    printFileId: emptyToNull(form.querySelector("#jobPrintFileIdInput")?.value),
+    printerSdFileId: emptyToNull(form.querySelector("#jobPrinterSdFileIdInput")?.value),
     targetTemperature: readOptionalNumber(form.querySelector("#jobTargetTemperatureInput").value),
     fanSpeed: readOptionalInteger(form.querySelector("#jobFanSpeedInput").value)
   };
@@ -494,6 +551,74 @@ async function handleSavePrintFile(form) {
     await refreshAllData({ silent: true });
   } catch (error) {
     setMessage(`Failed to register print file: ${error.message}`);
+  }
+}
+
+async function handleRegisterSdCardFile(button) {
+  const payload = {
+    printerId: button.dataset.printerId,
+    firmwarePath: button.dataset.firmwarePath,
+    displayName: button.dataset.displayName || button.dataset.firmwarePath,
+    rawLine: button.dataset.rawLine || button.dataset.firmwarePath
+  };
+
+  if (button.dataset.sizeBytes) {
+    payload.sizeBytes = Number.parseInt(button.dataset.sizeBytes, 10);
+  }
+
+  try {
+    const response = await registerPrinterSdFile(payload);
+    setMessage(`Registered SD file ${response.displayName}.`);
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to register SD file: ${error.message}`);
+  }
+}
+
+async function handleSavePrinterSdFile(form) {
+  const payload = {
+    printerId: form.querySelector("#printerSdFilePrinterIdInput").value.trim(),
+    firmwarePath: form.querySelector("#printerSdFilePathInput").value.trim(),
+    displayName: emptyToNull(form.querySelector("#printerSdFileDisplayNameInput").value),
+    printFileId: emptyToNull(form.querySelector("#printerSdFilePrintFileIdInput").value)
+  };
+
+  removeNullFields(payload);
+
+  try {
+    const response = await registerPrinterSdFile(payload);
+    setMessage(`Registered SD target ${response.displayName}.`);
+    form.reset();
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to register SD target: ${error.message}`);
+  }
+}
+
+function buildPrinterSdFileOptions(printerId) {
+  const files = state.printerSdFiles.filter((file) => file.printerId === printerId && file.enabled === true);
+
+  return [
+    `<option value="">Select enabled SD file for PRINT_FILE jobs</option>`,
+    ...files.map((file) => `
+      <option value="${escapeHtml(file.id)}">
+        ${escapeHtml(file.displayName || file.firmwarePath || file.id)}
+      </option>
+    `)
+  ].join("");
+}
+
+async function handleSetPrinterSdFileEnabled(printerSdFileId, enabled) {
+  if (!printerSdFileId) {
+    return;
+  }
+
+  try {
+    const response = await setPrinterSdFileEnabled(printerSdFileId, enabled);
+    setMessage(`${enabled ? "Enabled" : "Disabled"} SD target ${response.displayName}.`);
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to ${enabled ? "enable" : "disable"} SD target: ${error.message}`);
   }
 }
 
@@ -660,6 +785,21 @@ async function loadJobExecutionStepsIntoState(jobId) {
     setJobExecutionSteps(jobId, steps);
   } catch (error) {
     setMessage(`Failed to load execution diagnostics for ${jobId}: ${error.message}`);
+  }
+}
+
+async function loadPrinterSdCardFilesIntoState(printerId) {
+  if (!printerId) {
+    return;
+  }
+
+  try {
+    const data = await getPrinterSdCardFiles(printerId);
+    setPrinterSdCardFiles(printerId, data.files, data.rawResponse);
+    setPrinterSdFiles(await getPrinterSdFiles());
+    setMessage(`Loaded SD-card files for ${printerId}.`);
+  } catch (error) {
+    setMessage(`Failed to load SD-card files for ${printerId}: ${error.message}`);
   }
 }
 

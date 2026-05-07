@@ -53,6 +53,8 @@ public final class OperationMessages {
     public static final String EVENT_PRINTER_ERROR = "PRINTER_ERROR";
     public static final String EVENT_COMMAND_EXECUTED = "COMMAND_EXECUTED";
     public static final String EVENT_COMMAND_FAILED = "COMMAND_FAILED";
+    public static final String EVENT_SD_CARD_FILES_LISTED = "SD_CARD_FILES_LISTED";
+    public static final String EVENT_SD_CARD_FILE_LIST_FAILED = "SD_CARD_FILE_LIST_FAILED";
 
     public static final String PRINTER_NODE_DISABLED = "Printer node is disabled.";
     public static final String PRINTER_POLL_COMPLETED_SUCCESSFULLY = "Printer poll completed successfully.";
@@ -138,9 +140,16 @@ public final class OperationMessages {
     public static final String FAILED_TO_SAVE_PRINT_FILE = "Failed to save print file";
     public static final String FAILED_TO_LOAD_PRINT_FILE = "Failed to load print file";
     public static final String FAILED_TO_LOAD_PRINT_FILES = "Failed to load print files";
+    public static final String FAILED_TO_SAVE_PRINTER_SD_FILE = "Failed to save printer SD file";
+    public static final String FAILED_TO_LOAD_PRINTER_SD_FILE = "Failed to load printer SD file";
+    public static final String FAILED_TO_LOAD_PRINTER_SD_FILES = "Failed to load printer SD files";
     public static final String FAILED_TO_STORE_UPLOADED_PRINT_FILE = "failed_to_store_uploaded_print_file";
     public static final String FAILED_TO_READ_PRINT_FILE_CONTENT = "failed_to_read_print_file_content";
     public static final String PRINT_FILE_NOT_FOUND = "print_file_not_found";
+    public static final String PRINTER_SD_FILE_NOT_FOUND = "printer_sd_file_not_found";
+    public static final String PRINTER_SD_FILE_DISABLED = "printer_sd_file_disabled";
+    public static final String PRINTER_SD_FILE_ID_MUST_NOT_BE_BLANK = "printerSdFileId must not be blank";
+    public static final String PRINTER_SD_FILE_PATH_MUST_NOT_BE_BLANK = "firmwarePath must not be blank";
     public static final String PRINT_FILE_ID_MUST_NOT_BE_BLANK = "printFileId must not be blank";
     public static final String PRINT_FILE_PATH_MUST_NOT_BE_BLANK = "path must not be blank";
     public static final String PRINT_FILE_STORAGE_DIRECTORY_MUST_NOT_BE_BLANK = "printFileStorageDirectory must not be blank";
@@ -149,6 +158,7 @@ public final class OperationMessages {
     public static final String PRINT_FILE_MUST_EXIST = "print_file_must_exist";
     public static final String PRINT_FILE_MUST_BE_READABLE = "print_file_must_be_readable";
     public static final String PRINT_FILE_MUST_BE_REGULAR_FILE = "print_file_must_be_regular_file";
+    public static final String FAILED_TO_LIST_SD_CARD_FILES = "failed_to_list_sd_card_files";
 
     public static final String EVENT_JOB_CREATED = "JOB_CREATED";
     public static final String EVENT_JOB_ASSIGNED = "JOB_ASSIGNED";
@@ -333,6 +343,14 @@ public final class OperationMessages {
 
     public static String commandFailed(String wireCommand, String detail) {
         return "Manual command failed: " + wireCommand + " -> " + detail;
+    }
+
+    public static String sdCardFilesListed(int count) {
+        return "SD card files listed: " + count;
+    }
+
+    public static String sdCardFileListFailed(String detail) {
+        return "SD card file list failed: " + detail;
     }
 
     public static String safeDetail(String detail, String fallback) {

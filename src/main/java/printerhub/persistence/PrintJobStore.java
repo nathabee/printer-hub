@@ -29,6 +29,7 @@ public final class PrintJobStore {
                     state,
                     printer_id,
                     print_file_id,
+                    printer_sd_file_id,
                     target_temperature,
                     fan_speed,
                     failure_reason,
@@ -37,13 +38,14 @@ public final class PrintJobStore {
                     updated_at,
                     started_at,
                     finished_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     type = excluded.type,
                     state = excluded.state,
                     printer_id = excluded.printer_id,
                     print_file_id = excluded.print_file_id,
+                    printer_sd_file_id = excluded.printer_sd_file_id,
                     target_temperature = excluded.target_temperature,
                     fan_speed = excluded.fan_speed,
                     failure_reason = excluded.failure_reason,
@@ -77,6 +79,7 @@ public final class PrintJobStore {
                     state,
                     printer_id,
                     print_file_id,
+                    printer_sd_file_id,
                     target_temperature,
                     fan_speed,
                     failure_reason,
@@ -120,6 +123,7 @@ public final class PrintJobStore {
                     state,
                     printer_id,
                     print_file_id,
+                    printer_sd_file_id,
                     target_temperature,
                     fan_speed,
                     failure_reason,
@@ -166,6 +170,7 @@ public final class PrintJobStore {
                     state = ?,
                     printer_id = ?,
                     print_file_id = ?,
+                    printer_sd_file_id = ?,
                     target_temperature = ?,
                     fan_speed = ?,
                     failure_reason = ?,
@@ -184,27 +189,27 @@ public final class PrintJobStore {
             statement.setString(2, job.type().name());
             statement.setString(3, job.state().name());
             statement.setString(4, job.printerId());
-
             statement.setString(5, job.printFileId());
+            statement.setString(6, job.printerSdFileId());
 
             if (job.targetTemperature() == null) {
-                statement.setNull(6, java.sql.Types.REAL);
+                statement.setNull(7, java.sql.Types.REAL);
             } else {
-                statement.setDouble(6, job.targetTemperature());
+                statement.setDouble(7, job.targetTemperature());
             }
 
             if (job.fanSpeed() == null) {
-                statement.setNull(7, java.sql.Types.INTEGER);
+                statement.setNull(8, java.sql.Types.INTEGER);
             } else {
-                statement.setInt(7, job.fanSpeed());
+                statement.setInt(8, job.fanSpeed());
             }
 
-            statement.setString(8, job.failureReason());
-            statement.setString(9, job.failureDetail());
-            statement.setString(10, job.updatedAt().toString());
-            statement.setString(11, job.startedAt() == null ? null : job.startedAt().toString());
-            statement.setString(12, job.finishedAt() == null ? null : job.finishedAt().toString());
-            statement.setString(13, job.id());
+            statement.setString(9, job.failureReason());
+            statement.setString(10, job.failureDetail());
+            statement.setString(11, job.updatedAt().toString());
+            statement.setString(12, job.startedAt() == null ? null : job.startedAt().toString());
+            statement.setString(13, job.finishedAt() == null ? null : job.finishedAt().toString());
+            statement.setString(14, job.id());
 
             int updatedRows = statement.executeUpdate();
 
@@ -269,25 +274,26 @@ public final class PrintJobStore {
         statement.setString(4, job.state().name());
         statement.setString(5, job.printerId());
         statement.setString(6, job.printFileId());
+        statement.setString(7, job.printerSdFileId());
 
         if (job.targetTemperature() == null) {
-            statement.setNull(7, java.sql.Types.REAL);
+            statement.setNull(8, java.sql.Types.REAL);
         } else {
-            statement.setDouble(7, job.targetTemperature());
+            statement.setDouble(8, job.targetTemperature());
         }
 
         if (job.fanSpeed() == null) {
-            statement.setNull(8, java.sql.Types.INTEGER);
+            statement.setNull(9, java.sql.Types.INTEGER);
         } else {
-            statement.setInt(8, job.fanSpeed());
+            statement.setInt(9, job.fanSpeed());
         }
 
-        statement.setString(9, job.failureReason());
-        statement.setString(10, job.failureDetail());
-        statement.setString(11, job.createdAt().toString());
-        statement.setString(12, job.updatedAt().toString());
-        statement.setString(13, job.startedAt() == null ? null : job.startedAt().toString());
-        statement.setString(14, job.finishedAt() == null ? null : job.finishedAt().toString());
+        statement.setString(10, job.failureReason());
+        statement.setString(11, job.failureDetail());
+        statement.setString(12, job.createdAt().toString());
+        statement.setString(13, job.updatedAt().toString());
+        statement.setString(14, job.startedAt() == null ? null : job.startedAt().toString());
+        statement.setString(15, job.finishedAt() == null ? null : job.finishedAt().toString());
     }
 
     private PrintJob mapRow(ResultSet resultSet) throws SQLException {
@@ -298,6 +304,7 @@ public final class PrintJobStore {
                 JobState.valueOf(resultSet.getString("state")),
                 resultSet.getString("printer_id"),
                 resultSet.getString("print_file_id"),
+                resultSet.getString("printer_sd_file_id"),
                 nullableDouble(resultSet, "target_temperature"),
                 nullableInteger(resultSet, "fan_speed"),
                 resultSet.getString("failure_reason"),
