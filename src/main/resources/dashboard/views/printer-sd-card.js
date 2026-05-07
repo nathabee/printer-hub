@@ -1,10 +1,11 @@
 import { escapeHtml } from "../dashboard.js";
-import { state } from "../state.js";
+import { getPrinterSdUploadStatus, state } from "../state.js";
 
 export function renderPrinterSdCard(printer) {
   const data = state.printerSdCardFiles.get(printer.id);
   const files = data?.files ?? [];
   const registeredFiles = state.printerSdFiles.filter((file) => file.printerId === printer.id);
+  const uploadStatus = getPrinterSdUploadStatus(printer.id);
 
   return `
     <section class="section-card">
@@ -18,19 +19,20 @@ export function renderPrinterSdCard(printer) {
           <button type="button" data-load-sd-card-files="${escapeHtml(printer.id)}">Refresh files</button>
         </div>
       </div>
+            ${renderSdUploadStatus(uploadStatus)}
 
       
       ${files.length === 0
-  ? ` 
+      ? ` 
       ${renderEmptyState(data)} 
   `
-  : `
+      : `
     <details class="events-section">
       <summary class="events-header">SD card files (${files.length})</summary>
       ${renderFirmwareFileTable(printer.id, files, registeredFiles)}
     </details>
   `
-}
+    }
 
 
 
@@ -114,7 +116,7 @@ export function renderPrinterSdCard(printer) {
           <h3>No host print files registered</h3>
           <p class="muted">Use the form above to add prepared .gcode files to PrinterHub.</p>
         </div>
-      ` : renderHostFileTable()}
+        ` : renderHostFileTable(printer.id)}
     </section>
   `;
 }
@@ -124,6 +126,37 @@ function renderEmptyState(data) {
     <div class="empty-state">
       <h3>${data ? "No SD-card files reported" : "SD-card files not loaded"}</h3>
       <p class="muted">${data ? "The printer did not return printable files for this request." : "Use Refresh files to ask the selected printer for its SD-card file list."}</p>
+    </div>
+  `;
+}
+
+function renderSdUploadStatus(uploadStatus) {
+  if (!uploadStatus) {
+    return "";
+  }
+
+  const stateLabel = uploadStatus.state || "info";
+  const badgeClass = stateLabel === "success"
+    ? "badge-real"
+    : stateLabel === "error"
+      ? "badge-sim"
+      : "badge-real";
+
+  const title = stateLabel === "running"
+    ? "Upload in progress"
+    : stateLabel === "success"
+      ? "Last upload"
+      : "Upload error";
+
+  return `
+    <div class="empty-state">
+      <div class="section-header compact">
+        <div>
+          <h3>${escapeHtml(title)}</h3>
+          <p class="muted">${escapeHtml(uploadStatus.message || "")}</p>
+        </div>
+        <span class="badge ${badgeClass}">${escapeHtml(stateLabel.toUpperCase())}</span>
+      </div>
     </div>
   `;
 }
@@ -219,7 +252,7 @@ function renderRegisteredFileTable(files) {
   `;
 }
 
-function renderHostFileTable() {
+function renderHostFileTable(printerId) {
   return `
     <div class="table-wrap">
       <table class="data-table">
@@ -228,6 +261,7 @@ function renderHostFileTable() {
             <th>Filename</th>
             <th>Path</th>
             <th>Size</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -236,6 +270,16 @@ function renderHostFileTable() {
               <td>${escapeHtml(file.originalFilename || file.id)}</td>
               <td>${escapeHtml(file.path || "n/a")}</td>
               <td>${escapeHtml(formatSize(file.sizeBytes))}</td>
+              <td>
+                <button
+                  type="button"
+                  class="secondary-button small-button"
+                  data-upload-print-file-to-sd
+                  data-printer-id="${escapeHtml(printerId)}"
+                  data-print-file-id="${escapeHtml(file.id)}"
+                  data-target-filename="${escapeHtml(defaultSdTargetFilename(file.originalFilename || file.id))}"
+                >Upload to SD card</button>
+              </td>
             </tr>
           `).join("")}
         </tbody>
@@ -276,4 +320,25 @@ function formatSize(sizeBytes) {
   }
 
   return `${numericSize} bytes`;
+}
+
+function defaultSdTargetFilename(filename) {
+  if (!filename) {
+    return "UPLOAD.GCO";
+  }
+
+  const normalized = String(filename)
+    .trim()
+    .replace(/^.*[\\/]/, "")
+    .replace(/[^A-Za-z0-9._-]/g, "_");
+
+  if (!normalized) {
+    return "UPLOAD.GCO";
+  }
+
+  if (/\.gcode$/i.test(normalized) || /\.gco$/i.test(normalized)) {
+    return normalized;
+  }
+
+  return `${normalized}.gco`;
 }

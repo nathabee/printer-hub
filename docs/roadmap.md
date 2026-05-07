@@ -1531,37 +1531,33 @@ not block the first autonomous print activation milestone.
 
 ---
 
-### step F — Autonomous real-printer print-start workflow
 
-status: in progress
+### step F — SD-card administration and guarded host-side G-code upload
+
+status: done
 
 Purpose:
 
-Turn file-backed `PRINT_FILE` jobs from represented metadata into autonomous
-printer-side print activation.
-
-Step F is about Mode 2:
+Make the selected-printer SD Card workflow real and usable:
 
 ```text
-PrinterHub prepares/selects a printable file,
-asks the printer firmware to start printing it,
-then observes the printer through monitoring, events, and job diagnostics.
+PrinterHub can inspect printer-side SD files,
+register and manage printable targets,
+store host-side .gcode files,
+and copy a host-side file to a real printer SD card through
+a guarded Marlin-style upload session.
 ```
 
-It is not yet Mode 1 line-by-line G-code streaming.
+This step does not yet start a real autonomous print from the uploaded file.
 
 Goals:
 
-* implement Mode 2 controlled execution of file-backed print jobs
-* treat autonomous print start as a multi-step workflow, not as one direct command send
-* validate printer readiness before print activation
-* prevent conflicting access between monitoring, manual commands, and active job execution
-* support required preparation phases before print start
-* support transfer, printer-side file selection, or activation of the selected printable file as part of the job workflow
-* persist execution-step history for the print-start workflow
-* keep PrinterHub out of line-by-line G-code streaming in this step
 * add a selected-printer SD Card view to inspect printer-side printable files
 * move file preparation/upload responsibilities out of Print job creation and into the SD Card view
+* make SD upload feedback visible in the dashboard with clear in-progress / success / failure status
+* support Marlin-style host-driven SD upload only through a dedicated guarded upload session, not through the simple single-command path
+* prevent conflicting access between monitoring, manual commands, and active SD upload execution
+* persist SD-card listing, registration, enable/disable, and upload diagnostics
 
 Selected-printer dashboard addition:
 
@@ -1596,9 +1592,9 @@ SD Card view scope:
 * show the relationship between host-side file metadata and printer-side firmware path when known
 * allow review/edit of the host-side registered `.gcode` file before it is copied to the printer SD card, where safe
 * upload/copy a registered host-side file to the printer SD card only when a reliable transfer path is confirmed
+* show guarded upload status directly in the SD Card view
 * after a host-side file is copied to a printer SD card, refresh/read that printer SD card so the resulting firmware path can be registered for that specific printer
-* expose guarded delete only if the firmware command is confirmed and the operator action is explicit
-* provide the registered printer-side file target that the Print page can use for autonomous `PRINT_FILE` jobs
+* provide the registered printer-side file target that the Print page can later use for autonomous `PRINT_FILE` jobs
 
 Print page scope after this split:
 
@@ -1611,62 +1607,6 @@ Print page scope after this split:
   * source host file when linked
   * size when available
 
-File identity note:
-
-```text
-Marlin may expose short 8.3 firmware paths such as CE3E3V~1.GCO.
-These paths are suitable printer-side command targets, but they are not nice
-human display names and should not be treated as global business IDs.
-
-PrinterHub should distinguish:
-
-host print file id      -> PrinterHub metadata id for a stored host-side .gcode
-host path               -> server-side stored path in printerhub-print-files
-printer sd path         -> firmware path reported by the printer, e.g. /OLD/SUPPOR~1.GCO
-display name            -> human label when available
-raw firmware line       -> original printer response for audit/debugging
-```
-
-Registration and enablement note:
-
-```text
-Reading the printer SD card is discovery.
-
-When PrinterHub refreshes the SD-card list, each firmware-reported path is
-inserted or updated as a registered printer-side file target using:
-
-  printer id + firmware path
-
-as the unique identity. This prevents duplicate rows when the same file is
-seen again on later refreshes.
-
-Newly discovered files may be enabled by default during Step F so they are
-usable immediately, but existing enabled/disabled choices must be preserved
-on refresh. Operators can disable old or unwanted SD-card files so they remain
-known but do not appear in normal print-job creation.
-```
-
-Host file to printer SD-card relationship:
-
-```text
-A host-side .gcode file is stored once on the PrinterHub server:
-
-  printerhub-print-files/cube.gcode
-
-The same host file may later be copied to several printer SD cards. Each copy
-is represented by a separate printer-side registration because the physical SD
-card and firmware path belong to one printer:
-
-  host print file: cube.gcode
-  ├── printer-1 + CUBE.GCO
-  ├── printer-2 + CUBE.GCO
-  └── printer-3 + /PRINTS/CUBE.GCO
-
-The print job uses the printer-side registration, not the host file id.
-The optional host print file link is metadata that helps trace or inspect the
-source file.
-```
-
 Backend/API scope:
 
 * add printer-specific SD-card/file-list operations
@@ -1675,20 +1615,79 @@ Backend/API scope:
 * add API support for registering an existing SD-card firmware path as a printable target
 * add API support for enabling/disabling registered printer-side file targets
 * keep host-side `.gcode` registration and upload APIs, but present them in the SD Card workflow rather than job creation
-* prepare API support for copying/transferring a registered host-side file to one selected printer SD card when a verified transfer strategy exists
+* add guarded API support for copying/transferring a registered host-side file to one selected printer SD card
 * parse Marlin-style file-list responses as far as practical
 * persist relevant file-operation diagnostics as printer events and/or job execution steps
 * keep SD-card operations coordinated with monitoring and active jobs
-* reject SD-card write/delete operations while a print job is active unless explicitly safe
+* implement dedicated upload/session handling for firmware that requires numbered and checksummed host upload lines during `M28`/`M29` file transfer
+* do not treat SD upload as a normal one-command request/response exchange
 
-Important implementation note:
+Suggested substeps:
+
+1. Add firmware/file-list command support and parsing for SD-card listing. Done.
+2. Add backend API for selected-printer SD-card file listing. Done.
+3. Add the dashboard SD Card menu and read-only file list. Done.
+4. Add automatic printer-side file registration for files discovered on SD-card refresh. Done.
+5. Move host-side `.gcode` register/upload UI from Print job creation into the SD Card workflow. Done.
+6. Persist/link host-side file metadata to printer-side firmware path when known. Done.
+7. Change Print job creation so it only selects a registered printer-side printable target. Done.
+8. Add enabled/disabled state for registered printer-side files and filter Print job creation to enabled targets. Done.
+9. Add dashboard controls to enable/disable registered printer-side files. Done.
+10. Add guarded host-file-to-printer-SD transfer entry points in backend and dashboard. Done.
+11. Add dashboard-visible upload status and clearer operator error reporting for SD upload attempts. Done.
+12. Real-printer verify the transfer path on the Ender-style Marlin path. Done.
+13. Implement `SdCardUploadService` as a dedicated upload/session service instead of reusing the simple command path. Done.
+14. Implement numbered/checksummed line streaming for SD upload, including resend handling and clean `M29` close. Done.
+15. After transfer, refresh SD-card listing and link the discovered printer-side path to the host print file where possible. Done with confirmation-only linking.
+16. Persist workflow steps and printer events for listing, registration, enable/disable, transfer, resend, confirmation, and failures. Done.
+17. Add tests for list parsing, API responses, file registration/mapping, enable/disable filtering, upload-session behavior, checksum/resend handling, busy-printer rejection, and unsupported file operations. Done.
+
+Expected result:
+
+* the selected-printer dashboard can inspect printer-side SD-card files
+* the SD Card page owns file preparation, host upload, SD-card registration, and guarded transfer actions
+* the Print page creates jobs only from registered printer-side printable targets
+* PrinterHub can copy a host-side `.gcode` file to the verified real printer SD card through a dedicated numbered/checksummed upload session
+* upload confirmation depends on the printer SD listing, not on optimistic fallback registration
+* Mode 2 print activation remains the next step
+
+Note:
+
+The upload path is currently verified and adapted against the Ender 2 Neo V3 style Marlin behavior. On that path, PrinterHub resets host line numbering, opens `M28` inside the numbered session, streams numbered/checksummed content lines, closes with numbered `M29`, and verifies with numbered `M20`.
+
+---
+
+
+### step G — Autonomous real-printer print-start workflow and SD-card operation hardening
+
+status: planned
+
+Purpose:
+
+Turn the prepared SD-card/runtime model from Step F into actual autonomous
+printer-side print activation, and finish the remaining SD-card administration
+hardening.
+
+Step G is about Mode 2:
 
 ```text
-Marlin firmware exposes SD-card commands, but behavior and metadata quality can
-vary by firmware and printer configuration. Step F should first implement
-read/list/select/start safely, then add delete or transfer only behind explicit
-guarded actions once verified on the real printer.
+PrinterHub selects a registered printer-side file target,
+asks the printer firmware to start printing it,
+then observes the printer through monitoring, events, and job diagnostics.
 ```
+
+Goals:
+
+* implement Mode 2 controlled execution of file-backed `PRINT_FILE` jobs
+* treat autonomous print start as a multi-step workflow, not as one direct command send
+* validate printer readiness before print activation
+* support required preparation phases before print start
+* support printer-side file selection and activation as part of the job workflow
+* persist execution-step history for the print-start workflow
+* add explicit guarded delete of printer-side SD files from the SD Card administration view
+* track deleted printer-side files in persistence distinctly from enabled/disabled state
+* add a monitoring/debug setting that enables printer wire trace logging only when operators request it
+* verify and test upload behavior for `.gcode` files containing comments
 
 Typical workflow scope:
 
@@ -1707,33 +1706,27 @@ PRINT_FILE
 
 Suggested substeps:
 
-1. Add firmware/file-list command support and parsing for SD-card listing. Done.
-2. Add backend API for selected-printer SD-card file listing. Done.
-3. Add the dashboard SD Card menu and read-only file list. Done.
-4. Add automatic printer-side file registration for files discovered on SD-card refresh. Done.
-5. Move host-side `.gcode` register/upload UI from Print job creation into the SD Card workflow. Done.
-6. Persist/link host-side file metadata to printer-side firmware path when known. Done.
-7. Change Print job creation so it only selects a registered printer-side printable target. Done.
-8. Add enabled/disabled state for registered printer-side files and filter Print job creation to enabled targets.
-9. Add dashboard controls to enable/disable registered printer-side files.
-10. Implement guarded host-file-to-printer-SD transfer/copy workflow after confirming the real-printer transfer strategy.
-11. After transfer, refresh SD-card listing and link the discovered printer-side path to the host print file where possible.
-12. Implement guarded printer-side file selection / print-start workflow.
-13. Persist workflow steps and printer events for listing, registration, enable/disable, transfer, selection, activation, and failures.
-14. Add explicit guarded delete only after real-printer command behavior is verified.
-15. Add tests for list parsing, API responses, file registration/mapping, enable/disable filtering, job workflow decisions, busy-printer rejection, and unsupported file operations.
+1. Implement guarded printer-side file selection / print-start workflow.
+2. Persist workflow steps and printer events for selection, activation, running transition, and failures.
+3. Add explicit guarded delete only after real-printer command behavior is verified.
+4. Extend printer-side file persistence beyond enable/disable so deleted files can remain traceable in history.
+5. Add dashboard delete controls in the SD Card administration view.
+6. Add a monitoring/debug flag that enables printer command/response trace logging only when requested.
+7. Verify and test `.gcode` upload behavior with comment lines and representative real files.
+8. Add tests for print-start workflow decisions, SD delete behavior, debug-trace flag behavior, and commented-file upload handling.
 
 Expected result:
 
 * a real autonomous printer-side print can be started through the runtime as a controlled workflow
 * file-backed print jobs are no longer just metadata
-* the selected-printer dashboard can inspect printer-side SD-card files
-* the SD Card page owns file preparation, host upload, SD-card registration, and future transfer actions
-* the Print page creates jobs only from registered printer-side printable targets
 * print activation becomes coordinated, reviewable, and safer for real hardware use
+* SD-card administration covers enable/disable, delete, host upload, and operator-selected tracing
 * Mode 1 streamed printing remains a later local-runtime capability
 
-### step G — Autonomous running print supervision and operator controls
+---
+
+
+### step H — Autonomous running print supervision and operator controls
 
 status: planned
 

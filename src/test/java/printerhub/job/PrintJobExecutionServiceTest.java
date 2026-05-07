@@ -570,6 +570,12 @@ class PrintJobExecutionServiceTest {
         public void connect() {
         }
 
+
+        @Override
+        public String sendRawLine(String line) {
+            return "ok";
+        }
+
         @Override
         public String sendCommand(String command) {
             return response;
@@ -587,6 +593,12 @@ class PrintJobExecutionServiceTest {
 
         private SequencePrinterPort(String... responses) {
             this.responses = responses;
+        }
+
+
+        @Override
+        public String sendRawLine(String line) {
+            return "ok";
         }
 
         @Override
@@ -624,6 +636,11 @@ class PrintJobExecutionServiceTest {
         }
 
         @Override
+        public String sendRawLine(String line) {
+            return "ok";
+        }
+
+        @Override
         public void disconnect() {
         }
 
@@ -648,6 +665,13 @@ class PrintJobExecutionServiceTest {
         @Override
         public void connect() {
         }
+
+
+        @Override
+        public String sendRawLine(String line) {
+            return "ok";
+        }
+
 
         @Override
         public String sendCommand(String command) {

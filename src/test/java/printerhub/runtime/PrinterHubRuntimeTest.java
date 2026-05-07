@@ -23,6 +23,7 @@ import printerhub.job.PrinterActionGuard;
 import printerhub.job.PrinterActionMapper;
 import printerhub.job.PrinterSdFileService;
 import printerhub.persistence.PrintJobStore;
+import printerhub.command.SdCardUploadService;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -212,6 +213,14 @@ class PrinterHubRuntimeTest {
                                 printerEventStore);
 
                 PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+                SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                                printerRegistry,
+                                monitoringScheduler,
+                                printerActionGuard,
+                                printFileService,
+                                new SdCardService(printerEventStore),
+                                printerSdFileService,
+                                printerEventStore);
 
                 PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                 printJobService,
@@ -237,6 +246,7 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 new SdCardService(printerEventStore),
+                                sdCardUploadService,
                                 printFileService,
                                 printerSdFileService,
                                 printJobService,
@@ -297,6 +307,14 @@ class PrinterHubRuntimeTest {
                                 printerEventStore);
 
                 PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+                SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                                printerRegistry,
+                                monitoringScheduler,
+                                printerActionGuard,
+                                printFileService,
+                                new SdCardService(printerEventStore),
+                                printerSdFileService,
+                                printerEventStore);
 
                 PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                 printJobService,
@@ -322,6 +340,7 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 new SdCardService(printerEventStore),
+                                sdCardUploadService,
                                 printFileService,
                                 printerSdFileService,
                                 printJobService,
@@ -359,6 +378,14 @@ class PrinterHubRuntimeTest {
                                 printerEventStore);
 
                 PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+                SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                                printerRegistry,
+                                monitoringScheduler,
+                                printerActionGuard,
+                                printFileService,
+                                new SdCardService(printerEventStore),
+                                printerSdFileService,
+                                printerEventStore);
 
                 PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                 printJobService,
@@ -384,6 +411,7 @@ class PrinterHubRuntimeTest {
                                 printerEventStore,
                                 new PrinterCommandService(printerEventStore),
                                 new SdCardService(printerEventStore),
+                                sdCardUploadService,
                                 printFileService,
                                 printerSdFileService,
                                 printJobService,

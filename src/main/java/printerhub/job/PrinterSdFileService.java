@@ -60,8 +60,8 @@ public final class PrinterSdFileService {
 
         String normalizedPrinterId = printerId.trim();
         String normalizedFirmwarePath = firmwarePath.trim();
-        Optional<PrinterSdFile> existingFile =
-                printerSdFileStore.findByPrinterIdAndFirmwarePath(normalizedPrinterId, normalizedFirmwarePath);
+        Optional<PrinterSdFile> existingFile = printerSdFileStore.findByPrinterIdAndFirmwarePath(normalizedPrinterId,
+                normalizedFirmwarePath);
         Instant now = Instant.now(clock);
         PrinterSdFile file = new PrinterSdFile(
                 existingFile.map(PrinterSdFile::id).orElseGet(() -> UUID.randomUUID().toString()),
@@ -132,5 +132,15 @@ public final class PrinterSdFileService {
         if (printerId == null || printerId.isBlank()) {
             throw new IllegalArgumentException(OperationMessages.PRINTER_ID_MUST_NOT_BE_BLANK);
         }
+    }
+
+    public Optional<PrinterSdFile> findByPrinterIdAndFirmwarePath(String printerId, String firmwarePath) {
+        validatePrinterId(printerId);
+
+        if (firmwarePath == null || firmwarePath.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_SD_FILE_PATH_MUST_NOT_BE_BLANK);
+        }
+
+        return printerSdFileStore.findByPrinterIdAndFirmwarePath(printerId.trim(), firmwarePath.trim());
     }
 }

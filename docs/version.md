@@ -10,7 +10,7 @@ see ROADMAP.md
 
 ## 0.2.x — Local Runtime Administration and Job Management
 
-- 0.2.3 — step F — Autonomous real-printer print-start workflow
+- 0.2.3 — step F — SD-card administration and guarded host-side G-code upload
 - 0.2.3 — step E — File-backed print jobs and richer preparation/verification workflows
 - 0.2.3 — step D — Asynchronous job execution and docs
 - 0.2.3 — step C — Correct execution diagnostics and classified outcomes

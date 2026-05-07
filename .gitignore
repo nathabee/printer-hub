@@ -21,3 +21,6 @@ scripts/**
 **/to_ignore/**
 
 printerhub-print-files/**
+
+# AI
+.codex

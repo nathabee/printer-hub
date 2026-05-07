@@ -345,6 +345,11 @@ class PrinterMonitoringSchedulerTest {
                 }
 
                 @Override
+                public String sendRawLine(String line) {
+                        return "ok";
+                }
+
+                @Override
                 public String sendCommand(String command) {
                         return "ok";
                 }

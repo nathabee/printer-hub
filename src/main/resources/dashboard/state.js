@@ -31,6 +31,7 @@ export const state = {
   jobExecutionSteps: new Map(),
   jobCardSections: new Map(),
   printerSdCardFiles: new Map(),
+  printerSdUploadStatus: new Map(),
   printerCommandResults: new Map(),
   message: "",
   lastRefreshLabel: "never"
@@ -86,6 +87,19 @@ export function setSelectedPrinter(printerId) {
   state.selectedPrinterId = exists ? printerId : state.selectedPrinterId;
 }
 
+export function setPrinterSdUploadStatus(printerId, status) {
+  if (!printerId) {
+    return;
+  }
+
+  if (!status) {
+    state.printerSdUploadStatus.delete(printerId);
+    return;
+  }
+
+  state.printerSdUploadStatus.set(printerId, status);
+}
+
 export function setMessage(message) {
   state.message = message || "";
 }
@@ -124,6 +138,14 @@ export function getJobsForSelectedPrinter() {
   }
 
   return state.jobs.filter((job) => job.printerId === state.selectedPrinterId);
+}
+
+export function getPrinterSdUploadStatus(printerId) {
+  if (!printerId) {
+    return null;
+  }
+
+  return state.printerSdUploadStatus.get(printerId) ?? null;
 }
 
 export function setPrinterEvents(printerId, events) {

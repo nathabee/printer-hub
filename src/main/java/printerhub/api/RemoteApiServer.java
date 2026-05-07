@@ -12,7 +12,8 @@ import printerhub.command.SdCardFileList;
 import printerhub.command.SdCardService;
 import printerhub.config.RuntimeDefaults;
 import printerhub.job.AsyncPrintJobExecutor;
-import printerhub.job.JobFailureReason;
+// import printerhub.job.JobFailureReason;
+import printerhub.command.SdCardUploadService;
 import printerhub.job.PrintFile;
 import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionStep;
@@ -66,6 +67,7 @@ public final class RemoteApiServer {
     private final PrintJobService printJobService;
     private final AsyncPrintJobExecutor asyncPrintJobExecutor;
     private final PrintJobExecutionStepStore printJobExecutionStepStore;
+    private final SdCardUploadService sdCardUploadService;
 
     private HttpServer server;
 
@@ -80,6 +82,7 @@ public final class RemoteApiServer {
             PrinterEventStore printerEventStore,
             PrinterCommandService printerCommandService,
             SdCardService sdCardService,
+            SdCardUploadService sdCardUploadService,
             PrintFileService printFileService,
             PrinterSdFileService printerSdFileService,
             PrintJobService printJobService,
@@ -130,6 +133,9 @@ public final class RemoteApiServer {
         if (printJobExecutionStepStore == null) {
             throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("printJobExecutionStepStore"));
         }
+        if (sdCardUploadService == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("sdCardUploadService"));
+        }
 
         this.port = port;
         this.printerRegistry = printerRegistry;
@@ -141,6 +147,7 @@ public final class RemoteApiServer {
         this.printerEventStore = printerEventStore;
         this.printerCommandService = printerCommandService;
         this.sdCardService = sdCardService;
+        this.sdCardUploadService = sdCardUploadService;
         this.printFileService = printFileService;
         this.printerSdFileService = printerSdFileService;
         this.printJobService = printJobService;
@@ -769,6 +776,11 @@ public final class RemoteApiServer {
             return;
         }
 
+        if (parts.length == 3 && "sd-card".equals(parts[1]) && "uploads".equals(parts[2])) {
+            handlePrinterSdCardUploads(exchange, printerId);
+            return;
+        }
+
         if (parts.length == 2 && "events".equals(parts[1])) {
             handlePrinterEvents(exchange, printerId);
             return;
@@ -984,6 +996,29 @@ public final class RemoteApiServer {
                 targetTemperature);
 
         sendJson(exchange, 200, commandExecutionJson(result));
+    }
+
+    private void handlePrinterSdCardUploads(HttpExchange exchange, String printerId) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+
+        PrinterRuntimeNode node = printerRegistry.findById(printerId).orElse(null);
+
+        if (node == null) {
+            sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+            return;
+        }
+
+        String body = readBody(exchange);
+
+        SdCardUploadService.UploadResult result = sdCardUploadService.uploadToPrinterSd(
+                printerId,
+                requiredJsonString(body, "printFileId"),
+                optionalJsonString(body, "targetFilename", null));
+
+        sendJson(exchange, 200, sdCardUploadResultJson(result));
     }
 
     private void handlePrinterSdCardFiles(HttpExchange exchange, String printerId) throws IOException {
@@ -1615,6 +1650,21 @@ public final class RemoteApiServer {
         json.append("]}");
         return json.toString();
     }
+
+    private String sdCardUploadResultJson(SdCardUploadService.UploadResult result) {
+    return "{"
+            + "\"printerId\":\"" + escapeJson(result.printerId()) + "\","
+            + "\"printFileId\":\"" + escapeJson(result.printFileId()) + "\","
+            + "\"originalFilename\":\"" + escapeJson(result.originalFilename()) + "\","
+            + "\"requestedTargetFilename\":\"" + escapeJson(result.requestedTargetFilename()) + "\","
+            + "\"linkedFirmwarePath\":\"" + escapeJson(result.linkedFirmwarePath()) + "\","
+            + "\"printerSdFileId\":\"" + escapeJson(result.printerSdFileId()) + "\","
+            + "\"uploadedLineCount\":" + result.uploadedLineCount() + ","
+            + "\"success\":" + result.success() + ","
+            + "\"detail\":" + nullableString(result.detail())
+            + "}";
+}
+
 
     private String printJobExecutionStepJson(PrintJobExecutionStep step) {
         return "{"

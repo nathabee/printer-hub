@@ -24,7 +24,7 @@ import printerhub.persistence.PrinterSdFileStore;
 import printerhub.runtime.PrinterHubRuntime;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeStateCache;
-
+import printerhub.command.SdCardUploadService;
 import java.util.concurrent.CountDownLatch;
 
 public final class Main {
@@ -69,6 +69,15 @@ public final class Main {
 
                         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
 
+                        SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                                        printerRegistry,
+                                        monitoringScheduler,
+                                        printerActionGuard,
+                                        printFileService,
+                                        sdCardService,
+                                        printerSdFileService,
+                                        printerEventStore);
+
                         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                                         printJobService,
                                         printerRegistry,
@@ -94,6 +103,7 @@ public final class Main {
                                         printerEventStore,
                                         printerCommandService,
                                         sdCardService,
+                                        sdCardUploadService,
                                         printFileService,
                                         printerSdFileService,
                                         printJobService,

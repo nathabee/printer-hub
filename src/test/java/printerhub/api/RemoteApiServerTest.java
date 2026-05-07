@@ -28,6 +28,7 @@ import printerhub.persistence.PrinterSdFileStore;
 import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNodeFactory;
 import printerhub.runtime.PrinterRuntimeStateCache;
+import printerhub.command.SdCardUploadService;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -774,6 +775,14 @@ class RemoteApiServerTest {
                 printerEventStore);
 
         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+        SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                printerRegistry,
+                monitoringScheduler,
+                printerActionGuard,
+                printFileService,
+                new SdCardService(printerEventStore),
+                printerSdFileService,
+                printerEventStore);
 
         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                 printJobService,
@@ -800,6 +809,7 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 new SdCardService(printerEventStore),
+                sdCardUploadService,
                 printFileService,
                 printerSdFileService,
                 printJobService,
@@ -974,7 +984,8 @@ class RemoteApiServerTest {
             String printFileId = extractJsonString(fileResponse.body(), "id");
             assertNotNull(printFileId);
 
-            String printerSdFileId = registerPrinterSdFile(context, "printer-1", "BENCHY.GCO", "benchy.gcode", printFileId);
+            String printerSdFileId = registerPrinterSdFile(context, "printer-1", "BENCHY.GCO", "benchy.gcode",
+                    printFileId);
 
             HttpResponse<String> response = context.request(
                     "POST",
@@ -1350,6 +1361,14 @@ class RemoteApiServerTest {
                 printerEventStore);
 
         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+        SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                printerRegistry,
+                monitoringScheduler,
+                printerActionGuard,
+                printFileService,
+                new SdCardService(printerEventStore),
+                printerSdFileService,
+                printerEventStore);
 
         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                 printJobService,
@@ -1378,6 +1397,7 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 new SdCardService(printerEventStore),
+                sdCardUploadService,
                 printFileService,
                 printerSdFileService,
                 printJobService,
@@ -1473,6 +1493,14 @@ class RemoteApiServerTest {
         PrinterSdFileService printerSdFileService = new PrinterSdFileService(new PrinterSdFileStore(), printFileStore);
 
         PrinterActionGuard printerActionGuard = new PrinterActionGuard();
+        SdCardUploadService sdCardUploadService = new SdCardUploadService(
+                printerRegistry,
+                monitoringScheduler,
+                printerActionGuard,
+                printFileService,
+                new SdCardService(printerEventStore),
+                printerSdFileService,
+                printerEventStore);
 
         PrintJobExecutionService printJobExecutionService = new PrintJobExecutionService(
                 printJobService,
@@ -1499,6 +1527,7 @@ class RemoteApiServerTest {
                 printerEventStore,
                 new PrinterCommandService(printerEventStore),
                 new SdCardService(printerEventStore),
+                sdCardUploadService,
                 printFileService,
                 printerSdFileService,
                 printJobService,

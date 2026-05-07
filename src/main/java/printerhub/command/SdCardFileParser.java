@@ -40,6 +40,10 @@ public final class SdCardFileParser {
                 continue;
             }
 
+            if (!insideList) {
+                continue;
+            }
+
             files.add(parseFileLine(line));
         }
 

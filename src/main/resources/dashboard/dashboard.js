@@ -15,6 +15,7 @@ import {
   getPrinterEvents,
   getPrinterSdCardFiles,
   getPrinterSdFiles,
+  uploadPrinterSdFile,
   getPrinters,
   registerPrinterSdFile,
   registerPrintFile,
@@ -59,6 +60,7 @@ import {
   setPrimaryView,
   setPrinterView,
   setSelectedPrinter,
+  setPrinterSdUploadStatus,
   state
 } from "./state.js";
 
@@ -249,7 +251,54 @@ function renderPage() {
 }
 
 function renderGlobalMessage() {
-  globalMessageElement.textContent = state.message || "";
+  const message = state.message || "";
+  globalMessageElement.textContent = message;
+
+  globalMessageElement.classList.remove(
+    "is-visible",
+    "global-message-info",
+    "global-message-success",
+    "global-message-warning",
+    "global-message-error",
+    "muted"
+  );
+
+  if (!message) {
+    globalMessageElement.classList.add("global-message-info");
+    return;
+  }
+
+  globalMessageElement.classList.add("is-visible");
+
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("failed") || normalized.includes("error")) {
+    globalMessageElement.classList.add("global-message-error");
+    return;
+  }
+
+  if (normalized.includes("uploading") || normalized.includes("running")) {
+    globalMessageElement.classList.add("global-message-warning");
+    return;
+  }
+
+  if (
+    normalized.includes("saved")
+    || normalized.includes("created")
+    || normalized.includes("enabled")
+    || normalized.includes("disabled")
+    || normalized.includes("loaded")
+    || normalized.includes("uploaded")
+    || normalized.includes("executed")
+    || normalized.includes("cancelled")
+    || normalized.includes("deleted")
+    || normalized.includes("refreshed")
+  ) {
+    globalMessageElement.classList.add("global-message-success");
+    return;
+  }
+
+  globalMessageElement.classList.add("global-message-info");
 }
 
 function bindGlobalListeners() {
@@ -304,6 +353,17 @@ function bindGlobalListeners() {
     const registerSdCardFileButton = event.target.closest("[data-register-sd-card-file]");
     if (registerSdCardFileButton) {
       await handleRegisterSdCardFile(registerSdCardFileButton);
+      renderApp();
+      return;
+    }
+
+    const uploadPrintFileToSdButton = event.target.closest("[data-upload-print-file-to-sd]");
+    if (uploadPrintFileToSdButton) {
+      await handleUploadPrintFileToSd(
+        uploadPrintFileToSdButton.dataset.printerId,
+        uploadPrintFileToSdButton.dataset.printFileId,
+        uploadPrintFileToSdButton.dataset.targetFilename || ""
+      );
       renderApp();
       return;
     }
@@ -574,6 +634,45 @@ async function handleRegisterSdCardFile(button) {
     setMessage(`Failed to register SD file: ${error.message}`);
   }
 }
+
+async function handleUploadPrintFileToSd(printerId, printFileId, targetFilename) {
+  if (!printerId || !printFileId) {
+    return;
+  }
+
+  const hostFile = state.printFiles.find((file) => file.id === printFileId);
+  const hostLabel = hostFile?.originalFilename || hostFile?.path || printFileId;
+
+  setPrinterSdUploadStatus(printerId, {
+    state: "running",
+    message: `Uploading ${hostLabel} to SD card...`
+  });
+  setMessage(`Uploading ${hostLabel} to ${printerId}...`);
+  renderApp();
+
+  try {
+    const response = await uploadPrinterSdFile(printerId, printFileId, targetFilename);
+
+    setPrinterSdUploadStatus(printerId, {
+      state: "success",
+      message: `Uploaded ${response.originalFilename} as ${response.linkedFirmwarePath || response.requestedTargetFilename}.`
+    });
+
+    setMessage(
+      `Uploaded ${response.originalFilename} to ${printerId} as ${response.linkedFirmwarePath || response.requestedTargetFilename}.`
+    );
+
+    await refreshAllData({ silent: true });
+    await loadPrinterSdCardFilesIntoState(printerId);
+  } catch (error) {
+    setPrinterSdUploadStatus(printerId, {
+      state: "error",
+      message: `Upload failed: ${error.message}`
+    });
+    setMessage(`Failed to upload print file to SD card: ${error.message}`);
+  }
+}
+
 
 async function handleSavePrinterSdFile(form) {
   const payload = {

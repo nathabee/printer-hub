@@ -59,6 +59,28 @@ public final class SimulatedPrinterPort implements PrinterPort {
     }
 
     @Override
+    public String sendRawLine(String line) {
+        if (!connected) {
+            throw new IllegalStateException(OperationMessages.simulatedPrinterNotConnected(portName));
+        }
+
+        if (line == null) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("line"));
+        }
+
+        if (isErrorMode()) {
+            throw new IllegalStateException(OperationMessages.SIMULATED_PRINTER_FAILURE_RESPONSE);
+        }
+
+        if (isDisconnectedMode()) {
+            connected = false;
+            throw new IllegalStateException(OperationMessages.simulatedPrinterDisconnected(portName));
+        }
+
+        return PrinterProtocolDefaults.SIMULATED_RESPONSE_DEFAULT_OK;
+    }
+
+    @Override
     public void disconnect() {
         connected = false;
     }

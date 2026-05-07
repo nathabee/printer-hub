@@ -43,4 +43,21 @@ class SdCardFileParserTest {
         assertNull(files.get(0).sizeBytes());
         assertEquals("LONGNAME.GCO", files.get(0).rawLine());
     }
+
+    @Test
+    void parseIgnoresNoiseOutsideActualFileList() {
+        List<SdCardFile> files = parser.parse("""
+                Resend: 3
+                Error:Line Number is not Last Line Number+1, Last Line: 2
+                ok
+                Begin file list
+                TEST4.GCO 9
+                End file list
+                ok
+                """);
+
+        assertEquals(1, files.size());
+        assertEquals("TEST4.GCO", files.get(0).filename());
+        assertEquals(9L, files.get(0).sizeBytes());
+    }
 }

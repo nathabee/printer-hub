@@ -86,20 +86,17 @@ class PrinterRegistryTest {
 
         IllegalArgumentException ex1 = assertThrows(
                 IllegalArgumentException.class,
-                () -> registry.remove(null)
-        );
+                () -> registry.remove(null));
         assertEquals("printerId must not be blank", ex1.getMessage());
 
         IllegalArgumentException ex2 = assertThrows(
                 IllegalArgumentException.class,
-                () -> registry.remove("")
-        );
+                () -> registry.remove(""));
         assertEquals("printerId must not be blank", ex2.getMessage());
 
         IllegalArgumentException ex3 = assertThrows(
                 IllegalArgumentException.class,
-                () -> registry.remove("   ")
-        );
+                () -> registry.remove("   "));
         assertEquals("printerId must not be blank", ex3.getMessage());
     }
 
@@ -109,8 +106,7 @@ class PrinterRegistryTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> registry.register(null)
-        );
+                () -> registry.register(null));
 
         assertEquals("node must not be null", exception.getMessage());
     }
@@ -149,8 +145,7 @@ class PrinterRegistryTest {
                 "PORT_" + id,
                 "sim",
                 port,
-                true
-        );
+                true);
     }
 
     private static final class TestPrinterPort implements PrinterPort {
@@ -163,6 +158,11 @@ class PrinterRegistryTest {
 
         @Override
         public String sendCommand(String command) {
+            return "ok";
+        }
+
+        @Override
+        public String sendRawLine(String line) {
             return "ok";
         }
 

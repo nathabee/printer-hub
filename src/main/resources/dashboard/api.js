@@ -137,6 +137,19 @@ export async function setPrinterSdFileEnabled(printerSdFileId, enabled) {
   });
 }
 
+export async function uploadPrinterSdFile(printerId, printFileId, targetFilename = "") {
+  return requestJson(`/printers/${encodeURIComponent(printerId)}/sd-card/uploads`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      printFileId,
+      targetFilename
+    })
+  });
+}
+
 export async function registerPrintFile(path) {
   return requestJson("/print-files", {
     method: "POST",
@@ -156,6 +169,9 @@ export async function uploadPrintFile(file) {
     body: file
   });
 }
+
+
+
 
 export async function getPrintFileContent(printFileId) {
   return requestJson(`/print-files/${encodeURIComponent(printFileId)}/content`);
