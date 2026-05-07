@@ -4,6 +4,11 @@ import printerhub.OperationMessages;
 import printerhub.PrinterSnapshot;
 import printerhub.PrinterState;
 import printerhub.config.PrinterProtocolDefaults;
+import printerhub.job.JobState;
+import printerhub.job.JobType;
+import printerhub.job.PrintJob;
+import printerhub.job.PrintJobService;
+import printerhub.persistence.PrintJobStore;
 import printerhub.persistence.MonitoringRules;
 import printerhub.persistence.PrinterEventStore;
 import printerhub.persistence.PrinterSnapshotStore;
@@ -137,14 +142,17 @@ public final class PrinterMonitoringTask implements Runnable {
 
             node.printerPort().connect();
 
+            PrintJob runningAutonomousPrintJob = findRunningAutonomousPrintJobSafely();
             String response = node.printerPort().sendCommand(statusCommand);
+            String sdPrintStatusResponse = pollSdPrintStatusIfNeeded(runningAutonomousPrintJob);
+            String combinedResponse = combineResponses(response, sdPrintStatusResponse);
 
             if (response == null || response.isBlank()) {
                 PrinterSnapshot snapshot = PrinterSnapshot.error(
                         PrinterState.ERROR,
                         previousSnapshot.hotendTemperature(),
                         previousSnapshot.bedTemperature(),
-                        response,
+                        combinedResponse,
                         OperationMessages.noResponseForCommand(statusCommand),
                         Instant.now(clock)
                 );
@@ -161,15 +169,15 @@ public final class PrinterMonitoringTask implements Runnable {
             Double hotendTemperature = extractTemperature(HOTEND_PATTERN, response);
             Double bedTemperature = extractTemperature(BED_PATTERN, response);
 
-            PrinterState state = resolveState(response, hotendTemperature);
+            PrinterState state = resolveState(combinedResponse, hotendTemperature);
 
             if (state == PrinterState.ERROR) {
                 PrinterSnapshot snapshot = PrinterSnapshot.error(
                         PrinterState.ERROR,
                         hotendTemperature != null ? hotendTemperature : previousSnapshot.hotendTemperature(),
                         bedTemperature != null ? bedTemperature : previousSnapshot.bedTemperature(),
-                        response,
-                        response,
+                        combinedResponse,
+                        combinedResponse,
                         Instant.now(clock)
                 );
 
@@ -186,7 +194,7 @@ public final class PrinterMonitoringTask implements Runnable {
                     state,
                     hotendTemperature != null ? hotendTemperature : previousSnapshot.hotendTemperature(),
                     bedTemperature != null ? bedTemperature : previousSnapshot.bedTemperature(),
-                    response,
+                    combinedResponse,
                     Instant.now(clock)
             );
 
@@ -197,6 +205,16 @@ public final class PrinterMonitoringTask implements Runnable {
                     OperationMessages.PRINTER_POLL_COMPLETED_SUCCESSFULLY,
                     false
             );
+            try {
+                reconcileAutonomousPrintJob(runningAutonomousPrintJob, previousSnapshot, snapshot);
+            } catch (Exception exception) {
+                System.err.println(OperationMessages.apiOperationFailed(
+                        "Failed to reconcile autonomous print job for "
+                                + node.id()
+                                + ": "
+                                + safeMessage(exception)
+                ));
+            }
         } catch (Exception exception) {
             if (shouldSuppressFailureDuringShutdown(exception)) {
                 return;
@@ -258,6 +276,100 @@ public final class PrinterMonitoringTask implements Runnable {
         }
     }
 
+    private void reconcileAutonomousPrintJob(
+            PrintJob runningPrintFileJob,
+            PrinterSnapshot previousSnapshot,
+            PrinterSnapshot currentSnapshot
+    ) {
+        if (runningPrintFileJob == null) {
+            return;
+        }
+
+        if (!shouldCompleteAutonomousPrint(previousSnapshot, currentSnapshot)) {
+            return;
+        }
+
+        PrintJobService printJobService = new PrintJobService(
+                new PrintJobStore(),
+                eventStore,
+                clock
+        );
+        printJobService.markCompleted(runningPrintFileJob.id());
+        printJobService.recordJobAuditEvent(
+                runningPrintFileJob.id(),
+                OperationMessages.EVENT_JOB_EXECUTION_SUCCEEDED,
+                buildAutonomousCompletionMessage(previousSnapshot, currentSnapshot)
+        );
+    }
+
+    private PrintJob findRunningAutonomousPrintJobSafely() {
+        try {
+            return new PrintJobStore().findRecent(200)
+                    .stream()
+                    .filter(job -> node.id().equals(job.printerId()))
+                    .filter(job -> job.type() == JobType.PRINT_FILE)
+                    .filter(job -> job.state() == JobState.RUNNING)
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private boolean shouldCompleteAutonomousPrint(
+            PrinterSnapshot previousSnapshot,
+            PrinterSnapshot currentSnapshot
+    ) {
+        String currentResponse = currentSnapshot.lastResponse();
+        if (currentResponse != null && currentResponse.toLowerCase(Locale.ROOT).contains("done printing file")) {
+            return true;
+        }
+
+        return previousSnapshot.state() == PrinterState.PRINTING
+                && currentSnapshot.state() == PrinterState.IDLE;
+    }
+
+    private String buildAutonomousCompletionMessage(
+            PrinterSnapshot previousSnapshot,
+            PrinterSnapshot currentSnapshot
+    ) {
+        String currentResponse = currentSnapshot.lastResponse();
+        if (currentResponse != null && currentResponse.toLowerCase(Locale.ROOT).contains("done printing file")) {
+            return "Autonomous print completed according to monitoring: printer reported 'Done printing file'.";
+        }
+
+        if (previousSnapshot.state() == PrinterState.PRINTING
+                && currentSnapshot.state() == PrinterState.IDLE) {
+            return "Autonomous print completed according to monitoring: printer transitioned from PRINTING to IDLE.";
+        }
+
+        return "Autonomous print completed according to monitoring: latest printer state is "
+                + currentSnapshot.state()
+                + ".";
+    }
+
+    private String pollSdPrintStatusIfNeeded(PrintJob runningAutonomousPrintJob) {
+        if (runningAutonomousPrintJob == null) {
+            return null;
+        }
+
+        try {
+            return node.printerPort().sendCommand(PrinterProtocolDefaults.COMMAND_READ_SD_PRINT_STATUS);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private String combineResponses(String primaryResponse, String secondaryResponse) {
+        if (secondaryResponse == null || secondaryResponse.isBlank()) {
+            return primaryResponse;
+        }
+        if (primaryResponse == null || primaryResponse.isBlank()) {
+            return secondaryResponse;
+        }
+        return primaryResponse + System.lineSeparator() + secondaryResponse;
+    }
+
     private boolean shouldPersistEvent(String eventType, String eventMessage) {
         if (monitoringRules.errorPersistenceBehavior() == MonitoringRules.ErrorPersistenceBehavior.ALWAYS) {
             return true;
@@ -317,6 +429,14 @@ public final class PrinterMonitoringTask implements Runnable {
                 || normalized.contains("kill")
                 || normalized.contains("halted")) {
             return PrinterState.ERROR;
+        }
+
+        if (normalized.contains("not sd printing")) {
+            if (hotendTemperature != null
+                    && hotendTemperature > PrinterProtocolDefaults.DEFAULT_HEATING_TEMPERATURE_THRESHOLD) {
+                return PrinterState.HEATING;
+            }
+            return PrinterState.IDLE;
         }
 
         if (normalized.contains("busy")

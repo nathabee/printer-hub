@@ -140,7 +140,11 @@ function buildPrinterOptions(selectedPrinterId) {
 }
 
 function buildPrinterSdFileOptions(printerId) {
-  const files = state.printerSdFiles.filter((file) => file.printerId === printerId && file.enabled === true);
+  const files = state.printerSdFiles.filter((file) =>
+    file.printerId === printerId
+    && file.enabled === true
+    && file.deleted !== true
+  );
 
   return [
     `<option value="">Select enabled SD file for PRINT_FILE jobs</option>`,

@@ -18,7 +18,8 @@ public final class MonitoringRulesStore {
                     min_interval_seconds,
                     temperature_threshold,
                     event_dedup_window_seconds,
-                    error_persistence_behavior
+                    error_persistence_behavior,
+                    debug_wire_tracing_enabled
                 FROM monitoring_rules
                 WHERE id = ?;
                 """;
@@ -41,7 +42,8 @@ public final class MonitoringRulesStore {
                         resultSet.getLong("event_dedup_window_seconds"),
                         MonitoringRules.parseErrorPersistenceBehavior(
                                 resultSet.getString("error_persistence_behavior")
-                        )
+                        ),
+                        resultSet.getInt("debug_wire_tracing_enabled") == 1
                 );
             }
         } catch (SQLException exception) {
@@ -67,15 +69,17 @@ public final class MonitoringRulesStore {
                     temperature_threshold,
                     event_dedup_window_seconds,
                     error_persistence_behavior,
+                    debug_wire_tracing_enabled,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     poll_interval_seconds = excluded.poll_interval_seconds,
                     min_interval_seconds = excluded.min_interval_seconds,
                     temperature_threshold = excluded.temperature_threshold,
                     event_dedup_window_seconds = excluded.event_dedup_window_seconds,
                     error_persistence_behavior = excluded.error_persistence_behavior,
+                    debug_wire_tracing_enabled = excluded.debug_wire_tracing_enabled,
                     updated_at = CURRENT_TIMESTAMP;
                 """;
 
@@ -89,6 +93,7 @@ public final class MonitoringRulesStore {
             statement.setDouble(4, monitoringRules.temperatureDeltaThreshold());
             statement.setLong(5, monitoringRules.eventDeduplicationWindowSeconds());
             statement.setString(6, monitoringRules.errorPersistenceBehavior().name());
+            statement.setInt(7, monitoringRules.debugWireTracingEnabled() ? 1 : 0);
 
             statement.executeUpdate();
             return monitoringRules;

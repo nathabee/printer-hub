@@ -137,6 +137,12 @@ export async function setPrinterSdFileEnabled(printerSdFileId, enabled) {
   });
 }
 
+export async function deletePrinterSdFile(printerSdFileId) {
+  return requestJson(`/printer-sd-files/${encodeURIComponent(printerSdFileId)}`, {
+    method: "DELETE"
+  });
+}
+
 export async function uploadPrinterSdFile(printerId, printFileId, targetFilename = "") {
   return requestJson(`/printers/${encodeURIComponent(printerId)}/sd-card/uploads`, {
     method: "POST",

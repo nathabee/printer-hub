@@ -46,6 +46,11 @@ export function renderSettingsPage() {
             </select>
           </label>
 
+          <label class="checkbox-label">
+            <input id="debugWireTracingEnabledInput" name="debugWireTracingEnabled" type="checkbox" ${(monitoringRules.debugWireTracingEnabled ?? false) ? "checked" : ""}>
+            Enable printer wire trace logging
+          </label>
+
           <div class="form-actions">
             <button type="submit">Save monitoring rules</button>
           </div>

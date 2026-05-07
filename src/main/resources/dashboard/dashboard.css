@@ -659,6 +659,12 @@ textarea:focus {
   align-self: end;
 }
 
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 .placeholder-card {
   border-style: dashed;
   background: linear-gradient(180deg, var(--bg-surface), var(--bg-surface-muted));

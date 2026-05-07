@@ -158,6 +158,7 @@ class RemoteApiServerTest {
             assertTrue(response.body().contains("\"temperatureDeltaThreshold\":"));
             assertTrue(response.body().contains("\"eventDeduplicationWindowSeconds\":"));
             assertTrue(response.body().contains("\"errorPersistenceBehavior\":\"DEDUPLICATED\""));
+            assertTrue(response.body().contains("\"debugWireTracingEnabled\":false"));
         } finally {
             context.close();
         }
@@ -172,7 +173,7 @@ class RemoteApiServerTest {
                     "PUT",
                     "/settings/monitoring",
                     """
-                            {"pollIntervalSeconds":12,"snapshotMinimumIntervalSeconds":45,"temperatureDeltaThreshold":2.5,"eventDeduplicationWindowSeconds":90,"errorPersistenceBehavior":"ALWAYS"}
+                            {"pollIntervalSeconds":12,"snapshotMinimumIntervalSeconds":45,"temperatureDeltaThreshold":2.5,"eventDeduplicationWindowSeconds":90,"errorPersistenceBehavior":"ALWAYS","debugWireTracingEnabled":true}
                             """);
 
             assertEquals(200, response.statusCode());
@@ -181,6 +182,7 @@ class RemoteApiServerTest {
             assertTrue(response.body().contains("\"temperatureDeltaThreshold\":2.50"));
             assertTrue(response.body().contains("\"eventDeduplicationWindowSeconds\":90"));
             assertTrue(response.body().contains("\"errorPersistenceBehavior\":\"ALWAYS\""));
+            assertTrue(response.body().contains("\"debugWireTracingEnabled\":true"));
         } finally {
             context.close();
         }
@@ -1063,6 +1065,62 @@ class RemoteApiServerTest {
 
             assertEquals(400, response.statusCode());
             assertEquals("{\"error\":\"printer_sd_file_disabled\"}", response.body());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void deletePrinterSdFileMarksItDeleted() throws Exception {
+        TestContext context = createContext("printer-sd-file-delete.db");
+
+        try {
+            context.configurationStore.save(
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+            context.printerRegistry.register(
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+
+            String printerSdFileId = registerPrinterSdFile(context, "printer-1", "TEST4.GCO", "test4.gco", null);
+
+            HttpResponse<String> response = context.request(
+                    "DELETE",
+                    "/printer-sd-files/" + printerSdFileId,
+                    "");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"deleted\":true"));
+            assertTrue(response.body().contains("\"enabled\":false"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void postJobsRejectsDeletedPrinterSdFileTarget() throws Exception {
+        TestContext context = createContext("jobs-post-deleted-printer-sd-file.db");
+
+        try {
+            context.configurationStore.save(
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+            context.printerRegistry.register(
+                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+
+            String printerSdFileId = registerPrinterSdFile(context, "printer-1", "OLD.GCO", "old.gcode", null);
+            HttpResponse<String> deleteResponse = context.request(
+                    "DELETE",
+                    "/printer-sd-files/" + printerSdFileId,
+                    "");
+            assertEquals(200, deleteResponse.statusCode());
+
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/jobs",
+                    "{\"type\":\"PRINT_FILE\",\"printerId\":\"printer-1\",\"printerSdFileId\":\""
+                            + printerSdFileId
+                            + "\"}");
+
+            assertEquals(400, response.statusCode());
+            assertEquals("{\"error\":\"printer_sd_file_deleted\"}", response.body());
         } finally {
             context.close();
         }

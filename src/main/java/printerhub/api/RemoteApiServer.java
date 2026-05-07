@@ -18,11 +18,13 @@ import printerhub.job.PrintFile;
 import printerhub.job.PrintFileService;
 import printerhub.job.PrintJobExecutionStep;
 import printerhub.job.PrinterSdFile;
+import printerhub.job.PrinterActionGuard;
 import printerhub.job.PrinterSdFileService;
 import printerhub.persistence.PrintJobExecutionStepStore;
 import printerhub.job.JobType;
 import printerhub.job.PrintJob;
 import printerhub.job.PrintJobService;
+import printerhub.job.PrinterResponseClassifier;
 import printerhub.monitoring.PrinterMonitoringScheduler;
 import printerhub.persistence.MonitoringRules;
 import printerhub.persistence.MonitoringRulesStore;
@@ -68,6 +70,7 @@ public final class RemoteApiServer {
     private final AsyncPrintJobExecutor asyncPrintJobExecutor;
     private final PrintJobExecutionStepStore printJobExecutionStepStore;
     private final SdCardUploadService sdCardUploadService;
+    private final PrinterResponseClassifier printerResponseClassifier;
 
     private HttpServer server;
 
@@ -153,6 +156,7 @@ public final class RemoteApiServer {
         this.printJobService = printJobService;
         this.asyncPrintJobExecutor = asyncPrintJobExecutor;
         this.printJobExecutionStepStore = printJobExecutionStepStore;
+        this.printerResponseClassifier = new PrinterResponseClassifier();
     }
 
     public void start() {
@@ -264,7 +268,11 @@ public final class RemoteApiServer {
                     optionalJsonErrorPersistenceBehavior(
                             body,
                             "errorPersistenceBehavior",
-                            currentRules.errorPersistenceBehavior()));
+                            currentRules.errorPersistenceBehavior()),
+                    optionalJsonBoolean(
+                            body,
+                            "debugWireTracingEnabled",
+                            currentRules.debugWireTracingEnabled()));
 
             monitoringRulesStore.save(updatedRules);
             monitoringScheduler.updateMonitoringRules(updatedRules);
@@ -439,6 +447,47 @@ public final class RemoteApiServer {
             return;
         }
 
+        if (parts.length == 1 && "DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+            PrinterSdFile file = printerSdFileService.findById(printerSdFileId).orElse(null);
+
+            if (file == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+                return;
+            }
+
+            if (!file.deleted()) {
+                PrinterRuntimeNode node = printerRegistry.findById(file.printerId()).orElse(null);
+                if (node == null) {
+                    sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_NOT_FOUND));
+                    return;
+                }
+
+                PrinterActionGuard.GuardDecision decision = new PrinterActionGuard().validateForSdUpload(node);
+                if (!decision.allowed()) {
+                    sendJson(exchange, 400, errorJson(OperationMessages.safeDetail(
+                            decision.detail(),
+                            decision.failureReason() == null
+                                    ? OperationMessages.PRECONDITION_FAILED
+                                    : decision.failureReason().name())));
+                    return;
+                }
+
+                String response = sdCardService.deleteFile(node, file.firmwarePath());
+                PrinterResponseClassifier.ResponseClassification classification =
+                        printerResponseClassifier.classifyResponse("M30 " + file.firmwarePath(), response);
+                if (!classification.success()) {
+                    sendJson(exchange, 400, errorJson(OperationMessages.safeDetail(
+                            classification.detail(),
+                            OperationMessages.UNKNOWN_API_ERROR)));
+                    return;
+                }
+            }
+
+            PrinterSdFile deletedFile = printerSdFileService.markDeleted(printerSdFileId);
+            sendJson(exchange, 200, printerSdFileJson(deletedFile));
+            return;
+        }
+
         sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
     }
 
@@ -531,6 +580,11 @@ public final class RemoteApiServer {
 
                 if (printerSdFile == null) {
                     sendJson(exchange, 404, errorJson(OperationMessages.PRINTER_SD_FILE_NOT_FOUND));
+                    return;
+                }
+
+                if (printerSdFile.deleted()) {
+                    sendJson(exchange, 400, errorJson(OperationMessages.PRINTER_SD_FILE_DELETED));
                     return;
                 }
 
@@ -1067,8 +1121,8 @@ public final class RemoteApiServer {
                 + "\"snapshotMinimumIntervalSeconds\":" + monitoringRules.snapshotMinimumIntervalSeconds() + ","
                 + "\"temperatureDeltaThreshold\":" + formatDouble(monitoringRules.temperatureDeltaThreshold()) + ","
                 + "\"eventDeduplicationWindowSeconds\":" + monitoringRules.eventDeduplicationWindowSeconds() + ","
-                + "\"errorPersistenceBehavior\":\"" + escapeJson(monitoringRules.errorPersistenceBehavior().name())
-                + "\""
+                + "\"errorPersistenceBehavior\":\"" + escapeJson(monitoringRules.errorPersistenceBehavior().name()) + "\","
+                + "\"debugWireTracingEnabled\":" + monitoringRules.debugWireTracingEnabled()
                 + "}";
     }
 
@@ -1178,6 +1232,8 @@ public final class RemoteApiServer {
                 + "\"rawLine\":\"" + escapeJson(file.rawLine()) + "\","
                 + "\"printFileId\":" + nullableString(file.printFileId()) + ","
                 + "\"enabled\":" + file.enabled() + ","
+                + "\"deleted\":" + file.deleted() + ","
+                + "\"deletedAt\":" + nullableString(file.deletedAt() == null ? null : file.deletedAt().toString()) + ","
                 + "\"createdAt\":\"" + escapeJson(file.createdAt().toString()) + "\","
                 + "\"updatedAt\":\"" + escapeJson(file.updatedAt().toString()) + "\""
                 + "}";

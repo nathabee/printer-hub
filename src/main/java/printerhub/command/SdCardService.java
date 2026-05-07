@@ -77,4 +77,60 @@ public final class SdCardService {
             }
         }
     }
+
+    public String deleteFile(PrinterRuntimeNode node, String firmwarePath) {
+        if (node == null) {
+            throw new IllegalArgumentException(OperationMessages.NODE_MUST_NOT_BE_NULL);
+        }
+        if (firmwarePath == null || firmwarePath.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.PRINTER_SD_FILE_PATH_MUST_NOT_BE_BLANK);
+        }
+
+        String command = PrinterProtocolDefaults.COMMAND_DELETE_SD_FILE + " " + firmwarePath.trim();
+
+        synchronized (node.printerPort()) {
+            try {
+                node.printerPort().connect();
+                String response = node.printerPort().sendCommand(command);
+
+                eventStore.record(
+                        node.id(),
+                        null,
+                        "SD_CARD_FILE_DELETE_REQUESTED",
+                        "SD delete requested: " + firmwarePath.trim());
+
+                return response;
+            } catch (Exception exception) {
+                String detail = OperationMessages.safeDetail(
+                        exception.getMessage(),
+                        "Failed to delete SD-card file.");
+
+                try {
+                    eventStore.record(
+                            node.id(),
+                            null,
+                            "SD_CARD_FILE_DELETE_FAILED",
+                            "SD delete failed for " + firmwarePath.trim() + ": " + detail);
+                } catch (Exception persistException) {
+                    System.err.println(OperationMessages.failedToPersistEvent(
+                            node.id(),
+                            OperationMessages.safeDetail(
+                                    persistException.getMessage(),
+                                    OperationMessages.FAILED_TO_SAVE_PRINTER_EVENT)));
+                }
+
+                throw exception;
+            } finally {
+                try {
+                    node.printerPort().disconnect();
+                } catch (Exception exception) {
+                    System.err.println(OperationMessages.failedToDisconnectPrinterNode(
+                            node.id(),
+                            OperationMessages.safeDetail(
+                                    exception.getMessage(),
+                                    OperationMessages.UNKNOWN_RUNTIME_CLOSE_ERROR)));
+                }
+            }
+        }
+    }
 }

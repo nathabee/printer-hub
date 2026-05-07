@@ -148,6 +148,7 @@ public final class OperationMessages {
     public static final String PRINT_FILE_NOT_FOUND = "print_file_not_found";
     public static final String PRINTER_SD_FILE_NOT_FOUND = "printer_sd_file_not_found";
     public static final String PRINTER_SD_FILE_DISABLED = "printer_sd_file_disabled";
+    public static final String PRINTER_SD_FILE_DELETED = "printer_sd_file_deleted";
     public static final String PRINTER_SD_FILE_ID_MUST_NOT_BE_BLANK = "printerSdFileId must not be blank";
     public static final String PRINTER_SD_FILE_PATH_MUST_NOT_BE_BLANK = "firmwarePath must not be blank";
     public static final String PRINT_FILE_ID_MUST_NOT_BE_BLANK = "printFileId must not be blank";

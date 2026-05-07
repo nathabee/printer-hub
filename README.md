@@ -115,6 +115,11 @@ http://localhost:18080/dashboard
 
 The dashboard uses relative API requests, so it follows the port used to serve the dashboard. Port `8080` is only the backend default when no `printerhub.api.port` property is provided.
 
+Current platform note:
+
+* the currently documented and validated runtime/release workflow is Ubuntu/Linux-oriented
+* the Java runtime architecture is intended to remain cross-platform, but Windows-oriented packaging and verification are planned for a later packaging step
+
 ---
 
 ## Monitoring configuration
@@ -232,6 +237,7 @@ What is already available:
 * printer-side SD file discovery, registration, and enable/disable management
 * guarded host-to-printer SD-card `.gcode` upload
 * file-backed `PRINT_FILE` jobs created from registered printer-side SD targets
+* autonomous printer-side `PRINT_FILE` activation from registered SD targets
 * controlled real-printer action workflows for selected action types
 
 Current controlled action scope:
@@ -251,15 +257,17 @@ PRINT_FILE
 `PRINT_FILE` jobs now reference a registered printer-side SD target. PrinterHub
 can register an existing host path or save a dashboard-uploaded file into the
 configured print-file storage directory, then copy that host-side file to the
-selected printer SD card through a guarded upload session. It validates and
-persists the file metadata, but it does not slice, edit, or line-stream a full
-print in this version.
+selected printer SD card through a guarded upload session. It can then select
+that printer-side file and request an autonomous printer-side print start
+through the firmware. PrinterHub validates and persists the file metadata, but
+it does not slice, edit, or line-stream a full print from the host in this
+version.
 
 Current limitation:
 
-* PrinterHub can prepare and upload a file to the printer SD card, but it does
-  not yet start the autonomous print from that SD target. That print-start
-  workflow is the next step.
+* autonomous SD-print supervision is still early-stage: PrinterHub can start a
+  printer-side file-backed print and detect completion in observable cases, but
+  richer pause/cancel/progress controls remain future work
 
 Real-printer note:
 
@@ -285,6 +293,10 @@ GET /jobs/{id}
 GET /jobs/{id}/events
 GET /jobs/{id}/execution-steps
 ```
+
+For autonomous SD-backed `PRINT_FILE` jobs, PrinterHub also uses monitoring to
+help determine when a started printer-side file has completed on the firmware
+side.
 
 ---
 

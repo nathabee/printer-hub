@@ -15,6 +15,8 @@ import printerhub.runtime.PrinterRegistry;
 import printerhub.runtime.PrinterRuntimeNode;
 import printerhub.runtime.PrinterRuntimeStateCache;
 import printerhub.persistence.PrintJobExecutionStepStore;
+import printerhub.persistence.PrintFileStore;
+import printerhub.persistence.PrinterSdFileStore;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -412,15 +414,17 @@ class PrintJobExecutionServiceTest {
     }
 
     @Test
-    void executePrintFileJobCompletesAsPreparedMetadataWithoutSendingGcode() {
-        initializeDatabase("job-execution-print-file-prepared.db");
+    void executePrintFileJobStartsAutonomousPrinterWorkflowAndLeavesJobRunning() {
+        initializeDatabase("job-execution-print-file-running.db");
 
         PrintJobStore store = new PrintJobStore();
         PrinterEventStore eventStore = new PrinterEventStore();
         PrintJobExecutionStepStore stepStore = new PrintJobExecutionStepStore();
+        PrintFileStore printFileStore = new PrintFileStore();
         Clock clock = Clock.fixed(Instant.parse("2026-05-04T08:00:00Z"), ZoneOffset.UTC);
 
         PrintJobService jobService = new PrintJobService(store, eventStore, clock);
+        PrinterSdFileService printerSdFileService = new PrinterSdFileService(new PrinterSdFileStore(), printFileStore, clock);
 
         PrinterRegistry registry = new PrinterRegistry();
         PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
@@ -437,12 +441,20 @@ class PrintJobExecutionServiceTest {
                     true);
             registry.register(node);
 
+            PrinterSdFile printerSdFile = printerSdFileService.register(
+                    "printer-1",
+                    "TEST4.GCO",
+                    "TEST4.GCO",
+                    9L,
+                    "TEST4.GCO 9",
+                    null);
+
             PrintJob job = jobService.create(
                     "Print cube",
                     JobType.PRINT_FILE,
                     "printer-1",
-                    "print-file-1",
-                    "printer-sd-file-1",
+                    null,
+                    printerSdFile.id(),
                     null,
                     null);
 
@@ -457,19 +469,95 @@ class PrintJobExecutionServiceTest {
             PrinterActionExecutionResult result = executionService.execute(job.id());
 
             assertTrue(result.success());
-            assertNull(result.wireCommand());
-            assertEquals(0, printerPort.commandCount());
+            assertEquals("M24", result.wireCommand());
+            assertEquals(2, printerPort.commandCount());
+            assertEquals(List.of("M23 TEST4.GCO", "M24"), printerPort.commands());
+
+            PrintJob loaded = store.findById(job.id()).orElseThrow();
+            assertEquals(JobState.RUNNING, loaded.state());
+            assertNull(loaded.finishedAt());
+            assertNull(loaded.printFileId());
+            assertEquals(printerSdFile.id(), loaded.printerSdFileId());
+            assertFalse(node.executionInProgress());
+            assertNull(node.activeJobId());
+
+            List<PrintJobExecutionStep> steps = stepStore.findByJobId(job.id());
+            assertEquals(4, steps.size());
+            assertEquals("validate-printer-sd-target", steps.get(0).stepName());
+            assertEquals("select-printer-sd-file", steps.get(1).stepName());
+            assertEquals("M23 TEST4.GCO", steps.get(1).wireCommand());
+            assertEquals("start-printer-sd-print", steps.get(2).stepName());
+            assertEquals("M24", steps.get(2).wireCommand());
+            assertEquals("transition-job-running", steps.get(3).stepName());
+            assertNull(steps.get(0).wireCommand());
+            assertTrue(steps.get(0).success());
+        } finally {
+            scheduler.stop();
+        }
+    }
+
+    @Test
+    void executePrintFileJobCompletesImmediatelyWhenPrinterReportsDonePrinting() {
+        initializeDatabase("job-execution-print-file-immediate-complete.db");
+
+        PrintJobStore store = new PrintJobStore();
+        PrinterEventStore eventStore = new PrinterEventStore();
+        PrintJobExecutionStepStore stepStore = new PrintJobExecutionStepStore();
+        PrintFileStore printFileStore = new PrintFileStore();
+        Clock clock = Clock.fixed(Instant.parse("2026-05-04T08:00:00Z"), ZoneOffset.UTC);
+
+        PrintJobService jobService = new PrintJobService(store, eventStore, clock);
+        PrinterSdFileService printerSdFileService = new PrinterSdFileService(new PrinterSdFileStore(), printFileStore, clock);
+
+        PrinterRegistry registry = new PrinterRegistry();
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+        PrinterMonitoringScheduler scheduler = new PrinterMonitoringScheduler(registry, stateCache);
+
+        try {
+            PrinterRuntimeNode node = new PrinterRuntimeNode(
+                    "printer-1",
+                    "Printer 1",
+                    "SIM_PORT",
+                    "sim",
+                    new SequencePrinterPort(
+                            "echo:Now fresh file: TEST8.GCO File opened: TEST8.GCO Size: 24 File selected ok",
+                            "ok Done printing file"),
+                    true);
+            registry.register(node);
+
+            PrinterSdFile printerSdFile = printerSdFileService.register(
+                    "printer-1",
+                    "TEST8.GCO",
+                    "TEST8.GCO",
+                    24L,
+                    "TEST8.GCO 24",
+                    null);
+
+            PrintJob job = jobService.create(
+                    "Print tiny file",
+                    JobType.PRINT_FILE,
+                    "printer-1",
+                    null,
+                    printerSdFile.id(),
+                    null,
+                    null);
+
+            PrintJobExecutionService executionService = new PrintJobExecutionService(
+                    jobService,
+                    registry,
+                    scheduler,
+                    new PrinterActionGuard(),
+                    new PrinterActionMapper(),
+                    stepStore);
+
+            PrinterActionExecutionResult result = executionService.execute(job.id());
+
+            assertTrue(result.success());
+            assertEquals("M24", result.wireCommand());
 
             PrintJob loaded = store.findById(job.id()).orElseThrow();
             assertEquals(JobState.COMPLETED, loaded.state());
-            assertEquals("print-file-1", loaded.printFileId());
-            assertEquals("printer-sd-file-1", loaded.printerSdFileId());
-
-            List<PrintJobExecutionStep> steps = stepStore.findByJobId(job.id());
-            assertEquals(1, steps.size());
-            assertEquals("file-backed-print-prepared", steps.get(0).stepName());
-            assertNull(steps.get(0).wireCommand());
-            assertTrue(steps.get(0).success());
+            assertNotNull(loaded.finishedAt());
         } finally {
             scheduler.stop();
         }
@@ -624,6 +712,7 @@ class PrintJobExecutionServiceTest {
     private static final class CountingPrinterPort implements PrinterPort {
 
         private int commandCount = 0;
+        private final java.util.List<String> commands = new java.util.ArrayList<>();
 
         @Override
         public void connect() {
@@ -632,6 +721,7 @@ class PrintJobExecutionServiceTest {
         @Override
         public String sendCommand(String command) {
             commandCount++;
+            commands.add(command);
             return "ok";
         }
 
@@ -646,6 +736,10 @@ class PrintJobExecutionServiceTest {
 
         private int commandCount() {
             return commandCount;
+        }
+
+        private List<String> commands() {
+            return List.copyOf(commands);
         }
     }
 

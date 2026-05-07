@@ -14,6 +14,10 @@ public final class PrinterProtocolDefaults {
     public static final String COMMAND_SET_FAN_SPEED = "M106";
     public static final String COMMAND_TURN_FAN_OFF = "M107";
     public static final String COMMAND_LIST_SD_FILES = "M20";
+    public static final String COMMAND_SELECT_SD_FILE = "M23";
+    public static final String COMMAND_START_SD_PRINT = "M24";
+    public static final String COMMAND_READ_SD_PRINT_STATUS = "M27";
+    public static final String COMMAND_DELETE_SD_FILE = "M30";
     public static final int SD_UPLOAD_MAX_RETRIES_PER_LINE = 3;
     public static final String DEFAULT_STATUS_COMMAND = "M105";
     public static final double DEFAULT_HEATING_TEMPERATURE_THRESHOLD = 45.0;
@@ -34,4 +38,5 @@ public final class PrinterProtocolDefaults {
             End file list
             ok
             """;
+    public static final String SIMULATED_RESPONSE_M27 = "Not SD printing";
 }

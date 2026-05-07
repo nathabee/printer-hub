@@ -26,6 +26,9 @@ public final class DatabaseInitializer {
             ensureColumn(connection, "print_jobs", "print_file_id", "TEXT");
             ensureColumn(connection, "print_jobs", "printer_sd_file_id", "TEXT");
             ensureColumn(connection, "printer_sd_files", "enabled", "INTEGER NOT NULL DEFAULT 1");
+            ensureColumn(connection, "printer_sd_files", "deleted", "INTEGER NOT NULL DEFAULT 0");
+            ensureColumn(connection, "printer_sd_files", "deleted_at", "TEXT");
+            ensureColumn(connection, "monitoring_rules", "debug_wire_tracing_enabled", "INTEGER NOT NULL DEFAULT 0");
 
             System.out.println(OperationMessages.databaseInitialized(DatabaseConfig.databaseFile()));
         } catch (SQLException exception) {
@@ -59,6 +62,8 @@ public final class DatabaseInitializer {
                     raw_line TEXT,
                     print_file_id TEXT,
                     enabled INTEGER NOT NULL DEFAULT 1,
+                    deleted INTEGER NOT NULL DEFAULT 0,
+                    deleted_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     UNIQUE(printer_id, firmware_path)
@@ -187,6 +192,7 @@ public final class DatabaseInitializer {
                     poll_interval_seconds INTEGER NOT NULL DEFAULT 5,
                     event_dedup_window_seconds INTEGER NOT NULL DEFAULT 60,
                     error_persistence_behavior TEXT NOT NULL DEFAULT 'DEDUPLICATED',
+                    debug_wire_tracing_enabled INTEGER NOT NULL DEFAULT 0,
                     updated_at TEXT NOT NULL
                 );
                 """;

@@ -21,6 +21,8 @@ import printerhub.runtime.PrinterRuntimeStateCache;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -198,6 +200,123 @@ class SdCardUploadServiceTest {
         }
     }
 
+    @Test
+    void uploadPreservesCommentLinesAndSkipsBlankLines() throws Exception {
+        initializeDatabase("sd-upload-comments.db");
+
+        Path hostFile = tempDir.resolve("upload-comments.gcode");
+        Files.writeString(hostFile, "M105\n\n; upload test\nM104 S0\n");
+
+        PrinterRegistry printerRegistry = new PrinterRegistry();
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+        PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(printerRegistry, stateCache);
+        PrinterEventStore printerEventStore = new PrinterEventStore();
+        PrintFileStore printFileStore = new PrintFileStore();
+        PrintFileService printFileService = new PrintFileService(printFileStore);
+        PrinterSdFileService printerSdFileService = new PrinterSdFileService(new PrinterSdFileStore(), printFileStore);
+        SdCardUploadService uploadService = new SdCardUploadService(
+                printerRegistry,
+                monitoringScheduler,
+                new PrinterActionGuard(),
+                printFileService,
+                new SdCardService(printerEventStore),
+                printerSdFileService,
+                printerEventStore);
+
+        PrintFile printFile = printFileService.registerHostFile(hostFile.toString());
+        CommentAwarePrinterPort printerPort = new CommentAwarePrinterPort();
+        printerRegistry.register(new PrinterRuntimeNode(
+                "printer-1",
+                "Printer 1",
+                "/dev/ttyUSB0",
+                "real",
+                printerPort,
+                true));
+
+        try {
+            SdCardUploadService.UploadResult result = uploadService.uploadToPrinterSd(
+                    "printer-1",
+                    printFile.id(),
+                    "TEST7.GCO");
+
+            assertTrue(result.success());
+            assertEquals(3L, result.uploadedLineCount());
+            assertEquals(
+                    List.of(
+                            "raw:N0 M110 N0*125",
+                            "raw:N1 M28 TEST7.GCO*124",
+                            "raw:N2 M105*37",
+                            "raw:N3 ; upload test*115",
+                            "raw:N4 M104 S0*97",
+                            "raw:N5 M29*29",
+                            "raw:N6 M20*23"),
+                    printerPort.operations());
+        } finally {
+            monitoringScheduler.stop();
+        }
+    }
+
+    @Test
+    void uploadWireTraceLoggingOnlyPrintsWhenEnabled() throws Exception {
+        initializeDatabase("sd-upload-trace-flag.db");
+
+        Path hostFile = tempDir.resolve("upload-trace.gcode");
+        Files.writeString(hostFile, "M104 S0\n");
+
+        PrinterRegistry printerRegistry = new PrinterRegistry();
+        PrinterRuntimeStateCache stateCache = new PrinterRuntimeStateCache();
+        PrinterMonitoringScheduler monitoringScheduler = new PrinterMonitoringScheduler(printerRegistry, stateCache);
+        PrinterEventStore printerEventStore = new PrinterEventStore();
+        PrintFileStore printFileStore = new PrintFileStore();
+        PrintFileService printFileService = new PrintFileService(printFileStore);
+        PrinterSdFileService printerSdFileService = new PrinterSdFileService(new PrinterSdFileStore(), printFileStore);
+
+        PrintFile printFile = printFileService.registerHostFile(hostFile.toString());
+        RecordingUploadPrinterPort printerPort = new RecordingUploadPrinterPort();
+        printerRegistry.register(new PrinterRuntimeNode(
+                "printer-1",
+                "Printer 1",
+                "/dev/ttyUSB0",
+                "real",
+                printerPort,
+                true));
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        try {
+            System.setOut(new PrintStream(output));
+
+            SdCardUploadService disabledTraceService = new SdCardUploadService(
+                    printerRegistry,
+                    monitoringScheduler,
+                    new PrinterActionGuard(),
+                    printFileService,
+                    new SdCardService(printerEventStore),
+                    printerSdFileService,
+                    printerEventStore,
+                    () -> false);
+            disabledTraceService.uploadToPrinterSd("printer-1", printFile.id(), "TEST4.GCO");
+            assertFalse(output.toString().contains("SD upload wire"));
+
+            output.reset();
+
+            SdCardUploadService enabledTraceService = new SdCardUploadService(
+                    printerRegistry,
+                    monitoringScheduler,
+                    new PrinterActionGuard(),
+                    printFileService,
+                    new SdCardService(printerEventStore),
+                    printerSdFileService,
+                    printerEventStore,
+                    () -> true);
+            enabledTraceService.uploadToPrinterSd("printer-1", printFile.id(), "TEST4.GCO");
+            assertTrue(output.toString().contains("SD upload wire"));
+        } finally {
+            System.setOut(originalOut);
+            monitoringScheduler.stop();
+        }
+    }
+
     private void initializeDatabase(String fileName) {
         String databaseFile = tempDir.resolve(fileName).toString();
         System.setProperty(RuntimeDefaults.DATABASE_FILE_PROPERTY, databaseFile);
@@ -362,6 +481,60 @@ class SdCardUploadServiceTest {
             if (!connected) {
                 throw new IllegalStateException("not connected");
             }
+        }
+    }
+
+    private static final class CommentAwarePrinterPort implements PrinterPort {
+
+        private final List<String> operations = new ArrayList<>();
+        private boolean connected;
+
+        @Override
+        public void connect() {
+            connected = true;
+        }
+
+        @Override
+        public String sendCommand(String command) {
+            ensureConnected();
+            return "ok";
+        }
+
+        @Override
+        public String sendRawLine(String line) {
+            ensureConnected();
+            operations.add("raw:" + line);
+
+            return switch (line) {
+                case "N0 M110 N0*125", "N2 M105*37", "N3 ; upload test*115", "N4 M104 S0*97", "N5 M29*29" -> "ok";
+                case "N1 M28 TEST7.GCO*124" -> """
+                        echo:Now fresh file: TEST7.GCO
+                        Writing to file: TEST7.GCO
+                        ok
+                        """;
+                case "N6 M20*23" -> """
+                        Begin file list
+                        TEST7.GCO 28
+                        End file list
+                        ok
+                        """;
+                default -> throw new IllegalStateException("Unexpected raw line: " + line);
+            };
+        }
+
+        @Override
+        public void disconnect() {
+            connected = false;
+        }
+
+        private void ensureConnected() {
+            if (!connected) {
+                throw new IllegalStateException("not connected");
+            }
+        }
+
+        private List<String> operations() {
+            return List.copyOf(operations);
         }
     }
 }

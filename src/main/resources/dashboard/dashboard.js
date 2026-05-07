@@ -1,6 +1,7 @@
 import {
   cancelJob,
   createJob,
+  deletePrinterSdFile,
   createPrinter,
   deleteJob,
   deletePrinter,
@@ -378,6 +379,13 @@ function bindGlobalListeners() {
       return;
     }
 
+    const deletePrinterSdFileButton = event.target.closest("[data-delete-printer-sd-file-id]");
+    if (deletePrinterSdFileButton) {
+      await handleDeletePrinterSdFile(deletePrinterSdFileButton.dataset.deletePrinterSdFileId);
+      renderApp();
+      return;
+    }
+
     const jobActionButton = event.target.closest("[data-job-action]");
     if (jobActionButton) {
       await handleJobAction(jobActionButton.dataset.jobAction, jobActionButton.dataset.jobId);
@@ -548,7 +556,8 @@ async function handleSaveMonitoringRules(form) {
     snapshotMinimumIntervalSeconds: Number.parseInt(form.querySelector("#snapshotMinimumIntervalSecondsInput").value, 10),
     temperatureDeltaThreshold: Number.parseFloat(form.querySelector("#temperatureDeltaThresholdInput").value),
     eventDeduplicationWindowSeconds: Number.parseInt(form.querySelector("#eventDeduplicationWindowSecondsInput").value, 10),
-    errorPersistenceBehavior: form.querySelector("#errorPersistenceBehaviorInput").value
+    errorPersistenceBehavior: form.querySelector("#errorPersistenceBehaviorInput").value,
+    debugWireTracingEnabled: form.querySelector("#debugWireTracingEnabledInput").checked
   };
 
   try {
@@ -695,7 +704,11 @@ async function handleSavePrinterSdFile(form) {
 }
 
 function buildPrinterSdFileOptions(printerId) {
-  const files = state.printerSdFiles.filter((file) => file.printerId === printerId && file.enabled === true);
+  const files = state.printerSdFiles.filter((file) =>
+    file.printerId === printerId
+    && file.enabled === true
+    && file.deleted !== true
+  );
 
   return [
     `<option value="">Select enabled SD file for PRINT_FILE jobs</option>`,
@@ -718,6 +731,20 @@ async function handleSetPrinterSdFileEnabled(printerSdFileId, enabled) {
     await refreshAllData({ silent: true });
   } catch (error) {
     setMessage(`Failed to ${enabled ? "enable" : "disable"} SD target: ${error.message}`);
+  }
+}
+
+async function handleDeletePrinterSdFile(printerSdFileId) {
+  if (!printerSdFileId) {
+    return;
+  }
+
+  try {
+    const response = await deletePrinterSdFile(printerSdFileId);
+    setMessage(`Deleted SD target ${response.displayName}.`);
+    await refreshAllData({ silent: true });
+  } catch (error) {
+    setMessage(`Failed to delete SD target: ${error.message}`);
   }
 }
 
