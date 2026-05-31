@@ -501,8 +501,33 @@ class CentralApiServerTest {
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("SpaghettiChef Central"));
             assertTrue(response.body().contains("/central-dashboard/favicon.svg"));
+            assertTrue(response.body().contains("Fleet Status"));
+            assertTrue(response.body().contains("Farm Overview"));
+            assertTrue(response.body().contains("Printer And Camera Structure"));
+            assertTrue(response.body().contains("Replay Packages"));
+            assertTrue(response.body().contains("Replay Player"));
             assertFalse(response.body().toLowerCase(java.util.Locale.ROOT).contains("start print"));
             assertFalse(response.body().toLowerCase(java.util.Locale.ROOT).contains("emergency stop"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void centralDashboardJavascriptIsReadOnlyAndLoadsStructureAndReplay() throws Exception {
+        TestContext context = createContext("dashboard-js.db");
+        try {
+            HttpResponse<String> response = context.get("/central-dashboard/central-dashboard.js");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("/structure"));
+            assertTrue(response.body().contains("/camera-replay-packages"));
+            assertTrue(response.body().contains("showReplay"));
+            String lower = response.body().toLowerCase(java.util.Locale.ROOT);
+            assertFalse(lower.contains("start print"));
+            assertFalse(lower.contains("emergency stop"));
+            assertFalse(lower.contains("fetch('http://"));
+            assertFalse(lower.contains("fetch(\"http://"));
         } finally {
             context.close();
         }

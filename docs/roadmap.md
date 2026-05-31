@@ -3918,12 +3918,26 @@ archives that central stores and replays from its own storage:
 * uploaded package validation by `farmId`, `runtimeInstanceId`, and `farmSecret`
 * no live frame request or inbound call to the local farm
 
+### 1.0.4 — Public Read-Only Central Dashboard
+
+status: done
+
+Goals:
+
+Expose a safer central dashboard that reads only central APIs:
+
+* fleet status summary cards
+* farm overview table with online/stale/offline/disabled state
+* pushed printer/camera structure view
+* replay package listing
+* uploaded-frame replay player
+* no printer, camera, job, shell, upload, edit, delete, or local-runtime actions
+
 ### 1.0.x Next Slices
 
 Planned:
 
 * local-to-central push client settings
-* read-only central replay listing/player
 * VPS container deployment hardening
 * reverse proxy deployment documentation
 
