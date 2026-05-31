@@ -1,6 +1,6 @@
 # Test
 
-This document describes manual verification for the `0.1.x` local runtime architecture.
+This document describes manual verification for the local farm runtime.
 
 > SpaghettiChef is currently in runtime migration.
 > The focus is runtime startup, API responsiveness, background monitoring, dashboard configuration, and SQLite persistence.
@@ -20,6 +20,8 @@ Expected result:
 ```text
 BUILD SUCCESS
 ```
+
+For central read-only VPS viewer testing, see `docs/test-vps.md`.
 
 ---
 

@@ -91,6 +91,11 @@ The 0.7.x work adds the dataset and engine-settings layer:
 * persisted multi-engine settings for Java and external CLI analyzers
 * dashboard-based engine selection and per-run parameter overrides
 
+The 1.0.x work opens the first central read-only VPS viewer track. This is a
+teaser slice, not remote control: local farms stay private, push selected state
+outbound, and the VPS keeps a separate aggregate database for registration,
+heartbeat, overview, and a minimal central dashboard.
+
 ---
 
 ## System overview
@@ -124,6 +129,10 @@ flowchart TB
 ```
 
 SpaghettiChef keeps the Java runtime as the owner of API, persistence, dashboard, scheduling, printer workflows, and camera-job state. External image analyzers are treated as optional calculation engines, not as replacement backends.
+
+The emerging central VPS viewer is a separate read-only mode. It does not
+initialize local printer communication, camera capture, printer monitoring, or
+local jobs.
 
 ---
 
@@ -575,10 +584,11 @@ mvn clean verify
 Start the local runtime with an explicit database file and API port:
 
 ```bash
-mvn exec:java \
+mvn \
+  -Dexec.mainClass="spaghettichef.Main" \
   -Dspaghettichef.databaseFile="spaghettichef.db" \
   -Dspaghettichef.api.port=18080 \
-  -Dexec.mainClass="spaghettichef.Main"
+  exec:java
 ```
 
 Open the dashboard:
@@ -588,6 +598,25 @@ http://localhost:18080/dashboard
 ```
 
 The dashboard uses relative API requests, so it follows the port used by the embedded server.
+
+Central read-only viewer teaser:
+
+```bash
+mvn \
+  -Dexec.mainClass="spaghettichef.central.CentralMain" \
+  -Dspaghettichef.api.port=18180 \
+  -Dspaghettichef.central.databaseFile=spaghettichef-central.db \
+  exec:java
+```
+
+Open:
+
+```text
+http://localhost:18180/central-dashboard
+```
+
+In this first slice, farm registration and heartbeat can be tested with manual
+`curl` calls. The automatic local-to-central push client is a later 1.0.x step.
 
 ---
 
@@ -720,8 +749,8 @@ Current direction:
 0.5.x  Rust image analyzer and calculation-engine integration
 0.6.x  Replay, purge, crop region, and camera data management
 0.7.x  Runtime archive datasets and multi-engine settings
-0.7.2  Performance and accuracy test harness
-1.0.x  Central multi-farm architecture
+0.7.2+ Engine/tooling work resumed after or alongside 1.0.x
+1.0.x  Central read-only VPS viewer, push-only farm summaries, no remote control
 ```
 
 ---
@@ -734,6 +763,8 @@ Current direction:
 * [`docs/rest-api.md`](docs/rest-api.md) — API reference
 * [`docs/quickstart.md`](docs/quickstart.md) — local usage
 * [`docs/install.md`](docs/install.md) — installation notes
+* [`docs/install-vps.md`](docs/install-vps.md) — central VPS viewer install notes
+* [`docs/test-vps.md`](docs/test-vps.md) — central VPS viewer test notes
 * [`docs/developer.md`](docs/developer.md) — developer reference
 * [`docs/devops.md`](docs/devops.md) — CI and release workflow
 

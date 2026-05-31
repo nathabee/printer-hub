@@ -1,6 +1,8 @@
 package spaghettichef;
 
 import spaghettichef.api.RemoteApiServer;
+import spaghettichef.central.CentralMain;
+import spaghettichef.central.CentralMode;
 import spaghettichef.command.PrinterCommandService;
 import spaghettichef.command.SdCardService;
 import spaghettichef.config.RuntimeDefaults;
@@ -35,6 +37,11 @@ public final class Main {
 
         public static void main(String[] args) throws InterruptedException {
                 try {
+                        if (CentralMode.enabled()) {
+                                CentralMain.startAndWait();
+                                return;
+                        }
+
                         int apiPort = readIntProperty(
                                         RuntimeDefaults.API_PORT_PROPERTY,
                                         RuntimeDefaults.DEFAULT_API_PORT);

@@ -8,7 +8,9 @@ It focuses only on the shortest path to:
 - run a prebuilt package without recompilation
 - optionally build the project
 - start the local runtime
+- start the central read-only VPS viewer
 - add a simulated printer
+- register a farm with the central viewer by API
 - verify monitoring through the API and dashboard
 
 ---
@@ -99,6 +101,7 @@ Main outputs:
 target/surefire-reports/
 target/site/jacoco/
 target/spaghetti-chef-<version>-all.jar
+target/spaghetti-chef-<version>-central-vps.jar
 ```
 
 ---
@@ -121,26 +124,119 @@ java -Dspaghettichef.databaseFile=spaghettichef.db -Dspaghettichef.api.port=1808
 
 ---
 
-## Start the local runtime
+## Start The Local Farm Runtime
 
 For development, Maven can start SpaghettiChef directly:
 
 ```bash
-mvn exec:java \
+mvn \
   -Dexec.mainClass="spaghettichef.Main" \
-  -Dspaghettichef.api.port=8080 \
+  -Dspaghettichef.api.port=18080 \
   -Dspaghettichef.monitoring.intervalSeconds=1 \
-  -Dspaghettichef.databaseFile=spaghettichef.db
+  -Dspaghettichef.databaseFile=spaghettichef.db \
+  exec:java
 ```
 
 Expected startup output:
 
 ```text
 [SpaghettiChef] Database initialized: spaghettichef.db
-[SpaghettiChef] API server started on port 8080
+[SpaghettiChef] API server started on port 18080
 [SpaghettiChef] Local runtime started
-[SpaghettiChef] Health:   http://localhost:8080/health
-[SpaghettiChef] Printers: http://localhost:8080/printers
+[SpaghettiChef] Health:   http://localhost:18080/health
+[SpaghettiChef] Printers: http://localhost:18080/printers
+```
+
+Open the local farm dashboard:
+
+```text
+http://localhost:18080/dashboard
+```
+
+Important:
+
+```text
+Use spaghettichef.databaseFile.
+Do not use spaghetti.databaseFile.
+```
+
+---
+
+## Start The Central VPS Viewer Locally
+
+Use a second terminal and a different port:
+
+```bash
+mvn \
+  -Dexec.mainClass="spaghettichef.central.CentralMain" \
+  -Dspaghettichef.api.port=18180 \
+  -Dspaghettichef.central.databaseFile=spaghettichef-central.db \
+  exec:java
+```
+
+Then open:
+
+```text
+http://localhost:18180/central-dashboard
+```
+
+Central mode can also be started through the normal main class:
+
+```bash
+mvn \
+  -Dexec.mainClass="spaghettichef.Main" \
+  -Dspaghettichef.mode=central \
+  -Dspaghettichef.api.port=18180 \
+  -Dspaghettichef.central.databaseFile=spaghettichef-central.db \
+  exec:java
+```
+
+The central database is separate from the local farm database.
+
+---
+
+## Register A Farm With Central
+
+In 1.0.0, automatic local-to-central push is not implemented yet. To test the
+central API locally, simulate the outbound farm push with `curl`.
+
+Register a farm:
+
+```bash
+curl -s -X POST http://localhost:18180/api/central/farms/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "runtimeInstanceId": "local-dev-runtime-001",
+    "farmName": "Local Dev Farm",
+    "runtimeVersion": "1.0.0",
+    "hostname": "local-dev"
+  }'
+```
+
+Save the returned `farmId` and `farmSecret`, then send a heartbeat:
+
+```bash
+curl -s -X POST http://localhost:18180/api/central/farms/<farmId>/heartbeat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "runtimeInstanceId": "local-dev-runtime-001",
+    "farmSecret": "<farmSecret>",
+    "runtimeVersion": "1.0.0",
+    "status": "ONLINE",
+    "printerCount": 1,
+    "cameraCount": 0,
+    "activePrintCount": 0,
+    "warningCount": 0,
+    "errorCount": 0,
+    "spaghettiAlertCount": 0,
+    "message": "manual local test"
+  }'
+```
+
+Check central overview:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/overview
 ```
 
 ---
@@ -150,7 +246,7 @@ Expected startup output:
 From another terminal:
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:18080/health
 ```
 
 Expected result:
@@ -164,7 +260,7 @@ Expected result:
 ## Verify initial printer list
 
 ```bash
-curl http://localhost:8080/printers
+curl http://localhost:18080/printers
 ```
 
 Expected result:
@@ -180,7 +276,7 @@ Expected result:
 Create one simulated printer:
 
 ```bash
-curl -X POST http://localhost:8080/printers \
+curl -X POST http://localhost:18080/printers \
   -H "Content-Type: application/json" \
   -d '{
     "id": "printer-1",
@@ -202,7 +298,7 @@ Expected result:
 ## Check printer list again
 
 ```bash
-curl http://localhost:8080/printers
+curl http://localhost:18080/printers
 ```
 
 After a short delay, expected fields should include:
@@ -242,13 +338,13 @@ Typical simulated state after monitoring:
 ## Read one printer directly
 
 ```bash
-curl http://localhost:8080/printers/printer-1
+curl http://localhost:18080/printers/printer-1
 ```
 
 Read only the status snapshot:
 
 ```bash
-curl http://localhost:8080/printers/printer-1/status
+curl http://localhost:18080/printers/printer-1/status
 ```
 
 ---
@@ -258,7 +354,7 @@ curl http://localhost:8080/printers/printer-1/status
 Disable:
 
 ```bash
-curl -X POST http://localhost:8080/printers/printer-1/disable
+curl -X POST http://localhost:18080/printers/printer-1/disable
 ```
 
 Expected result:
@@ -269,7 +365,7 @@ Expected result:
 Enable again:
 
 ```bash
-curl -X POST http://localhost:8080/printers/printer-1/enable
+curl -X POST http://localhost:18080/printers/printer-1/enable
 ```
 
 Expected result:
@@ -283,7 +379,7 @@ Expected result:
 ## Update a printer
 
 ```bash
-curl -X PUT http://localhost:8080/printers/printer-1 \
+curl -X PUT http://localhost:18080/printers/printer-1 \
   -H "Content-Type: application/json" \
   -d '{
     "displayName": "Updated Simulated Printer",
@@ -306,7 +402,7 @@ Expected result:
 ## Delete a printer
 
 ```bash
-curl -X DELETE http://localhost:8080/printers/printer-1
+curl -X DELETE http://localhost:18080/printers/printer-1
 ```
 
 Expected result:
@@ -318,7 +414,7 @@ Expected result:
 Check again:
 
 ```bash
-curl http://localhost:8080/printers
+curl http://localhost:18080/printers
 ```
 
 ---
@@ -328,7 +424,7 @@ curl http://localhost:8080/printers
 Open in a browser:
 
 ```text
-http://localhost:8080/dashboard
+http://localhost:18080/dashboard
 ```
 
 The dashboard reads runtime state through the REST API.
@@ -408,7 +504,7 @@ Real-printer creation uses the same API, but with:
 Example:
 
 ```bash
-curl -X POST http://localhost:8080/printers \
+curl -X POST http://localhost:18080/printers \
   -H "Content-Type: application/json" \
   -d '{
     "id": "printer-real-1",
@@ -436,7 +532,7 @@ Check:
 Health check:
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:18080/health
 ```
 
 ---
@@ -474,6 +570,8 @@ dialout
 After the quickstart works, continue with:
 
 * `install.md`
+* `install-vps.md`
+* `test-vps.md`
 * `devops.md`
 * `developer.md`
 * `roadmap.md`

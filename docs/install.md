@@ -287,6 +287,9 @@ spaghetti-chef-<version>-release.tar.gz
 
 spaghetti-chef-<version>-admin.zip
   Windows remote-administration bootstrap package for OpenSSH-based setup
+
+spaghetti-chef-<version>-central-vps-container.tar.gz
+  Central read-only VPS viewer container bundle
 ```
 
 The Linux and Windows packages are the expert runtime packages.
@@ -298,6 +301,10 @@ documentation.
 The admin package contains the PowerShell helper scripts and example runtime
 configuration used to bootstrap and operate a remote Windows SpaghettiChef host
 through OpenSSH.
+
+The central VPS package contains the central read-only runtime jar, Dockerfile,
+and minimal deployment notes. It is separate from the local Linux and Windows
+farm packages. See `docs/install-vps.md`.
 
 
 ---

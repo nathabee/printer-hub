@@ -1,0 +1,303 @@
+package spaghettichef.central.api;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import spaghettichef.central.persistence.CentralDatabase;
+import spaghettichef.central.persistence.CentralDatabaseConfig;
+import spaghettichef.central.persistence.CentralDatabaseInitializer;
+import spaghettichef.central.persistence.CentralFarmStore;
+import spaghettichef.central.service.CentralFarmService;
+
+import java.net.ServerSocket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class CentralApiServerTest {
+    @TempDir
+    Path tempDir;
+
+    @AfterEach
+    void clearProperties() {
+        System.clearProperty(CentralDatabaseConfig.CENTRAL_DATABASE_FILE_PROPERTY);
+        System.clearProperty("spaghettichef.databaseFile");
+    }
+
+    @Test
+    void firstFarmRegistrationCreatesFarm() throws Exception {
+        TestContext context = createContext("register.db");
+        try {
+            HttpResponse<String> response = register(context, "runtime-1", "Home Farm");
+
+            assertEquals(201, response.statusCode());
+            assertTrue(response.body().contains("\"farmId\":\"farm-"));
+            assertTrue(response.body().contains("\"farmSecret\":"));
+            assertTrue(response.body().contains("\"runtimeInstanceId\":\"runtime-1\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void repeatedRegistrationBySameRuntimeInstanceIdDoesNotCreateDuplicate() throws Exception {
+        TestContext context = createContext("register-repeat.db");
+        try {
+            String firstFarmId = extractJsonString(register(context, "runtime-1", "Home Farm").body(), "farmId");
+            String secondFarmId = extractJsonString(register(context, "runtime-1", "Home Farm Renamed").body(), "farmId");
+
+            assertEquals(firstFarmId, secondFarmId);
+            assertEquals(1, countFarms());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void heartbeatUpdatesLastSeenAtAndSummaryCounters() throws Exception {
+        TestContext context = createContext("heartbeat.db");
+        try {
+            Registration registration = registration(context);
+
+            HttpResponse<String> response = heartbeat(context, registration, "runtime-1", """
+                    "printerCount":3,
+                    "cameraCount":2,
+                    "activePrintCount":1,
+                    "warningCount":4,
+                    "errorCount":5,
+                    "spaghettiAlertCount":6,
+                    "message":"ok"
+                    """);
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"lastSeenAt\":\""));
+            assertTrue(response.body().contains("\"printerCount\":3"));
+            assertTrue(response.body().contains("\"cameraCount\":2"));
+            assertTrue(response.body().contains("\"activePrintCount\":1"));
+            assertTrue(response.body().contains("\"spaghettiAlertCount\":6"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void unknownFarmHeartbeatIsRejected() throws Exception {
+        TestContext context = createContext("heartbeat-unknown.db");
+        try {
+            HttpResponse<String> response = context.request("POST", "/api/central/farms/farm-missing/heartbeat", """
+                    {"runtimeInstanceId":"runtime-1","farmSecret":"secret"}
+                    """);
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("unknown_farm"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void mismatchedRuntimeInstanceHeartbeatIsRejected() throws Exception {
+        TestContext context = createContext("heartbeat-mismatch.db");
+        try {
+            Registration registration = registration(context);
+
+            HttpResponse<String> response = heartbeat(context, registration, "runtime-other", "\"printerCount\":1");
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("runtime_instance_mismatch"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void disabledFarmHeartbeatIsRejected() throws Exception {
+        TestContext context = createContext("heartbeat-disabled.db");
+        try {
+            Registration registration = registration(context);
+            try (Connection connection = CentralDatabase.getConnection();
+                    PreparedStatement statement = connection.prepareStatement(
+                            "UPDATE central_farm SET enabled = 0 WHERE farm_id = ?")) {
+                statement.setString(1, registration.farmId());
+                statement.executeUpdate();
+            }
+
+            HttpResponse<String> response = heartbeat(context, registration, "runtime-1", "\"printerCount\":1");
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("farm_disabled"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void overviewReturnsOnlineStaleOfflineState() throws Exception {
+        TestContext context = createContext("overview.db");
+        try {
+            Registration online = registration(context, "runtime-online", "Online Farm");
+            heartbeat(context, online, "runtime-online", "\"printerCount\":1");
+            Registration stale = registration(context, "runtime-stale", "Stale Farm");
+            heartbeat(context, stale, "runtime-stale", "\"printerCount\":1");
+            Registration offline = registration(context, "runtime-offline", "Offline Farm");
+
+            setLastSeen(stale.farmId(), "2020-01-01T00:07:00Z");
+            setLastSeen(offline.farmId(), "2019-12-31T23:59:00Z");
+
+            HttpResponse<String> response = context.get("/api/central/farms/overview");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"status\":\"ONLINE\""));
+            assertTrue(response.body().contains("\"status\":\"STALE\""));
+            assertTrue(response.body().contains("\"status\":\"OFFLINE\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void localDatabasePropertyDoesNotConfigureCentralDatabase() throws Exception {
+        Path localDb = tempDir.resolve("local.db");
+        Path centralDb = tempDir.resolve("central.db");
+        System.setProperty("spaghettichef.databaseFile", localDb.toString());
+        System.setProperty(CentralDatabaseConfig.CENTRAL_DATABASE_FILE_PROPERTY, centralDb.toString());
+
+        new CentralDatabaseInitializer().initialize();
+
+        assertFalse(java.nio.file.Files.exists(localDb));
+        assertTrue(java.nio.file.Files.exists(centralDb));
+    }
+
+    @Test
+    void centralDashboardIsReadOnlyAndListsFarms() throws Exception {
+        TestContext context = createContext("dashboard.db");
+        try {
+            register(context, "runtime-1", "Home Farm");
+
+            HttpResponse<String> response = context.get("/central-dashboard");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("SpaghettiChef Central"));
+            assertFalse(response.body().toLowerCase(java.util.Locale.ROOT).contains("start print"));
+            assertFalse(response.body().toLowerCase(java.util.Locale.ROOT).contains("emergency stop"));
+        } finally {
+            context.close();
+        }
+    }
+
+    private TestContext createContext(String dbName) throws Exception {
+        System.setProperty(CentralDatabaseConfig.CENTRAL_DATABASE_FILE_PROPERTY, tempDir.resolve(dbName).toString());
+        new CentralDatabaseInitializer().initialize();
+        int port = findFreePort();
+        CentralApiServer server = new CentralApiServer(
+                port,
+                new CentralFarmService(new CentralFarmStore(), java.time.Clock.fixed(
+                        java.time.Instant.parse("2020-01-01T00:10:00Z"),
+                        java.time.ZoneOffset.UTC)));
+        server.start();
+        return new TestContext(port, server);
+    }
+
+    private HttpResponse<String> register(TestContext context, String runtimeInstanceId, String farmName)
+            throws Exception {
+        return context.request("POST", "/api/central/farms/register", "{"
+                + "\"runtimeInstanceId\":\"" + runtimeInstanceId + "\","
+                + "\"farmName\":\"" + farmName + "\","
+                + "\"runtimeVersion\":\"1.0.0\","
+                + "\"hostname\":\"private-host\""
+                + "}");
+    }
+
+    private Registration registration(TestContext context) throws Exception {
+        return registration(context, "runtime-1", "Home Farm");
+    }
+
+    private Registration registration(TestContext context, String runtimeInstanceId, String farmName) throws Exception {
+        String body = register(context, runtimeInstanceId, farmName).body();
+        return new Registration(extractJsonString(body, "farmId"), extractJsonString(body, "farmSecret"));
+    }
+
+    private HttpResponse<String> heartbeat(
+            TestContext context,
+            Registration registration,
+            String runtimeInstanceId,
+            String fields) throws Exception {
+        return context.request("POST", "/api/central/farms/" + registration.farmId() + "/heartbeat", "{"
+                + "\"runtimeInstanceId\":\"" + runtimeInstanceId + "\","
+                + "\"farmSecret\":\"" + registration.farmSecret() + "\","
+                + "\"runtimeVersion\":\"1.0.0\","
+                + fields
+                + "}");
+    }
+
+    private int countFarms() throws Exception {
+        try (Connection connection = CentralDatabase.getConnection();
+                PreparedStatement statement = connection.prepareStatement("SELECT COUNT(*) FROM central_farm");
+                java.sql.ResultSet resultSet = statement.executeQuery()) {
+            assertTrue(resultSet.next());
+            return resultSet.getInt(1);
+        }
+    }
+
+    private void setLastSeen(String farmId, String instant) throws Exception {
+        try (Connection connection = CentralDatabase.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE central_farm SET last_seen_at = ? WHERE farm_id = ?")) {
+            statement.setString(1, instant);
+            statement.setString(2, farmId);
+            statement.executeUpdate();
+        }
+    }
+
+    private int findFreePort() throws Exception {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
+    private String extractJsonString(String body, String fieldName) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "\"" + java.util.regex.Pattern.quote(fieldName) + "\"\\s*:\\s*\"([^\"]*)\"").matcher(body);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private record Registration(String farmId, String farmSecret) {
+    }
+
+    private static final class TestContext {
+        private final int port;
+        private final CentralApiServer server;
+        private final HttpClient httpClient = HttpClient.newHttpClient();
+
+        private TestContext(int port, CentralApiServer server) {
+            this.port = port;
+            this.server = server;
+        }
+
+        private HttpResponse<String> get(String path) throws Exception {
+            return request("GET", path, null);
+        }
+
+        private HttpResponse<String> request(String method, String path, String body) throws Exception {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + path));
+            if (body == null) {
+                builder.method(method, HttpRequest.BodyPublishers.noBody());
+            } else {
+                builder.method(method, HttpRequest.BodyPublishers.ofString(body))
+                        .header("Content-Type", "application/json");
+            }
+            return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        }
+
+        private void close() {
+            server.stop();
+        }
+    }
+}

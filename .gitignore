@@ -29,9 +29,14 @@ chat.txt
 data/
 spaghettichef-print-files/**
 spaghettichef-camera/**
-*.jpg
 response.txt
 message.txt
+
+
+# dataset pictures and snapshots pictures
+camera/**
+dataset/**/*.jpg
+dataset/**/*.zip
 
 
 # Rust build output

@@ -8,7 +8,11 @@ see ROADMAP.md
 
  
 next :
-0.7.2 — Performance and Accuracy Test Harness
+# 0.7.2+  , 0.8 0.9  postponed
+
+## 1.0.x — Central Read-Only VPS Viewer
+
+- 1.0.0 — First Central Read-Only Slice
 
 
 
