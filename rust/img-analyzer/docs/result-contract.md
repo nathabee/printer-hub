@@ -2,7 +2,7 @@
 
 This contract describes the stable command-line behavior for the standalone SpaghettiChef Rust image analyzer.
 
-Version: `1.0.2`
+Version: `1.0.5`
 
 The analyzer is still an independent CLI. Java does not call it yet.
 
@@ -79,7 +79,7 @@ Example success output:
 ```json
 {
   "engineName": "RUST_CLI_DELTA",
-  "engineVersion": "1.0.2",
+  "engineVersion": "1.0.5",
   "algorithmVariant": "FRAME_DELTA",
   "confidence": 0.78,
   "suspected": true,

@@ -10,25 +10,58 @@
 <body>
   <main>
     <header class="topbar">
-      <img src="/central-dashboard/favicon.svg" alt="" class="brand-logo">
-      <h1>SpaghettiChef Central</h1>
+      <div class="brand">
+        <img src="/central-dashboard/favicon.svg" alt="" class="brand-logo">
+        <h1>SpaghettiChef Central</h1>
+      </div>
+      <p id="last-refresh">Loading...</p>
     </header>
-    <table>
-      <thead>
-        <tr>
-          <th>Farm</th>
-          <th>Status</th>
-          <th>Printers</th>
-          <th>Cameras</th>
-          <th>Active Prints</th>
-          <th>Alerts</th>
-          <th>Last Seen</th>
-        </tr>
-      </thead>
-      <tbody id="farms">
-        <tr><td colspan="7">Loading...</td></tr>
-      </tbody>
-    </table>
+
+    <section aria-labelledby="summary-title">
+      <h2 id="summary-title">Fleet Status</h2>
+      <div id="farm-cards" class="summary-grid"></div>
+    </section>
+
+    <section aria-labelledby="farms-title">
+      <h2 id="farms-title">Farm Overview</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Farm</th>
+              <th>Status</th>
+              <th>Printers</th>
+              <th>Cameras</th>
+              <th>Active Prints</th>
+              <th>Warnings</th>
+              <th>Errors</th>
+              <th>Alerts</th>
+              <th>Last Seen</th>
+            </tr>
+          </thead>
+          <tbody id="farms">
+            <tr><td colspan="9">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="structure-title">
+      <h2 id="structure-title">Printer And Camera Structure</h2>
+      <div id="structure-view" class="structure-grid"></div>
+    </section>
+
+    <section aria-labelledby="replay-title">
+      <h2 id="replay-title">Replay Packages</h2>
+      <div class="replay-layout">
+        <div id="replays" class="replay-list">Loading...</div>
+        <div id="replay-player" class="replay-player">
+          <h3>Replay Player</h3>
+          <div id="replay-frame" class="frame-stage">No frame selected.</div>
+          <div id="replay-meta" class="replay-meta"></div>
+        </div>
+      </div>
+    </section>
   </main>
   <script src="/central-dashboard/central-dashboard.js"></script>
 </body>

@@ -852,23 +852,65 @@ EOF
                         ]
                       }" > target/central-structure-push.json
 
+                    python3 - "${FARM_ID}" <<'PY'
+import json
+import sys
+import zipfile
+
+farm_id = sys.argv[1]
+manifest = {
+    "farmId": farm_id,
+    "runtimeInstanceId": "ci-runtime-001",
+    "cameraJobId": "ci-camera-job-1",
+    "printerId": "printer-1",
+    "cameraId": "camera-1",
+    "startedAt": "2026-05-31T10:00:00Z",
+    "finishedAt": "2026-05-31T10:01:00Z",
+    "frameCount": 1,
+    "deltaCount": 0,
+    "label": "ci-replay",
+    "source": "local-upload",
+}
+with zipfile.ZipFile("target/central-replay-package.zip", "w") as archive:
+    archive.writestr("manifest.json", json.dumps(manifest))
+    archive.writestr("snapshots/000001.jpg", "fake-ci-frame")
+PY
+
+                    curl -fsS -X POST "http://localhost:${CENTRAL_PORT}/api/central/farms/${FARM_ID}/camera-replay-packages" \
+                      -H "Content-Type: application/zip" \
+                      -H "X-SpaghettiChef-Farm-Secret: ${FARM_SECRET}" \
+                      --data-binary @target/central-replay-package.zip \
+                      > target/central-replay-upload.json
+
+                    REPLAY_PACKAGE_ID=$(python3 -c 'import json; print(json.load(open("target/central-replay-upload.json"))["package"]["packageId"])')
+
                     curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/farms/overview" \
                       > target/central-overview.json
                     curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/farms/${FARM_ID}" \
                       > target/central-farm.json
                     curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/farms/${FARM_ID}/structure" \
                       > target/central-structure.json
+                    curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/farms/${FARM_ID}/camera-replay-packages" \
+                      > target/central-replay-list.json
+                    curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/camera-replay-packages/${REPLAY_PACKAGE_ID}" \
+                      > target/central-replay-detail.json
+                    curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/camera-replay-packages/${REPLAY_PACKAGE_ID}/files/snapshots/000001.jpg" \
+                      > target/central-replay-frame.jpg
                     curl -fsS "http://localhost:${CENTRAL_PORT}/central-dashboard" \
                       > target/central-dashboard.html
 
                     grep -q '"accepted":true' target/central-heartbeat.json
                     grep -q '"accepted":true' target/central-structure-push.json
+                    grep -q '"accepted":true' target/central-replay-upload.json
                     grep -q '"status":"ONLINE"' target/central-overview.json
                     grep -q '"printerCount":2' target/central-overview.json
                     grep -q '"status":"ONLINE"' target/central-farm.json
                     grep -q '"printerCount":2' target/central-farm.json
                     grep -q '"printerId":"printer-1"' target/central-structure.json
                     grep -q '"cameraId":"camera-1"' target/central-structure.json
+                    grep -q '"cameraJobId":"ci-camera-job-1"' target/central-replay-list.json
+                    grep -q '"relativePath":"snapshots/000001.jpg"' target/central-replay-detail.json
+                    grep -q 'fake-ci-frame' target/central-replay-frame.jpg
                     if grep -q 'farmSecret' target/central-structure.json; then
                       echo "Structure read endpoint must not return farmSecret"
                       exit 1
@@ -881,6 +923,8 @@ EOF
 
                     sqlite3 "${CENTRAL_DB_FILE}" '.tables' > target/central-db-tables.txt
                     grep -q 'central_farm' target/central-db-tables.txt
+                    grep -q 'central_replay_package' target/central-db-tables.txt
+                    grep -q 'central_replay_file' target/central-db-tables.txt
 
                     stop_central
                     trap - EXIT
@@ -1038,12 +1082,14 @@ docker run --rm -p 8080:8080 \
   -e SPAGHETTICHEF_MODE=central \
   -e CENTRAL_MODE=true \
   -e CENTRAL_REGISTRATION_TOKEN=change-me \
+  -e CENTRAL_REPLAY_STORAGE_DIR=/data/replay \
   -v "$PWD/data:/data" \
   spaghettichef-central-vps
 ```
 
-Use `-Dspaghettichef.central.databaseFile=/data/spaghettichef-central.db`
-through `JAVA_OPTS` to place the central database on a persistent volume.
+The container defaults to HTTP port `8080`, central database
+`/data/spaghettichef-central.db`, and replay package files under
+`CENTRAL_REPLAY_STORAGE_DIR`. Override with `JAVA_OPTS` if needed.
 EOF
         '''
 

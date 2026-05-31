@@ -12,6 +12,9 @@ next :
 
 ## 1.0.x — Central Read-Only VPS Viewer
 
+- 1.0.5 — Containerized VPS Deployment
+- 1.0.4 — Public Read-Only Central Dashboard
+- 1.0.3 — Camera Job Replay Package Upload
 - 1.0.2 — Farm Structure Snapshot
 - 1.0.1 — Farm Registration and Heartbeat
 - 1.0.0 — First Central Read-Only Slice

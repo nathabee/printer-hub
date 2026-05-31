@@ -929,7 +929,7 @@ This version does not implement:
 
 ## Status
 
-Planned.
+Done.
 
 ## Purpose
 
@@ -1051,7 +1051,7 @@ This version does not implement:
 
 ## Status
 
-Planned.
+Done.
 
 ## Purpose
 
@@ -1144,7 +1144,7 @@ The 1.0.x dashboard must not include buttons or endpoints for:
 
 ## Status
 
-Planned.
+Done.
 
 ## Purpose
 

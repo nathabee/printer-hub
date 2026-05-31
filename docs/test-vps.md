@@ -10,12 +10,12 @@ It covers only:
 - heartbeat
 - single-farm read
 - structure snapshot push/read
+- replay package upload/list/frame read
 - overview
 - read-only dashboard
 - central database initialization
 
-It does not cover replay upload, central actions, user accounts, or local farm
-push automation.
+It does not cover central actions, user accounts, or local farm push automation.
 
 ---
 
@@ -238,6 +238,68 @@ and control action fields.
 
 ---
 
+## Upload Replay Package
+
+Create a small zip package:
+
+```bash
+python3 - <<'PY'
+import json
+import zipfile
+
+manifest = {
+    "farmId": "<farmId>",
+    "runtimeInstanceId": "manual-runtime-001",
+    "cameraJobId": "manual-camera-job-1",
+    "printerId": "p1",
+    "cameraId": "cam1",
+    "startedAt": "2026-05-31T10:00:00Z",
+    "finishedAt": "2026-05-31T10:01:00Z",
+    "frameCount": 1,
+    "deltaCount": 0,
+    "label": "manual replay",
+    "source": "local-upload",
+}
+with zipfile.ZipFile("target/manual-central-replay.zip", "w") as archive:
+    archive.writestr("manifest.json", json.dumps(manifest))
+    archive.writestr("snapshots/000001.jpg", "fake-frame")
+PY
+```
+
+Replace `<farmId>` inside the generated manifest or create it from a shell
+template, then upload:
+
+```bash
+curl -s -X POST http://localhost:18180/api/central/farms/<farmId>/camera-replay-packages \
+  -H "Content-Type: application/zip" \
+  -H "X-SpaghettiChef-Farm-Secret: <farmSecret>" \
+  --data-binary @target/manual-central-replay.zip
+```
+
+List packages:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>/camera-replay-packages
+```
+
+Read package detail and uploaded frame:
+
+```bash
+curl -s http://localhost:18180/api/central/camera-replay-packages/<packageId>
+curl -s http://localhost:18180/api/central/camera-replay-packages/<packageId>/files/snapshots/000001.jpg
+```
+
+Expected:
+
+```text
+package metadata is returned
+file metadata includes snapshots/000001.jpg
+uploaded frame bytes are returned from central storage
+farmSecret is not included in read responses
+```
+
+---
+
 ## Rejection Checks
 
 Unknown farm:
@@ -322,6 +384,8 @@ Expected:
 
 ```text
 central_farm table exists
+central_replay_package table exists
+central_replay_file table exists
 registered farm row exists
 last_seen_at changes after heartbeat
 ```

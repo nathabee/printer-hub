@@ -39,6 +39,37 @@ public final class CentralDatabaseInitializer {
                     """);
             addColumnIfMissing(statement, "structure_json TEXT");
             addColumnIfMissing(statement, "structure_updated_at TEXT");
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS central_replay_package (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        package_id TEXT NOT NULL UNIQUE,
+                        farm_id TEXT NOT NULL,
+                        runtime_instance_id TEXT NOT NULL,
+                        camera_job_id TEXT,
+                        printer_id TEXT,
+                        camera_id TEXT,
+                        label TEXT,
+                        started_at TEXT,
+                        finished_at TEXT,
+                        frame_count INTEGER NOT NULL DEFAULT 0,
+                        delta_count INTEGER NOT NULL DEFAULT 0,
+                        visibility TEXT,
+                        manifest_json TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    """);
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS central_replay_file (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        package_id TEXT NOT NULL,
+                        file_type TEXT NOT NULL,
+                        relative_path TEXT NOT NULL,
+                        content_type TEXT,
+                        size_bytes INTEGER NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL
+                    );
+                    """);
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to initialize central database schema", exception);
         }

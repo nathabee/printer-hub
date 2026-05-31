@@ -6,7 +6,10 @@ COPY target/spaghetti-chef-*-central-vps.jar /app/spaghetti-chef-central-vps.jar
 
 ENV SPAGHETTICHEF_MODE=central
 ENV CENTRAL_MODE=true
-ENV JAVA_OPTS=""
+ENV CENTRAL_REPLAY_STORAGE_DIR=/data/replay
+ENV JAVA_OPTS="-Dspaghettichef.api.port=8080 -Dspaghettichef.central.databaseFile=/data/spaghettichef-central.db"
+
+VOLUME ["/data"]
 
 EXPOSE 8080
 

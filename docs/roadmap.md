@@ -3900,15 +3900,61 @@ snapshot to central:
 * unsafe fields rejected before storage
 * structure read endpoint does not return `farmSecret`
 
+### 1.0.3 — Camera Job Replay Package Upload
+
+status: done
+
+Goals:
+
+Allow a registered farm to upload selected camera job replay packages as zip
+archives that central stores and replays from its own storage:
+
+* `POST /api/central/farms/{farmId}/camera-replay-packages`
+* `GET /api/central/farms/{farmId}/camera-replay-packages`
+* `GET /api/central/camera-replay-packages/{packageId}`
+* `GET /api/central/camera-replay-packages/{packageId}/files/{relativePath}`
+* replay metadata persisted in central-only replay tables
+* replay files stored under the central replay storage directory
+* uploaded package validation by `farmId`, `runtimeInstanceId`, and `farmSecret`
+* no live frame request or inbound call to the local farm
+
+### 1.0.4 — Public Read-Only Central Dashboard
+
+status: done
+
+Goals:
+
+Expose a safer central dashboard that reads only central APIs:
+
+* fleet status summary cards
+* farm overview table with online/stale/offline/disabled state
+* pushed printer/camera structure view
+* replay package listing
+* uploaded-frame replay player
+* no printer, camera, job, shell, upload, edit, delete, or local-runtime actions
+
+### 1.0.5 — Containerized VPS Deployment
+
+status: done
+
+Goals:
+
+Package and document the central read-only runtime as a VPS container:
+
+* central VPS shaded JAR with `spaghettichef.central.CentralMain`
+* `Dockerfile.central`
+* container default HTTP port `8080`
+* mounted `/data` volume for SQLite database and replay storage
+* central database path externalized through `JAVA_OPTS`
+* replay storage path externalized through `CENTRAL_REPLAY_STORAGE_DIR`
+* central health endpoint smoke-tested in Jenkins
+* reverse proxy deployment shape documented
+
 ### 1.0.x Next Slices
 
 Planned:
 
 * local-to-central push client settings
-* selected camera replay package upload
-* read-only central replay listing/player
-* VPS container deployment hardening
-* reverse proxy deployment documentation
 
 Not in 1.0.x:
 

@@ -9,22 +9,32 @@ import spaghettichef.shared.SpaghettiChefLog;
 import spaghettichef.central.service.CentralFarm;
 import spaghettichef.central.service.CentralFarmOverview;
 import spaghettichef.central.service.CentralFarmService;
+import spaghettichef.central.service.CentralReplayFile;
+import spaghettichef.central.service.CentralReplayPackage;
+import spaghettichef.central.service.CentralReplayPackageService;
+import spaghettichef.central.service.CentralReplayUploadRequest;
 import spaghettichef.central.service.FarmHeartbeatRequest;
 import spaghettichef.central.service.FarmRegistrationRequest;
 import spaghettichef.central.service.FarmStructureSnapshotRequest;
 import spaghettichef.shared.config.RuntimeDefaults;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public final class CentralApiServer {
     public static final String REGISTRATION_TOKEN_PROPERTY = "spaghettichef.central.registrationToken";
@@ -33,19 +43,32 @@ public final class CentralApiServer {
 
     private final int port;
     private final CentralFarmService farmService;
+    private final CentralReplayPackageService replayService;
+    private final Path replayStorageDir;
     private final String registrationToken;
     private HttpServer server;
 
     public CentralApiServer(int port, CentralFarmService farmService) {
-        this(port, farmService, null);
+        this(port, farmService, null, Path.of("central-replay-storage"), null);
     }
 
     public CentralApiServer(int port, CentralFarmService farmService, String registrationToken) {
+        this(port, farmService, null, Path.of("central-replay-storage"), registrationToken);
+    }
+
+    public CentralApiServer(
+            int port,
+            CentralFarmService farmService,
+            CentralReplayPackageService replayService,
+            Path replayStorageDir,
+            String registrationToken) {
         if (port < RuntimeDefaults.MIN_PORT || port > RuntimeDefaults.MAX_PORT) {
             throw new IllegalArgumentException(OperationMessages.PORT_MUST_BE_IN_VALID_RANGE);
         }
         this.port = port;
         this.farmService = farmService;
+        this.replayService = replayService;
+        this.replayStorageDir = replayStorageDir;
         this.registrationToken = blankToNull(registrationToken);
     }
 
@@ -59,6 +82,8 @@ public final class CentralApiServer {
             server.createContext("/health", exchange -> safeHandle(exchange, this::handleHealth));
             server.createContext("/version", exchange -> safeHandle(exchange, this::handleVersion));
             server.createContext("/api/central/farms", exchange -> safeHandle(exchange, this::handleFarms));
+            server.createContext("/api/central/camera-replay-packages",
+                    exchange -> safeHandle(exchange, this::handleReplayPackage));
             server.createContext("/central-dashboard", exchange -> safeHandle(exchange, this::handleDashboard));
             server.start();
             SpaghettiChefLog.info(OperationMessages.apiServerStarted(port));
@@ -110,6 +135,13 @@ public final class CentralApiServer {
         Matcher structure = Pattern.compile("^/api/central/farms/([^/]+)/structure$").matcher(path);
         if (structure.matches()) {
             handleStructure(exchange, structure.group(1));
+            return;
+        }
+
+        Matcher farmReplayPackages = Pattern.compile("^/api/central/farms/([^/]+)/camera-replay-packages$")
+                .matcher(path);
+        if (farmReplayPackages.matches()) {
+            handleFarmReplayPackages(exchange, farmReplayPackages.group(1));
             return;
         }
 
@@ -189,6 +221,125 @@ public final class CentralApiServer {
                 publicStructureJson(request)));
         sendJson(exchange, 200, "{\"accepted\":true,\"structureUpdatedAt\":"
                 + nullableString(farm.structureUpdatedAt().toString()) + "}");
+    }
+
+    private void handleFarmReplayPackages(HttpExchange exchange, String farmId) throws IOException {
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleReplayUpload(exchange, farmId);
+            return;
+        }
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleReplayList(exchange, farmId);
+            return;
+        }
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handleReplayUpload(HttpExchange exchange, String farmId) throws IOException {
+        ensureReplayService();
+        byte[] zipBytes = exchange.getRequestBody().readAllBytes();
+        ExtractedReplayZip extracted = extractReplayZip(zipBytes);
+        Map<String, Object> manifest = CentralJson.parseObject(extracted.manifestJson());
+        String manifestFarmId = requiredJsonString(manifest, "farmId");
+        if (!farmId.equals(manifestFarmId)) {
+            throw new CentralFarmService.FarmRejectedException("farm_id_mismatch");
+        }
+        CentralReplayUploadRequest upload = replayService.createUpload(
+                farmId,
+                requiredJsonString(manifest, "runtimeInstanceId"),
+                requiredReplaySecret(exchange, manifest),
+                CentralJson.stringField(manifest, "cameraJobId"),
+                CentralJson.stringField(manifest, "printerId"),
+                CentralJson.stringField(manifest, "cameraId"),
+                CentralJson.stringField(manifest, "label"),
+                CentralJson.stringField(manifest, "startedAt"),
+                CentralJson.stringField(manifest, "finishedAt"),
+                optionalJsonInteger(manifest, "frameCount", 0),
+                optionalJsonInteger(manifest, "deltaCount", 0),
+                CentralJson.stringField(manifest, "visibility"),
+                CentralJson.stringify(publicReplayManifest(manifest)),
+                extracted.files());
+        Path packageDir = replayStorageDir.resolve(upload.replayPackage().packageId()).normalize();
+        if (!packageDir.startsWith(replayStorageDir.normalize())) {
+            throw new IllegalArgumentException("invalid replay package path");
+        }
+        Files.createDirectories(packageDir);
+        for (ExtractedReplayFile file : extracted.extractedFiles()) {
+            Path destination = packageDir.resolve(file.relativePath()).normalize();
+            if (!destination.startsWith(packageDir)) {
+                throw new IllegalArgumentException("invalid replay file path");
+            }
+            Files.createDirectories(destination.getParent());
+            Files.write(destination, file.bytes());
+        }
+        replayService.store(upload);
+        sendJson(exchange, 201, "{\"accepted\":true,\"package\":" + replayPackageJson(upload.replayPackage(), false)
+                + "}");
+    }
+
+    private void handleReplayList(HttpExchange exchange, String farmId) throws IOException {
+        ensureReplayService();
+        List<CentralReplayPackage> packages = replayService.listForFarm(farmId);
+        StringBuilder json = new StringBuilder("{\"packages\":[");
+        for (int index = 0; index < packages.size(); index++) {
+            if (index > 0) {
+                json.append(',');
+            }
+            json.append(replayPackageJson(packages.get(index), false));
+        }
+        json.append("]}");
+        sendJson(exchange, 200, json.toString());
+    }
+
+    private void handleReplayPackage(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+        Matcher file = Pattern.compile("^/api/central/camera-replay-packages/([^/]+)/files/(.+)$").matcher(path);
+        if (file.matches()) {
+            handleReplayFile(exchange, file.group(1), file.group(2));
+            return;
+        }
+        Matcher detail = Pattern.compile("^/api/central/camera-replay-packages/([^/]+)$").matcher(path);
+        if (detail.matches()) {
+            handleReplayDetail(exchange, detail.group(1));
+            return;
+        }
+        sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(path)));
+    }
+
+    private void handleReplayDetail(HttpExchange exchange, String packageId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+        ensureReplayService();
+        CentralReplayPackage replayPackage = replayService.getPackage(packageId);
+        List<CentralReplayFile> files = replayService.listFiles(packageId);
+        StringBuilder json = new StringBuilder("{\"package\":");
+        json.append(replayPackageJson(replayPackage, true)).append(",\"files\":[");
+        for (int index = 0; index < files.size(); index++) {
+            if (index > 0) {
+                json.append(',');
+            }
+            json.append(replayFileJson(files.get(index), true));
+        }
+        json.append("]}");
+        sendJson(exchange, 200, json.toString());
+    }
+
+    private void handleReplayFile(HttpExchange exchange, String packageId, String relativePath) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+        ensureReplayService();
+        replayService.getPackage(packageId);
+        String safeRelativePath = safeReplayRelativePath(relativePath);
+        Path file = replayStorageDir.resolve(packageId).resolve(safeRelativePath).normalize();
+        if (!file.startsWith(replayStorageDir.resolve(packageId).normalize()) || !Files.isRegularFile(file)) {
+            sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(relativePath)));
+            return;
+        }
+        sendBytes(exchange, 200, Files.readAllBytes(file), contentType(safeRelativePath));
     }
 
     private void handleGetStructure(HttpExchange exchange, String farmId) throws IOException {
@@ -312,6 +463,122 @@ public final class CentralApiServer {
         return CentralJson.stringify(structure);
     }
 
+    private ExtractedReplayZip extractReplayZip(byte[] zipBytes) throws IOException {
+        ArrayList<ExtractedReplayFile> extractedFiles = new ArrayList<>();
+        ArrayList<CentralReplayPackageService.UploadedReplayFile> metadataFiles = new ArrayList<>();
+        String manifestJson = null;
+        try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipEntry entry;
+            while ((entry = zipInputStream.getNextEntry()) != null) {
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                String relativePath = safeReplayRelativePath(entry.getName());
+                byte[] bytes = zipInputStream.readAllBytes();
+                if ("manifest.json".equals(relativePath)) {
+                    manifestJson = new String(bytes, StandardCharsets.UTF_8);
+                }
+                extractedFiles.add(new ExtractedReplayFile(relativePath, bytes));
+                metadataFiles.add(new CentralReplayPackageService.UploadedReplayFile(relativePath, bytes.length));
+            }
+        }
+        if (manifestJson == null || manifestJson.isBlank()) {
+            throw new IllegalArgumentException("replay package must contain manifest.json");
+        }
+        return new ExtractedReplayZip(manifestJson, extractedFiles, metadataFiles);
+    }
+
+    private String safeReplayRelativePath(String path) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("replay file path must not be blank");
+        }
+        String normalized = path.replace('\\', '/');
+        while (normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        Path normalizedPath = Path.of(normalized).normalize();
+        String result = normalizedPath.toString().replace('\\', '/');
+        if (result.isBlank() || result.startsWith("../") || result.equals("..") || result.contains("/../")) {
+            throw new IllegalArgumentException("invalid replay file path");
+        }
+        return result;
+    }
+
+    private String requiredReplaySecret(HttpExchange exchange, Map<String, Object> manifest) {
+        String headerSecret = blankToNull(exchange.getRequestHeaders().getFirst("X-SpaghettiChef-Farm-Secret"));
+        if (headerSecret != null) {
+            return headerSecret;
+        }
+        return requiredJsonString(manifest, "farmSecret");
+    }
+
+    private Map<String, Object> publicReplayManifest(Map<String, Object> manifest) {
+        LinkedHashMap<String, Object> publicManifest = new LinkedHashMap<>(manifest);
+        publicManifest.remove("farmSecret");
+        return publicManifest;
+    }
+
+    private String replayPackageJson(CentralReplayPackage replayPackage, boolean includeManifest) {
+        return "{"
+                + "\"packageId\":" + nullableString(replayPackage.packageId()) + ","
+                + "\"farmId\":" + nullableString(replayPackage.farmId()) + ","
+                + "\"runtimeInstanceId\":" + nullableString(replayPackage.runtimeInstanceId()) + ","
+                + "\"cameraJobId\":" + nullableString(replayPackage.cameraJobId()) + ","
+                + "\"printerId\":" + nullableString(replayPackage.printerId()) + ","
+                + "\"cameraId\":" + nullableString(replayPackage.cameraId()) + ","
+                + "\"label\":" + nullableString(replayPackage.label()) + ","
+                + "\"startedAt\":" + nullableString(replayPackage.startedAt()) + ","
+                + "\"finishedAt\":" + nullableString(replayPackage.finishedAt()) + ","
+                + "\"frameCount\":" + replayPackage.frameCount() + ","
+                + "\"deltaCount\":" + replayPackage.deltaCount() + ","
+                + "\"visibility\":" + nullableString(replayPackage.visibility()) + ","
+                + "\"createdAt\":" + nullableString(replayPackage.createdAt().toString())
+                + (includeManifest ? ",\"manifest\":" + replayPackage.manifestJson() : "")
+                + "}";
+    }
+
+    private String replayFileJson(CentralReplayFile file, boolean includeUrl) {
+        return "{"
+                + "\"fileType\":" + nullableString(file.fileType()) + ","
+                + "\"relativePath\":" + nullableString(file.relativePath()) + ","
+                + "\"contentType\":" + nullableString(file.contentType()) + ","
+                + "\"sizeBytes\":" + file.sizeBytes()
+                + (includeUrl ? ",\"url\":" + nullableString("/api/central/camera-replay-packages/"
+                        + file.packageId() + "/files/" + file.relativePath()) : "")
+                + "}";
+    }
+
+    private int optionalJsonInteger(Map<String, Object> object, String fieldName, int fallback) {
+        Object value = object.get(fieldName);
+        if (value == null) {
+            return fallback;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        throw new IllegalArgumentException(fieldName + " must be a number");
+    }
+
+    private String contentType(String relativePath) {
+        String lower = relativePath.toLowerCase(java.util.Locale.ROOT);
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (lower.endsWith(".png")) {
+            return "image/png";
+        }
+        if (lower.endsWith(".json")) {
+            return "application/json; charset=utf-8";
+        }
+        return "application/octet-stream";
+    }
+
+    private void ensureReplayService() {
+        if (replayService == null) {
+            throw new IllegalStateException("central replay service is not configured");
+        }
+    }
+
     private List<?> arrayField(Map<String, Object> object, String fieldName) {
         Object value = object.get(fieldName);
         if (!(value instanceof List<?> list)) {
@@ -428,6 +695,15 @@ public final class CentralApiServer {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private record ExtractedReplayZip(
+            String manifestJson,
+            List<ExtractedReplayFile> extractedFiles,
+            List<CentralReplayPackageService.UploadedReplayFile> files) {
+    }
+
+    private record ExtractedReplayFile(String relativePath, byte[] bytes) {
     }
 
     @FunctionalInterface
