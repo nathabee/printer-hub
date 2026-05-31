@@ -143,6 +143,15 @@ public final class CentralFarmService {
                 .toList();
     }
 
+    public CentralFarmOverview getFarm(String farmId) {
+        require(farmId, "farmId");
+        CentralFarm farm = store.findByFarmId(farmId.trim());
+        if (farm == null) {
+            throw new FarmRejectedException("unknown_farm");
+        }
+        return new CentralFarmOverview(farm, derivedStatus(farm));
+    }
+
     public String derivedStatus(CentralFarm farm) {
         if (!farm.enabled()) {
             return "DISABLED";

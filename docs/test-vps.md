@@ -8,6 +8,7 @@ It covers only:
 - central mode startup
 - central farm registration
 - heartbeat
+- single-farm read
 - overview
 - read-only dashboard
 - central database initialization
@@ -89,9 +90,18 @@ Expected:
 
 ## Register Farm
 
+If the central runtime was started with `CENTRAL_REGISTRATION_TOKEN` or
+`-Dspaghettichef.central.registrationToken=...`, add this header to the
+registration request:
+
+```text
+X-SpaghettiChef-Registration-Token: <token>
+```
+
 ```bash
 curl -s -X POST http://localhost:18180/api/central/farms/register \
   -H "Content-Type: application/json" \
+  -H "X-SpaghettiChef-Registration-Token: <token-if-configured>" \
   -d '{
     "runtimeInstanceId": "manual-runtime-001",
     "farmName": "Manual Test Farm",
@@ -146,6 +156,25 @@ HTTP 200
 accepted is true
 lastSeenAt is set
 summary counters are updated
+```
+
+---
+
+## Get One Farm
+
+Replace `<farmId>` with the value from registration:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>
+```
+
+Expected:
+
+```text
+HTTP 200
+response contains farmId
+response contains current online/stale/offline status
+response does not contain farmSecret
 ```
 
 ---

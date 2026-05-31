@@ -3869,6 +3869,21 @@ central read-only viewer on :18180
 manual curl registration/heartbeat simulates the future local outbound push
 ```
 
+### 1.0.1 — Farm Registration And Heartbeat
+
+status: done
+
+Goals:
+
+Complete the first central farm identity API:
+
+* stable `farmId` assigned by the VPS
+* stable `runtimeInstanceId` used for re-registration
+* heartbeat validation with `farmSecret`
+* latest summary counters and `lastSeenAt`
+* online/stale/offline/disabled overview state
+* single-farm read endpoint without returning `farmSecret`
+
 ### 1.0.x Next Slices
 
 Planned:

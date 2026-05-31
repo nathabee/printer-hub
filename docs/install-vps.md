@@ -115,14 +115,24 @@ The two runtimes must use different ports and different database files.
 
 ## Manual Registration Smoke Test
 
-The 1.0.0 first slice does not include the local farm push client yet. Use
+The 1.0.1 slice does not include the local farm push client yet. Use
 `curl` to simulate the local farm pushing selected data to central.
+
+If `CENTRAL_REGISTRATION_TOKEN` or
+`-Dspaghettichef.central.registrationToken=...` is configured, registration
+requests must include one of:
+
+```text
+X-SpaghettiChef-Registration-Token: <token>
+Authorization: Bearer <token>
+```
 
 Register:
 
 ```bash
 curl -s -X POST http://localhost:18180/api/central/farms/register \
   -H "Content-Type: application/json" \
+  -H "X-SpaghettiChef-Registration-Token: <token-if-configured>" \
   -d '{
     "runtimeInstanceId": "vps-test-runtime-001",
     "farmName": "VPS Test Farm",
@@ -164,6 +174,12 @@ Overview:
 curl -s http://localhost:18180/api/central/farms/overview
 ```
 
+Single farm:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>
+```
+
 ---
 
 ## Container Package
@@ -196,6 +212,7 @@ docker run --rm \
   -p 8080:8080 \
   -e SPAGHETTICHEF_MODE=central \
   -e CENTRAL_MODE=true \
+  -e CENTRAL_REGISTRATION_TOKEN=change-me \
   -e JAVA_OPTS="-Dspaghettichef.central.databaseFile=/data/spaghettichef-central.db" \
   -v "$PWD/data:/data" \
   spaghettichef-central-vps

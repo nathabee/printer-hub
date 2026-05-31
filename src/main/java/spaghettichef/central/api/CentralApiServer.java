@@ -24,16 +24,26 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class CentralApiServer {
+    public static final String REGISTRATION_TOKEN_PROPERTY = "spaghettichef.central.registrationToken";
+    public static final String REGISTRATION_TOKEN_ENV = "CENTRAL_REGISTRATION_TOKEN";
+    public static final String REGISTRATION_TOKEN_HEADER = "X-SpaghettiChef-Registration-Token";
+
     private final int port;
     private final CentralFarmService farmService;
+    private final String registrationToken;
     private HttpServer server;
 
     public CentralApiServer(int port, CentralFarmService farmService) {
+        this(port, farmService, null);
+    }
+
+    public CentralApiServer(int port, CentralFarmService farmService, String registrationToken) {
         if (port < RuntimeDefaults.MIN_PORT || port > RuntimeDefaults.MAX_PORT) {
             throw new IllegalArgumentException(OperationMessages.PORT_MUST_BE_IN_VALID_RANGE);
         }
         this.port = port;
         this.farmService = farmService;
+        this.registrationToken = blankToNull(registrationToken);
     }
 
     public void start() {
@@ -94,6 +104,12 @@ public final class CentralApiServer {
             return;
         }
 
+        Matcher farm = Pattern.compile("^/api/central/farms/([^/]+)$").matcher(path);
+        if (farm.matches()) {
+            handleGetFarm(exchange, farm.group(1));
+            return;
+        }
+
         if ("/api/central/farms".equals(path) || "/api/central/farms/".equals(path)) {
             handleOverview(exchange);
             return;
@@ -107,6 +123,7 @@ public final class CentralApiServer {
             sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
             return;
         }
+        validateRegistrationToken(exchange);
         String body = readBody(exchange);
         CentralFarm farm = farmService.register(new FarmRegistrationRequest(
                 requiredJsonString(body, "runtimeInstanceId"),
@@ -139,6 +156,16 @@ public final class CentralApiServer {
                 optionalJsonInteger(body, "spaghettiAlertCount", 0),
                 optionalJsonString(body, "message", null)));
         sendJson(exchange, 200, "{\"accepted\":true,\"farm\":" + farmJson(farm, false) + "}");
+    }
+
+    private void handleGetFarm(HttpExchange exchange, String farmId) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+            return;
+        }
+        CentralFarmOverview overview = farmService.getFarm(farmId);
+        sendJson(exchange, 200, "{\"status\":\"" + escapeJson(overview.status()) + "\",\"farm\":"
+                + farmJson(overview.farm(), false) + "}");
     }
 
     private void handleOverview(HttpExchange exchange) throws IOException {
@@ -232,6 +259,22 @@ public final class CentralApiServer {
         return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
     }
 
+    private void validateRegistrationToken(HttpExchange exchange) {
+        if (registrationToken == null) {
+            return;
+        }
+        String provided = blankToNull(exchange.getRequestHeaders().getFirst(REGISTRATION_TOKEN_HEADER));
+        if (provided == null) {
+            String authorization = blankToNull(exchange.getRequestHeaders().getFirst("Authorization"));
+            if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
+                provided = blankToNull(authorization.substring(7));
+            }
+        }
+        if (!registrationToken.equals(provided)) {
+            throw new CentralFarmService.FarmRejectedException("registration_token_mismatch");
+        }
+    }
+
     private String requiredJsonString(String body, String fieldName) {
         String value = optionalJsonString(body, fieldName, null);
         if (value == null || value.isBlank()) {
@@ -312,6 +355,10 @@ public final class CentralApiServer {
             return "";
         }
         return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     @FunctionalInterface

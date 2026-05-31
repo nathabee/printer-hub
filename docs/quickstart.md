@@ -205,6 +205,7 @@ Register a farm:
 ```bash
 curl -s -X POST http://localhost:18180/api/central/farms/register \
   -H "Content-Type: application/json" \
+  -H "X-SpaghettiChef-Registration-Token: <token-if-configured>" \
   -d '{
     "runtimeInstanceId": "local-dev-runtime-001",
     "farmName": "Local Dev Farm",
@@ -212,6 +213,10 @@ curl -s -X POST http://localhost:18180/api/central/farms/register \
     "hostname": "local-dev"
   }'
 ```
+
+The registration-token header is only required when central was started with
+`CENTRAL_REGISTRATION_TOKEN` or
+`-Dspaghettichef.central.registrationToken=...`.
 
 Save the returned `farmId` and `farmSecret`, then send a heartbeat:
 
@@ -237,6 +242,12 @@ Check central overview:
 
 ```bash
 curl -s http://localhost:18180/api/central/farms/overview
+```
+
+Check one farm:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>
 ```
 
 ---

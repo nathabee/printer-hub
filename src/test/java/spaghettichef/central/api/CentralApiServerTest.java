@@ -46,6 +46,56 @@ class CentralApiServerTest {
     }
 
     @Test
+    void registrationTokenIsRequiredWhenConfigured() throws Exception {
+        TestContext context = createContext("register-token.db", "secret-token");
+        try {
+            HttpResponse<String> missing = context.request("POST", "/api/central/farms/register", "{"
+                    + "\"runtimeInstanceId\":\"runtime-1\","
+                    + "\"farmName\":\"Home Farm\""
+                    + "}");
+
+            assertEquals(403, missing.statusCode());
+            assertTrue(missing.body().contains("registration_token_mismatch"));
+
+            HttpResponse<String> accepted = context.request(
+                    "POST",
+                    "/api/central/farms/register",
+                    "{"
+                            + "\"runtimeInstanceId\":\"runtime-1\","
+                            + "\"farmName\":\"Home Farm\""
+                            + "}",
+                    CentralApiServer.REGISTRATION_TOKEN_HEADER,
+                    "secret-token");
+
+            assertEquals(201, accepted.statusCode());
+            assertTrue(accepted.body().contains("\"farmId\":\"farm-"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void registrationTokenCanBeSentAsBearerToken() throws Exception {
+        TestContext context = createContext("register-bearer-token.db", "secret-token");
+        try {
+            HttpResponse<String> response = context.request(
+                    "POST",
+                    "/api/central/farms/register",
+                    "{"
+                            + "\"runtimeInstanceId\":\"runtime-1\","
+                            + "\"farmName\":\"Home Farm\""
+                            + "}",
+                    "Authorization",
+                    "Bearer secret-token");
+
+            assertEquals(201, response.statusCode());
+            assertTrue(response.body().contains("\"farmId\":\"farm-"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
     void repeatedRegistrationBySameRuntimeInstanceIdDoesNotCreateDuplicate() throws Exception {
         TestContext context = createContext("register-repeat.db");
         try {
@@ -162,6 +212,42 @@ class CentralApiServerTest {
     }
 
     @Test
+    void getFarmReturnsOneFarmWithoutSecret() throws Exception {
+        TestContext context = createContext("get-farm.db");
+        try {
+            Registration registration = registration(context);
+            heartbeat(context, registration, "runtime-1", """
+                    "printerCount":3,
+                    "cameraCount":2,
+                    "activePrintCount":1
+                    """);
+
+            HttpResponse<String> response = context.get("/api/central/farms/" + registration.farmId());
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"status\":\"ONLINE\""));
+            assertTrue(response.body().contains("\"farmId\":\"" + registration.farmId() + "\""));
+            assertTrue(response.body().contains("\"printerCount\":3"));
+            assertFalse(response.body().contains("farmSecret"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void getUnknownFarmIsRejected() throws Exception {
+        TestContext context = createContext("get-farm-missing.db");
+        try {
+            HttpResponse<String> response = context.get("/api/central/farms/farm-missing");
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("unknown_farm"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
     void localDatabasePropertyDoesNotConfigureCentralDatabase() throws Exception {
         Path localDb = tempDir.resolve("local.db");
         Path centralDb = tempDir.resolve("central.db");
@@ -207,6 +293,10 @@ class CentralApiServerTest {
     }
 
     private TestContext createContext(String dbName) throws Exception {
+        return createContext(dbName, null);
+    }
+
+    private TestContext createContext(String dbName, String registrationToken) throws Exception {
         System.setProperty(CentralDatabaseConfig.CENTRAL_DATABASE_FILE_PROPERTY, tempDir.resolve(dbName).toString());
         new CentralDatabaseInitializer().initialize();
         int port = findFreePort();
@@ -214,7 +304,8 @@ class CentralApiServerTest {
                 port,
                 new CentralFarmService(new CentralFarmStore(), java.time.Clock.fixed(
                         java.time.Instant.parse("2020-01-01T00:10:00Z"),
-                        java.time.ZoneOffset.UTC)));
+                        java.time.ZoneOffset.UTC)),
+                registrationToken);
         server.start();
         return new TestContext(port, server);
     }
@@ -300,6 +391,15 @@ class CentralApiServerTest {
         }
 
         private HttpResponse<String> request(String method, String path, String body) throws Exception {
+            return request(method, path, body, null, null);
+        }
+
+        private HttpResponse<String> request(
+                String method,
+                String path,
+                String body,
+                String headerName,
+                String headerValue) throws Exception {
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create("http://localhost:" + port + path));
             if (body == null) {
@@ -307,6 +407,9 @@ class CentralApiServerTest {
             } else {
                 builder.method(method, HttpRequest.BodyPublishers.ofString(body))
                         .header("Content-Type", "application/json");
+            }
+            if (headerName != null && headerValue != null) {
+                builder.header(headerName, headerValue);
             }
             return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         }
