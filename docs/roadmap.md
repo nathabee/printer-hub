@@ -3900,12 +3900,29 @@ snapshot to central:
 * unsafe fields rejected before storage
 * structure read endpoint does not return `farmSecret`
 
+### 1.0.3 — Camera Job Replay Package Upload
+
+status: done
+
+Goals:
+
+Allow a registered farm to upload selected camera job replay packages as zip
+archives that central stores and replays from its own storage:
+
+* `POST /api/central/farms/{farmId}/camera-replay-packages`
+* `GET /api/central/farms/{farmId}/camera-replay-packages`
+* `GET /api/central/camera-replay-packages/{packageId}`
+* `GET /api/central/camera-replay-packages/{packageId}/files/{relativePath}`
+* replay metadata persisted in central-only replay tables
+* replay files stored under the central replay storage directory
+* uploaded package validation by `farmId`, `runtimeInstanceId`, and `farmSecret`
+* no live frame request or inbound call to the local farm
+
 ### 1.0.x Next Slices
 
 Planned:
 
 * local-to-central push client settings
-* selected camera replay package upload
 * read-only central replay listing/player
 * VPS container deployment hardening
 * reverse proxy deployment documentation

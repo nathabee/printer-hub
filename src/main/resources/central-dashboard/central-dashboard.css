@@ -28,6 +28,16 @@ h1 {
   margin: 0;
 }
 
+h2 {
+  font-size: 16px;
+  margin: 24px 0 10px;
+}
+
+h3 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -49,4 +59,34 @@ th {
 
 .status {
   font-weight: 700;
+}
+
+.replay-list {
+  display: grid;
+  gap: 10px;
+}
+
+.replay-item {
+  background: white;
+  border: 1px solid #d8dde4;
+  padding: 12px;
+}
+
+.replay-item p,
+.empty {
+  margin: 0;
+  color: #56616f;
+  font-size: 14px;
+}
+
+.replay-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.replay-links a {
+  color: #0d5ea6;
+  font-size: 13px;
 }

@@ -7,8 +7,11 @@ import spaghettichef.central.persistence.CentralDatabase;
 import spaghettichef.central.persistence.CentralDatabaseConfig;
 import spaghettichef.central.persistence.CentralDatabaseInitializer;
 import spaghettichef.central.persistence.CentralFarmStore;
+import spaghettichef.central.persistence.CentralReplayPackageStore;
 import spaghettichef.central.service.CentralFarmService;
+import spaghettichef.central.service.CentralReplayPackageService;
 
+import java.io.ByteArrayOutputStream;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,6 +23,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -360,6 +365,119 @@ class CentralApiServerTest {
     }
 
     @Test
+    void replayPackageUploadStoresMetadataAndFiles() throws Exception {
+        TestContext context = createContext("replay.db");
+        try {
+            Registration registration = registration(context);
+            byte[] zip = replayZip(registration, "runtime-1");
+
+            HttpResponse<String> upload = context.requestBytes(
+                    "POST",
+                    "/api/central/farms/" + registration.farmId() + "/camera-replay-packages",
+                    zip,
+                    "X-SpaghettiChef-Farm-Secret",
+                    registration.farmSecret());
+
+            assertEquals(201, upload.statusCode());
+            assertTrue(upload.body().contains("\"accepted\":true"));
+            assertTrue(upload.body().contains("\"cameraJobId\":\"local-job-42\""));
+            assertFalse(upload.body().contains("farmSecret"));
+            String packageId = extractJsonString(upload.body(), "packageId");
+            assertNotNull(packageId);
+
+            HttpResponse<String> list = context.get(
+                    "/api/central/farms/" + registration.farmId() + "/camera-replay-packages");
+            assertEquals(200, list.statusCode());
+            assertTrue(list.body().contains(packageId));
+            assertTrue(list.body().contains("\"frameCount\":2"));
+
+            HttpResponse<String> detail = context.get("/api/central/camera-replay-packages/" + packageId);
+            assertEquals(200, detail.statusCode());
+            assertTrue(detail.body().contains("\"manifest\":"));
+            assertTrue(detail.body().contains("\"relativePath\":\"snapshots/000001.jpg\""));
+            assertTrue(detail.body().contains("\"url\":\"/api/central/camera-replay-packages/" + packageId
+                    + "/files/snapshots/000001.jpg\""));
+            assertFalse(detail.body().contains("farmSecret"));
+
+            HttpResponse<String> frame = context.get(
+                    "/api/central/camera-replay-packages/" + packageId + "/files/snapshots/000001.jpg");
+            assertEquals(200, frame.statusCode());
+            assertEquals("fake-jpeg-frame-1", frame.body());
+            assertTrue(java.nio.file.Files.exists(tempDir.resolve("replay-storage")
+                    .resolve(packageId)
+                    .resolve("snapshots/000001.jpg")));
+            assertEquals(1, countReplayPackages());
+            assertTrue(countReplayFiles(packageId) >= 3);
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void replayUploadRejectsUnknownFarm() throws Exception {
+        TestContext context = createContext("replay-unknown.db");
+        try {
+            Registration registration = new Registration("farm-missing", "secret");
+            HttpResponse<String> response = context.requestBytes(
+                    "POST",
+                    "/api/central/farms/farm-missing/camera-replay-packages",
+                    replayZip(registration, "runtime-1"),
+                    "X-SpaghettiChef-Farm-Secret",
+                    "secret");
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("unknown_farm"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void replayUploadRejectsMismatchedRuntimeInstance() throws Exception {
+        TestContext context = createContext("replay-mismatch.db");
+        try {
+            Registration registration = registration(context);
+            HttpResponse<String> response = context.requestBytes(
+                    "POST",
+                    "/api/central/farms/" + registration.farmId() + "/camera-replay-packages",
+                    replayZip(registration, "runtime-other"),
+                    "X-SpaghettiChef-Farm-Secret",
+                    registration.farmSecret());
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("runtime_instance_mismatch"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void replayUploadRejectsDisabledFarm() throws Exception {
+        TestContext context = createContext("replay-disabled.db");
+        try {
+            Registration registration = registration(context);
+            try (Connection connection = CentralDatabase.getConnection();
+                    PreparedStatement statement = connection.prepareStatement(
+                            "UPDATE central_farm SET enabled = 0 WHERE farm_id = ?")) {
+                statement.setString(1, registration.farmId());
+                statement.executeUpdate();
+            }
+
+            HttpResponse<String> response = context.requestBytes(
+                    "POST",
+                    "/api/central/farms/" + registration.farmId() + "/camera-replay-packages",
+                    replayZip(registration, "runtime-1"),
+                    "X-SpaghettiChef-Farm-Secret",
+                    registration.farmSecret());
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("farm_disabled"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
     void localDatabasePropertyDoesNotConfigureCentralDatabase() throws Exception {
         Path localDb = tempDir.resolve("local.db");
         Path centralDb = tempDir.resolve("central.db");
@@ -412,11 +530,16 @@ class CentralApiServerTest {
         System.setProperty(CentralDatabaseConfig.CENTRAL_DATABASE_FILE_PROPERTY, tempDir.resolve(dbName).toString());
         new CentralDatabaseInitializer().initialize();
         int port = findFreePort();
+        CentralFarmStore farmStore = new CentralFarmStore();
         CentralApiServer server = new CentralApiServer(
                 port,
-                new CentralFarmService(new CentralFarmStore(), java.time.Clock.fixed(
+                new CentralFarmService(farmStore, java.time.Clock.fixed(
                         java.time.Instant.parse("2020-01-01T00:10:00Z"),
                         java.time.ZoneOffset.UTC)),
+                new CentralReplayPackageService(farmStore, new CentralReplayPackageStore(), java.time.Clock.fixed(
+                        java.time.Instant.parse("2020-01-01T00:10:00Z"),
+                        java.time.ZoneOffset.UTC)),
+                tempDir.resolve("replay-storage"),
                 registrationToken);
         server.start();
         return new TestContext(port, server);
@@ -473,6 +596,56 @@ class CentralApiServerTest {
             assertTrue(resultSet.next());
             return resultSet.getInt(1);
         }
+    }
+
+    private int countReplayPackages() throws Exception {
+        try (Connection connection = CentralDatabase.getConnection();
+                PreparedStatement statement = connection.prepareStatement("SELECT COUNT(*) FROM central_replay_package");
+                ResultSet resultSet = statement.executeQuery()) {
+            assertTrue(resultSet.next());
+            return resultSet.getInt(1);
+        }
+    }
+
+    private int countReplayFiles(String packageId) throws Exception {
+        try (Connection connection = CentralDatabase.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT COUNT(*) FROM central_replay_file WHERE package_id = ?")) {
+            statement.setString(1, packageId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertTrue(resultSet.next());
+                return resultSet.getInt(1);
+            }
+        }
+    }
+
+    private byte[] replayZip(Registration registration, String runtimeInstanceId) throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(output)) {
+            addZipEntry(zip, "manifest.json", "{"
+                    + "\"farmId\":\"" + registration.farmId() + "\","
+                    + "\"runtimeInstanceId\":\"" + runtimeInstanceId + "\","
+                    + "\"cameraJobId\":\"local-job-42\","
+                    + "\"printerId\":\"printer-1\","
+                    + "\"cameraId\":\"camera-1\","
+                    + "\"startedAt\":\"2026-05-31T10:00:00Z\","
+                    + "\"finishedAt\":\"2026-05-31T10:15:00Z\","
+                    + "\"frameCount\":2,"
+                    + "\"deltaCount\":1,"
+                    + "\"label\":\"spaghetti\","
+                    + "\"source\":\"local-upload\""
+                    + "}");
+            addZipEntry(zip, "snapshots/000001.jpg", "fake-jpeg-frame-1");
+            addZipEntry(zip, "snapshots/000002.jpg", "fake-jpeg-frame-2");
+            addZipEntry(zip, "deltas/000001_000002_delta.jpg", "fake-delta-frame");
+        }
+        return output.toByteArray();
+    }
+
+    private void addZipEntry(ZipOutputStream zip, String path, String content) throws Exception {
+        zip.putNextEntry(new ZipEntry(path));
+        zip.write(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        zip.closeEntry();
     }
 
     private String storedStructureJson(String farmId) throws Exception {
@@ -563,6 +736,22 @@ class CentralApiServerTest {
                 builder.method(method, HttpRequest.BodyPublishers.ofString(body))
                         .header("Content-Type", "application/json");
             }
+            if (headerName != null && headerValue != null) {
+                builder.header(headerName, headerValue);
+            }
+            return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        }
+
+        private HttpResponse<String> requestBytes(
+                String method,
+                String path,
+                byte[] body,
+                String headerName,
+                String headerValue) throws Exception {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + path))
+                    .method(method, HttpRequest.BodyPublishers.ofByteArray(body))
+                    .header("Content-Type", "application/zip");
             if (headerName != null && headerValue != null) {
                 builder.header(headerName, headerValue);
             }
