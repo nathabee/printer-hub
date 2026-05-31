@@ -205,6 +205,7 @@ Register a farm:
 ```bash
 curl -s -X POST http://localhost:18180/api/central/farms/register \
   -H "Content-Type: application/json" \
+  -H "X-SpaghettiChef-Registration-Token: <token-if-configured>" \
   -d '{
     "runtimeInstanceId": "local-dev-runtime-001",
     "farmName": "Local Dev Farm",
@@ -212,6 +213,10 @@ curl -s -X POST http://localhost:18180/api/central/farms/register \
     "hostname": "local-dev"
   }'
 ```
+
+The registration-token header is only required when central was started with
+`CENTRAL_REGISTRATION_TOKEN` or
+`-Dspaghettichef.central.registrationToken=...`.
 
 Save the returned `farmId` and `farmSecret`, then send a heartbeat:
 
@@ -237,6 +242,46 @@ Check central overview:
 
 ```bash
 curl -s http://localhost:18180/api/central/farms/overview
+```
+
+Check one farm:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>
+```
+
+Push a sanitized printer/camera structure snapshot:
+
+```bash
+curl -s -X POST http://localhost:18180/api/central/farms/<farmId>/structure \
+  -H "Content-Type: application/json" \
+  -d '{
+    "runtimeInstanceId": "local-dev-runtime-001",
+    "farmSecret": "<farmSecret>",
+    "generatedAt": "2026-05-31T10:30:00Z",
+    "printers": [
+      {
+        "printerId": "p1",
+        "displayName": "Local Dev Printer",
+        "enabled": true,
+        "status": "IDLE"
+      }
+    ],
+    "cameras": [
+      {
+        "cameraId": "cam1",
+        "displayName": "Front Camera",
+        "printerId": "p1",
+        "enabled": true
+      }
+    ]
+  }'
+```
+
+Read it back:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>/structure
 ```
 
 ---

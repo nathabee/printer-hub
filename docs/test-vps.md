@@ -8,6 +8,8 @@ It covers only:
 - central mode startup
 - central farm registration
 - heartbeat
+- single-farm read
+- structure snapshot push/read
 - overview
 - read-only dashboard
 - central database initialization
@@ -89,9 +91,18 @@ Expected:
 
 ## Register Farm
 
+If the central runtime was started with `CENTRAL_REGISTRATION_TOKEN` or
+`-Dspaghettichef.central.registrationToken=...`, add this header to the
+registration request:
+
+```text
+X-SpaghettiChef-Registration-Token: <token>
+```
+
 ```bash
 curl -s -X POST http://localhost:18180/api/central/farms/register \
   -H "Content-Type: application/json" \
+  -H "X-SpaghettiChef-Registration-Token: <token-if-configured>" \
   -d '{
     "runtimeInstanceId": "manual-runtime-001",
     "farmName": "Manual Test Farm",
@@ -147,6 +158,83 @@ accepted is true
 lastSeenAt is set
 summary counters are updated
 ```
+
+---
+
+## Get One Farm
+
+Replace `<farmId>` with the value from registration:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>
+```
+
+Expected:
+
+```text
+HTTP 200
+response contains farmId
+response contains current online/stale/offline status
+response does not contain farmSecret
+```
+
+---
+
+## Push Structure Snapshot
+
+Replace `<farmId>` and `<farmSecret>` with values from registration:
+
+```bash
+curl -s -X POST http://localhost:18180/api/central/farms/<farmId>/structure \
+  -H "Content-Type: application/json" \
+  -d '{
+    "runtimeInstanceId": "manual-runtime-001",
+    "farmSecret": "<farmSecret>",
+    "generatedAt": "2026-05-31T10:30:00Z",
+    "printers": [
+      {
+        "printerId": "p1",
+        "displayName": "Ender 3",
+        "enabled": true,
+        "status": "PRINTING"
+      }
+    ],
+    "cameras": [
+      {
+        "cameraId": "cam1",
+        "displayName": "Front Camera",
+        "printerId": "p1",
+        "enabled": true
+      }
+    ]
+  }'
+```
+
+Expected:
+
+```text
+HTTP 200
+accepted is true
+structureUpdatedAt is set
+```
+
+Read it back:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>/structure
+```
+
+Expected:
+
+```text
+response contains printerId p1
+response contains cameraId cam1
+response does not contain farmSecret
+```
+
+Structure payloads are rejected if they contain unsafe fields such as secrets,
+tokens, local file paths, serial port names, local LAN IP addresses, or command
+and control action fields.
 
 ---
 

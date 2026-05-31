@@ -828,14 +828,55 @@ EOF
                         \\"message\\": \\"ok\\"
                       }" > target/central-heartbeat.json
 
+                    curl -fsS -X POST "http://localhost:${CENTRAL_PORT}/api/central/farms/${FARM_ID}/structure" \
+                      -H "Content-Type: application/json" \
+                      -d "{
+                        \\"runtimeInstanceId\\": \\"ci-runtime-001\\",
+                        \\"farmSecret\\": \\"${FARM_SECRET}\\",
+                        \\"generatedAt\\": \\"2026-05-31T10:30:00Z\\",
+                        \\"printers\\": [
+                          {
+                            \\"printerId\\": \\"printer-1\\",
+                            \\"displayName\\": \\"CI Printer\\",
+                            \\"enabled\\": true,
+                            \\"status\\": \\"PRINTING\\"
+                          }
+                        ],
+                        \\"cameras\\": [
+                          {
+                            \\"cameraId\\": \\"camera-1\\",
+                            \\"displayName\\": \\"CI Camera\\",
+                            \\"printerId\\": \\"printer-1\\",
+                            \\"enabled\\": true
+                          }
+                        ]
+                      }" > target/central-structure-push.json
+
                     curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/farms/overview" \
                       > target/central-overview.json
+                    curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/farms/${FARM_ID}" \
+                      > target/central-farm.json
+                    curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/farms/${FARM_ID}/structure" \
+                      > target/central-structure.json
                     curl -fsS "http://localhost:${CENTRAL_PORT}/central-dashboard" \
                       > target/central-dashboard.html
 
                     grep -q '"accepted":true' target/central-heartbeat.json
+                    grep -q '"accepted":true' target/central-structure-push.json
                     grep -q '"status":"ONLINE"' target/central-overview.json
                     grep -q '"printerCount":2' target/central-overview.json
+                    grep -q '"status":"ONLINE"' target/central-farm.json
+                    grep -q '"printerCount":2' target/central-farm.json
+                    grep -q '"printerId":"printer-1"' target/central-structure.json
+                    grep -q '"cameraId":"camera-1"' target/central-structure.json
+                    if grep -q 'farmSecret' target/central-structure.json; then
+                      echo "Structure read endpoint must not return farmSecret"
+                      exit 1
+                    fi
+                    if grep -q 'farmSecret' target/central-farm.json; then
+                      echo "Single-farm read endpoint must not return farmSecret"
+                      exit 1
+                    fi
                     grep -q 'SpaghettiChef Central' target/central-dashboard.html
 
                     sqlite3 "${CENTRAL_DB_FILE}" '.tables' > target/central-db-tables.txt
@@ -996,6 +1037,7 @@ docker build -f Dockerfile -t spaghettichef-central-vps .
 docker run --rm -p 8080:8080 \
   -e SPAGHETTICHEF_MODE=central \
   -e CENTRAL_MODE=true \
+  -e CENTRAL_REGISTRATION_TOKEN=change-me \
   -v "$PWD/data:/data" \
   spaghettichef-central-vps
 ```

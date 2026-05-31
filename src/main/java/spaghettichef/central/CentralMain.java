@@ -42,7 +42,16 @@ public final class CentralMain {
         CentralDatabaseInitializer initializer = new CentralDatabaseInitializer();
         initializer.initialize();
         CentralFarmService service = new CentralFarmService(new CentralFarmStore());
-        return new CentralApiServer(apiPort, service);
+        return new CentralApiServer(apiPort, service, readRegistrationToken());
+    }
+
+    private static String readRegistrationToken() {
+        String propertyValue = System.getProperty(CentralApiServer.REGISTRATION_TOKEN_PROPERTY);
+        if (propertyValue != null && !propertyValue.isBlank()) {
+            return propertyValue.trim();
+        }
+        String envValue = System.getenv(CentralApiServer.REGISTRATION_TOKEN_ENV);
+        return envValue == null || envValue.isBlank() ? null : envValue.trim();
     }
 
     private static int readIntProperty(String key, int defaultValue) {

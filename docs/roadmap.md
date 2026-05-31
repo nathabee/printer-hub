@@ -3869,12 +3869,42 @@ central read-only viewer on :18180
 manual curl registration/heartbeat simulates the future local outbound push
 ```
 
+### 1.0.1 — Farm Registration And Heartbeat
+
+status: done
+
+Goals:
+
+Complete the first central farm identity API:
+
+* stable `farmId` assigned by the VPS
+* stable `runtimeInstanceId` used for re-registration
+* heartbeat validation with `farmSecret`
+* latest summary counters and `lastSeenAt`
+* online/stale/offline/disabled overview state
+* single-farm read endpoint without returning `farmSecret`
+
+### 1.0.2 — Farm Structure Snapshot
+
+status: done
+
+Goals:
+
+Allow a registered farm to push the latest sanitized read-only structure
+snapshot to central:
+
+* `POST /api/central/farms/{farmId}/structure`
+* `GET /api/central/farms/{farmId}/structure`
+* validation by `farmId`, `runtimeInstanceId`, and `farmSecret`
+* latest structure JSON stored on the central farm record
+* unsafe fields rejected before storage
+* structure read endpoint does not return `farmSecret`
+
 ### 1.0.x Next Slices
 
 Planned:
 
 * local-to-central push client settings
-* farm structure snapshot push
 * selected camera replay package upload
 * read-only central replay listing/player
 * VPS container deployment hardening

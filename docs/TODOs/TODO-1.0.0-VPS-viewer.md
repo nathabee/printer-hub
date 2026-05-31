@@ -503,7 +503,7 @@ The local and central code paths must not import each other. Shared code should 
 
 ## Status
 
-Planned.
+Done.
 
 ## Purpose
 
@@ -601,7 +601,7 @@ This version does not implement:
 
 ## Status
 
-Planned.
+Done.
 
 ## Purpose
 
@@ -796,7 +796,7 @@ This version does not implement:
 
 ## Status
 
-Planned.
+Done.
 
 ## Purpose
 
