@@ -1144,7 +1144,7 @@ The 1.0.x dashboard must not include buttons or endpoints for:
 
 ## Status
 
-Planned.
+Done.
 
 ## Purpose
 

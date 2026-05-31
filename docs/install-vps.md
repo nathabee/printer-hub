@@ -248,9 +248,22 @@ docker run --rm \
   -e CENTRAL_MODE=true \
   -e CENTRAL_REGISTRATION_TOKEN=change-me \
   -e CENTRAL_REPLAY_STORAGE_DIR=/data/replay \
-  -e JAVA_OPTS="-Dspaghettichef.central.databaseFile=/data/spaghettichef-central.db" \
   -v "$PWD/data:/data" \
   spaghettichef-central-vps
+```
+
+The container defaults to:
+
+```text
+HTTP port: 8080
+central database: /data/spaghettichef-central.db
+replay storage: /data/replay
+```
+
+Override with `JAVA_OPTS` if needed, for example:
+
+```bash
+-e JAVA_OPTS="-Dspaghettichef.api.port=8080 -Dspaghettichef.central.databaseFile=/data/custom-central.db"
 ```
 
 Open:

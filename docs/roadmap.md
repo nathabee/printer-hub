@@ -3933,13 +3933,28 @@ Expose a safer central dashboard that reads only central APIs:
 * uploaded-frame replay player
 * no printer, camera, job, shell, upload, edit, delete, or local-runtime actions
 
+### 1.0.5 — Containerized VPS Deployment
+
+status: done
+
+Goals:
+
+Package and document the central read-only runtime as a VPS container:
+
+* central VPS shaded JAR with `spaghettichef.central.CentralMain`
+* `Dockerfile.central`
+* container default HTTP port `8080`
+* mounted `/data` volume for SQLite database and replay storage
+* central database path externalized through `JAVA_OPTS`
+* replay storage path externalized through `CENTRAL_REPLAY_STORAGE_DIR`
+* central health endpoint smoke-tested in Jenkins
+* reverse proxy deployment shape documented
+
 ### 1.0.x Next Slices
 
 Planned:
 
 * local-to-central push client settings
-* VPS container deployment hardening
-* reverse proxy deployment documentation
 
 Not in 1.0.x:
 

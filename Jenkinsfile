@@ -1087,9 +1087,9 @@ docker run --rm -p 8080:8080 \
   spaghettichef-central-vps
 ```
 
-Use `-Dspaghettichef.central.databaseFile=/data/spaghettichef-central.db`
-through `JAVA_OPTS` to place the central database on a persistent volume.
-Replay package files are stored under `CENTRAL_REPLAY_STORAGE_DIR`.
+The container defaults to HTTP port `8080`, central database
+`/data/spaghettichef-central.db`, and replay package files under
+`CENTRAL_REPLAY_STORAGE_DIR`. Override with `JAVA_OPTS` if needed.
 EOF
         '''
 
