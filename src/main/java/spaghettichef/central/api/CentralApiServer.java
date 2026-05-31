@@ -11,6 +11,7 @@ import spaghettichef.central.service.CentralFarmOverview;
 import spaghettichef.central.service.CentralFarmService;
 import spaghettichef.central.service.FarmHeartbeatRequest;
 import spaghettichef.central.service.FarmRegistrationRequest;
+import spaghettichef.central.service.FarmStructureSnapshotRequest;
 import spaghettichef.shared.config.RuntimeDefaults;
 
 import java.io.IOException;
@@ -104,6 +105,12 @@ public final class CentralApiServer {
             return;
         }
 
+        Matcher structure = Pattern.compile("^/api/central/farms/([^/]+)/structure$").matcher(path);
+        if (structure.matches()) {
+            handleStructure(exchange, structure.group(1));
+            return;
+        }
+
         Matcher farm = Pattern.compile("^/api/central/farms/([^/]+)$").matcher(path);
         if (farm.matches()) {
             handleGetFarm(exchange, farm.group(1));
@@ -156,6 +163,41 @@ public final class CentralApiServer {
                 optionalJsonInteger(body, "spaghettiAlertCount", 0),
                 optionalJsonString(body, "message", null)));
         sendJson(exchange, 200, "{\"accepted\":true,\"farm\":" + farmJson(farm, false) + "}");
+    }
+
+    private void handleStructure(HttpExchange exchange, String farmId) throws IOException {
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleStructurePush(exchange, farmId);
+            return;
+        }
+        if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleGetStructure(exchange, farmId);
+            return;
+        }
+        sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+    }
+
+    private void handleStructurePush(HttpExchange exchange, String farmId) throws IOException {
+        String body = readBody(exchange);
+        CentralFarm farm = farmService.updateStructure(new FarmStructureSnapshotRequest(
+                farmId,
+                requiredJsonString(body, "runtimeInstanceId"),
+                requiredJsonString(body, "farmSecret"),
+                publicStructureJson(body)));
+        sendJson(exchange, 200, "{\"accepted\":true,\"structureUpdatedAt\":"
+                + nullableString(farm.structureUpdatedAt().toString()) + "}");
+    }
+
+    private void handleGetStructure(HttpExchange exchange, String farmId) throws IOException {
+        CentralFarmOverview overview = farmService.getFarm(farmId);
+        CentralFarm farm = overview.farm();
+        sendJson(exchange, 200, "{"
+                + "\"farmId\":" + nullableString(farm.farmId()) + ","
+                + "\"runtimeInstanceId\":" + nullableString(farm.runtimeInstanceId()) + ","
+                + "\"structureUpdatedAt\":" + nullableString(
+                        farm.structureUpdatedAt() == null ? null : farm.structureUpdatedAt().toString()) + ","
+                + "\"structure\":" + (farm.structureJson() == null ? "null" : farm.structureJson())
+                + "}");
     }
 
     private void handleGetFarm(HttpExchange exchange, String farmId) throws IOException {
@@ -257,6 +299,28 @@ public final class CentralApiServer {
 
     private String readBody(HttpExchange exchange) throws IOException {
         return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+    }
+
+    private String publicStructureJson(String body) {
+        String sanitized = removeJsonStringField(body, "farmSecret");
+        sanitized = removeJsonStringField(sanitized, "runtimeInstanceId");
+        return sanitized;
+    }
+
+    private String removeJsonStringField(String body, String fieldName) {
+        String field = Pattern.quote(fieldName);
+        String valuePattern = "\"(?:\\\\.|[^\"])*\"";
+        String withoutLeadingField = body.replaceFirst(
+                "\\{\\s*\"" + field + "\"\\s*:\\s*" + valuePattern + "\\s*,", "{");
+        if (!withoutLeadingField.equals(body)) {
+            return withoutLeadingField;
+        }
+        String withoutTrailingField = body.replaceFirst(
+                ",\\s*\"" + field + "\"\\s*:\\s*" + valuePattern + "\\s*\\}", "}");
+        if (!withoutTrailingField.equals(body)) {
+            return withoutTrailingField;
+        }
+        return body.replaceFirst("\"" + field + "\"\\s*:\\s*" + valuePattern, "");
     }
 
     private void validateRegistrationToken(HttpExchange exchange) {

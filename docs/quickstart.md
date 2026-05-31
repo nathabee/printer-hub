@@ -250,6 +250,40 @@ Check one farm:
 curl -s http://localhost:18180/api/central/farms/<farmId>
 ```
 
+Push a sanitized printer/camera structure snapshot:
+
+```bash
+curl -s -X POST http://localhost:18180/api/central/farms/<farmId>/structure \
+  -H "Content-Type: application/json" \
+  -d '{
+    "runtimeInstanceId": "local-dev-runtime-001",
+    "farmSecret": "<farmSecret>",
+    "generatedAt": "2026-05-31T10:30:00Z",
+    "printers": [
+      {
+        "printerId": "p1",
+        "displayName": "Local Dev Printer",
+        "enabled": true,
+        "status": "IDLE"
+      }
+    ],
+    "cameras": [
+      {
+        "cameraId": "cam1",
+        "displayName": "Front Camera",
+        "printerId": "p1",
+        "enabled": true
+      }
+    ]
+  }'
+```
+
+Read it back:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>/structure
+```
+
 ---
 
 ## Verify health

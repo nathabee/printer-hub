@@ -22,6 +22,8 @@ public record CentralFarm(
         int spaghettiAlertCount,
         String lastStatusMessage,
         String lastSummaryJson,
+        String structureJson,
+        Instant structureUpdatedAt,
         Instant createdAt,
         Instant updatedAt,
         String metadataJson) {

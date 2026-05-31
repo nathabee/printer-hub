@@ -30,13 +30,27 @@ public final class CentralDatabaseInitializer {
                         spaghetti_alert_count INTEGER NOT NULL DEFAULT 0,
                         last_status_message TEXT,
                         last_summary_json TEXT,
+                        structure_json TEXT,
+                        structure_updated_at TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
                         metadata_json TEXT
                     );
                     """);
+            addColumnIfMissing(statement, "structure_json TEXT");
+            addColumnIfMissing(statement, "structure_updated_at TEXT");
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to initialize central database schema", exception);
+        }
+    }
+
+    private void addColumnIfMissing(Statement statement, String columnDefinition) throws SQLException {
+        try {
+            statement.execute("ALTER TABLE central_farm ADD COLUMN " + columnDefinition);
+        } catch (SQLException exception) {
+            if (!exception.getMessage().toLowerCase(java.util.Locale.ROOT).contains("duplicate column name")) {
+                throw exception;
+            }
         }
     }
 }

@@ -137,7 +137,7 @@ Example:
 ```json
 {
   "engineName": "RUST_CLI_DELTA",
-  "engineVersion": "1.0.1",
+  "engineVersion": "1.0.2",
   "algorithmVariant": "FRAME_DELTA",
   "confidence": 0.78,
   "suspected": true,
@@ -177,7 +177,7 @@ The stable CLI and JSON behavior is documented in [docs/result-contract.md](docs
 Current version:
 
 ```text
-1.0.1
+1.0.2
 Standalone Rust prototype.
 No Java integration yet.
 ```

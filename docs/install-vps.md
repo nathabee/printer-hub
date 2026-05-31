@@ -115,7 +115,7 @@ The two runtimes must use different ports and different database files.
 
 ## Manual Registration Smoke Test
 
-The 1.0.1 slice does not include the local farm push client yet. Use
+The 1.0.2 slice does not include the local farm push client yet. Use
 `curl` to simulate the local farm pushing selected data to central.
 
 If `CENTRAL_REGISTRATION_TOKEN` or
@@ -178,6 +178,40 @@ Single farm:
 
 ```bash
 curl -s http://localhost:18180/api/central/farms/<farmId>
+```
+
+Push a sanitized structure snapshot:
+
+```bash
+curl -s -X POST http://localhost:18180/api/central/farms/<farmId>/structure \
+  -H "Content-Type: application/json" \
+  -d '{
+    "runtimeInstanceId": "vps-test-runtime-001",
+    "farmSecret": "<farmSecret>",
+    "generatedAt": "2026-05-31T10:30:00Z",
+    "printers": [
+      {
+        "printerId": "p1",
+        "displayName": "Ender 3",
+        "enabled": true,
+        "status": "PRINTING"
+      }
+    ],
+    "cameras": [
+      {
+        "cameraId": "cam1",
+        "displayName": "Front Camera",
+        "printerId": "p1",
+        "enabled": true
+      }
+    ]
+  }'
+```
+
+Read the latest pushed structure:
+
+```bash
+curl -s http://localhost:18180/api/central/farms/<farmId>/structure
 ```
 
 ---

@@ -16,8 +16,8 @@ public final class CentralFarmStore {
                     farm_id, runtime_instance_id, farm_name, runtime_version, hostname, display_location,
                     description, farm_secret, enabled, registered_at, last_seen_at, printer_count, camera_count,
                     active_print_count, warning_count, error_count, spaghetti_alert_count, last_status_message,
-                    last_summary_json, created_at, updated_at, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    last_summary_json, structure_json, structure_updated_at, created_at, updated_at, metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         update(sql, farm);
     }
@@ -71,6 +71,23 @@ public final class CentralFarmStore {
         }
     }
 
+    public void updateStructure(CentralFarm farm) {
+        try (Connection connection = CentralDatabase.getConnection();
+                PreparedStatement statement = connection.prepareStatement("""
+                        UPDATE central_farm
+                        SET structure_json = ?, structure_updated_at = ?, updated_at = ?
+                        WHERE farm_id = ?
+                        """)) {
+            statement.setString(1, farm.structureJson());
+            statement.setString(2, farm.structureUpdatedAt().toString());
+            statement.setString(3, farm.updatedAt().toString());
+            statement.setString(4, farm.farmId());
+            statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to update central farm structure", exception);
+        }
+    }
+
     public CentralFarm findByRuntimeInstanceId(String runtimeInstanceId) {
         return findOne("SELECT * FROM central_farm WHERE runtime_instance_id = ?", runtimeInstanceId);
     }
@@ -116,9 +133,11 @@ public final class CentralFarmStore {
             statement.setInt(17, farm.spaghettiAlertCount());
             statement.setString(18, farm.lastStatusMessage());
             statement.setString(19, farm.lastSummaryJson());
-            statement.setString(20, farm.createdAt().toString());
-            statement.setString(21, farm.updatedAt().toString());
-            statement.setString(22, farm.metadataJson());
+            statement.setString(20, farm.structureJson());
+            statement.setString(21, farm.structureUpdatedAt() == null ? null : farm.structureUpdatedAt().toString());
+            statement.setString(22, farm.createdAt().toString());
+            statement.setString(23, farm.updatedAt().toString());
+            statement.setString(24, farm.metadataJson());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to store central farm", exception);
@@ -161,6 +180,8 @@ public final class CentralFarmStore {
                 resultSet.getInt("spaghetti_alert_count"),
                 resultSet.getString("last_status_message"),
                 resultSet.getString("last_summary_json"),
+                resultSet.getString("structure_json"),
+                parseInstant(resultSet.getString("structure_updated_at")),
                 java.time.Instant.parse(resultSet.getString("created_at")),
                 java.time.Instant.parse(resultSet.getString("updated_at")),
                 resultSet.getString("metadata_json"));

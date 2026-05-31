@@ -248,6 +248,109 @@ class CentralApiServerTest {
     }
 
     @Test
+    void structureSnapshotCanBePushedAndReturned() throws Exception {
+        TestContext context = createContext("structure.db");
+        try {
+            Registration registration = registration(context);
+
+            HttpResponse<String> push = pushStructure(context, registration, "runtime-1", """
+                    "generatedAt":"2026-05-31T10:30:00Z",
+                    "printers":[{"printerId":"p1","displayName":"Ender 3","enabled":true,"status":"PRINTING"}],
+                    "cameras":[{"cameraId":"cam1","displayName":"Front Camera","printerId":"p1","enabled":true}]
+                    """);
+
+            assertEquals(200, push.statusCode());
+            assertTrue(push.body().contains("\"accepted\":true"));
+            assertTrue(push.body().contains("\"structureUpdatedAt\":\""));
+
+            HttpResponse<String> get = context.get("/api/central/farms/" + registration.farmId() + "/structure");
+
+            assertEquals(200, get.statusCode());
+            assertTrue(get.body().contains("\"farmId\":\"" + registration.farmId() + "\""));
+            assertTrue(get.body().contains("\"printerId\":\"p1\""));
+            assertTrue(get.body().contains("\"cameraId\":\"cam1\""));
+            assertTrue(get.body().contains("\"structureUpdatedAt\":\""));
+            assertFalse(get.body().contains("farmSecret"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void structurePushRejectsUnknownFarm() throws Exception {
+        TestContext context = createContext("structure-unknown.db");
+        try {
+            HttpResponse<String> response = context.request("POST", "/api/central/farms/farm-missing/structure", "{"
+                    + "\"runtimeInstanceId\":\"runtime-1\","
+                    + "\"farmSecret\":\"secret\","
+                    + "\"printers\":[],"
+                    + "\"cameras\":[]"
+                    + "}");
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("unknown_farm"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void structurePushRejectsMismatchedRuntimeInstanceId() throws Exception {
+        TestContext context = createContext("structure-mismatch.db");
+        try {
+            Registration registration = registration(context);
+
+            HttpResponse<String> response = pushStructure(context, registration, "runtime-other",
+                    "\"printers\":[],\"cameras\":[]");
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("runtime_instance_mismatch"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void structurePushRejectsDisabledFarm() throws Exception {
+        TestContext context = createContext("structure-disabled.db");
+        try {
+            Registration registration = registration(context);
+            try (Connection connection = CentralDatabase.getConnection();
+                    PreparedStatement statement = connection.prepareStatement(
+                            "UPDATE central_farm SET enabled = 0 WHERE farm_id = ?")) {
+                statement.setString(1, registration.farmId());
+                statement.executeUpdate();
+            }
+
+            HttpResponse<String> response = pushStructure(context, registration, "runtime-1",
+                    "\"printers\":[],\"cameras\":[]");
+
+            assertEquals(403, response.statusCode());
+            assertTrue(response.body().contains("farm_disabled"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void structurePushRejectsUnsafeFields() throws Exception {
+        TestContext context = createContext("structure-unsafe.db");
+        try {
+            Registration registration = registration(context);
+
+            HttpResponse<String> response = pushStructure(context, registration, "runtime-1", """
+                    "printers":[{"printerId":"p1","displayName":"Ender","serialPort":"/dev/ttyUSB0"}],
+                    "cameras":[]
+                    """);
+
+            assertEquals(400, response.statusCode());
+            assertTrue(response.body().contains("forbidden field serialport"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
     void localDatabasePropertyDoesNotConfigureCentralDatabase() throws Exception {
         Path localDb = tempDir.resolve("local.db");
         Path centralDb = tempDir.resolve("central.db");
@@ -338,6 +441,18 @@ class CentralApiServerTest {
                 + "\"runtimeInstanceId\":\"" + runtimeInstanceId + "\","
                 + "\"farmSecret\":\"" + registration.farmSecret() + "\","
                 + "\"runtimeVersion\":\"1.0.0\","
+                + fields
+                + "}");
+    }
+
+    private HttpResponse<String> pushStructure(
+            TestContext context,
+            Registration registration,
+            String runtimeInstanceId,
+            String fields) throws Exception {
+        return context.request("POST", "/api/central/farms/" + registration.farmId() + "/structure", "{"
+                + "\"runtimeInstanceId\":\"" + runtimeInstanceId + "\","
+                + "\"farmSecret\":\"" + registration.farmSecret() + "\","
                 + fields
                 + "}");
     }

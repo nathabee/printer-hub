@@ -4,6 +4,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +55,8 @@ public final class CentralFarmService {
                     existing.spaghettiAlertCount(),
                     existing.lastStatusMessage(),
                     existing.lastSummaryJson(),
+                    existing.structureJson(),
+                    existing.structureUpdatedAt(),
                     existing.createdAt(),
                     now,
                     request.metadataJson());
@@ -81,6 +84,8 @@ public final class CentralFarmService {
                 0,
                 0,
                 0,
+                null,
+                null,
                 null,
                 null,
                 now,
@@ -130,10 +135,63 @@ public final class CentralFarmService {
                 Math.max(0, request.spaghettiAlertCount()),
                 blankToNull(request.message()),
                 summaryJson(request),
+                existing.structureJson(),
+                existing.structureUpdatedAt(),
                 existing.createdAt(),
                 now,
                 existing.metadataJson());
         store.updateHeartbeat(updated);
+        return updated;
+    }
+
+    public CentralFarm updateStructure(FarmStructureSnapshotRequest request) {
+        require(request.farmId(), "farmId");
+        require(request.runtimeInstanceId(), "runtimeInstanceId");
+        require(request.farmSecret(), "farmSecret");
+        require(request.structureJson(), "structureJson");
+
+        CentralFarm existing = store.findByFarmId(request.farmId());
+        if (existing == null) {
+            throw new FarmRejectedException("unknown_farm");
+        }
+        if (!existing.enabled()) {
+            throw new FarmRejectedException("farm_disabled");
+        }
+        if (!existing.runtimeInstanceId().equals(request.runtimeInstanceId().trim())) {
+            throw new FarmRejectedException("runtime_instance_mismatch");
+        }
+        if (!existing.farmSecret().equals(request.farmSecret().trim())) {
+            throw new FarmRejectedException("farm_secret_mismatch");
+        }
+        validateSafeStructure(request.structureJson());
+
+        Instant now = clock.instant();
+        CentralFarm updated = new CentralFarm(
+                existing.farmId(),
+                existing.runtimeInstanceId(),
+                existing.farmName(),
+                existing.runtimeVersion(),
+                existing.hostname(),
+                existing.displayLocation(),
+                existing.description(),
+                existing.farmSecret(),
+                existing.enabled(),
+                existing.registeredAt(),
+                existing.lastSeenAt(),
+                existing.printerCount(),
+                existing.cameraCount(),
+                existing.activePrintCount(),
+                existing.warningCount(),
+                existing.errorCount(),
+                existing.spaghettiAlertCount(),
+                existing.lastStatusMessage(),
+                existing.lastSummaryJson(),
+                request.structureJson().trim(),
+                now,
+                existing.createdAt(),
+                now,
+                existing.metadataJson());
+        store.updateStructure(updated);
         return updated;
     }
 
@@ -150,6 +208,52 @@ public final class CentralFarmService {
             throw new FarmRejectedException("unknown_farm");
         }
         return new CentralFarmOverview(farm, derivedStatus(farm));
+    }
+
+    private void validateSafeStructure(String structureJson) {
+        String lower = structureJson.toLowerCase(Locale.ROOT);
+        String[] forbidden = {
+                "\"command\"",
+                "\"commands\"",
+                "\"action\"",
+                "\"actions\"",
+                "\"startprint\"",
+                "\"start_print\"",
+                "\"stopprint\"",
+                "\"stop_print\"",
+                "\"pauseprint\"",
+                "\"pause_print\"",
+                "\"emergencystop\"",
+                "\"emergency_stop\"",
+                "\"gcode\"",
+                "\"serialport\"",
+                "\"serial_port\"",
+                "\"portname\"",
+                "\"port_name\"",
+                "\"secret\"",
+                "\"token\"",
+                "\"apikey\"",
+                "\"api_key\"",
+                "\"filepath\"",
+                "\"file_path\"",
+                "\"localpath\"",
+                "\"local_path\"",
+                "\"executable\"",
+                "\"stacktrace\"",
+                "\"stack_trace\""
+        };
+        for (String field : forbidden) {
+            if (lower.contains(field)) {
+                throw new IllegalArgumentException("structure contains forbidden field " + field.replace("\"", ""));
+            }
+        }
+        if (lower.matches("(?s).*\\b(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2\\d|3[0-1])\\.\\d{1,3}\\.\\d{1,3})\\b.*")) {
+            throw new IllegalArgumentException("structure contains local lan ip address");
+        }
+        if (lower.contains("c:\\\\") || lower.contains("/home/") || lower.contains("/users/")
+                || lower.contains("/var/") || lower.contains("/etc/")) {
+            throw new IllegalArgumentException("structure contains local filesystem path");
+        }
     }
 
     public String derivedStatus(CentralFarm farm) {
