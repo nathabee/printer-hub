@@ -744,4 +744,4 @@ The baseline should show:
 * At least one baseline report is archived.
 * False positives and false negatives can be inspected.
 * Reports include automatic motion/noise metrics.
-* The baseline can later be compared with 0.8.x ML results.
+* The baseline can later be compared with 0.9.x ML results.

@@ -18,6 +18,11 @@ pipeline {
             description: 'Port used for the local runtime smoke test.'
         )
         string(
+            name: 'CENTRAL_API_SMOKE_PORT',
+            defaultValue: '18190',
+            description: 'Port used for the central read-only VPS smoke test.'
+        )
+        string(
             name: 'RELEASE_VERSION',
             defaultValue: '',
             description: 'Optional release version, for example 0.1.3. Leave empty for CI-only runs.'
@@ -111,7 +116,7 @@ pipeline {
                       echo "Using database file ${DB_FILE}"
 
                       mvn -B -ntp exec:java \
-                        -Dexec.mainClass="spaghettichef.Main" \
+                        -Dexec.mainClass="spaghettichef.local.LocalMain" \
                         -Dspaghettichef.api.port="${API_PORT}" \
                         -Dspaghettichef.monitoring.intervalSeconds=1 \
                         -Dspaghettichef.databaseFile="${DB_FILE}" \
@@ -421,7 +426,7 @@ PY
                       echo "Using database file ${DB_FILE}"
 
                       mvn -B -ntp exec:java \
-                        -Dexec.mainClass="spaghettichef.Main" \
+                        -Dexec.mainClass="spaghettichef.local.LocalMain" \
                         -Dspaghettichef.api.port="${ROBUST_PORT}" \
                         -Dspaghettichef.monitoring.intervalSeconds=1 \
                         -Dspaghettichef.databaseFile="${DB_FILE}" \
@@ -746,6 +751,102 @@ EOF
             }
         }
 
+        stage('Central VPS Smoke Test') {
+            steps {
+                sh '''
+                    set -eu
+
+                    CENTRAL_PORT="${CENTRAL_API_SMOKE_PORT:-18190}"
+                    CENTRAL_DB_FILE="spaghettichef-central-ci.db"
+
+                    mkdir -p target
+                    rm -f "${CENTRAL_DB_FILE}"
+
+                    start_central() {
+                      echo "Starting SpaghettiChef central VPS runtime on port ${CENTRAL_PORT}"
+
+                      mvn -B -ntp exec:java \
+                        -Dexec.mainClass="spaghettichef.central.CentralMain" \
+                        -Dspaghettichef.api.port="${CENTRAL_PORT}" \
+                        -Dspaghettichef.central.databaseFile="${CENTRAL_DB_FILE}" \
+                        > target/central-vps-smoke.log 2>&1 &
+
+                      CENTRAL_PID=$!
+                      export CENTRAL_PID
+
+                      for i in $(seq 1 30); do
+                        if curl -fsS "http://localhost:${CENTRAL_PORT}/health" >/dev/null; then
+                          return 0
+                        fi
+                        sleep 1
+                      done
+
+                      echo "Central VPS runtime did not become healthy in time"
+                      cat target/central-vps-smoke.log || true
+                      return 1
+                    }
+
+                    stop_central() {
+                      if [ -n "${CENTRAL_PID:-}" ]; then
+                        kill "${CENTRAL_PID}" >/dev/null 2>&1 || true
+                        wait "${CENTRAL_PID}" >/dev/null 2>&1 || true
+                        unset CENTRAL_PID
+                      fi
+                    }
+
+                    trap stop_central EXIT
+                    start_central
+
+                    curl -fsS "http://localhost:${CENTRAL_PORT}/health" > target/central-health.json
+                    grep -q '"mode":"central"' target/central-health.json
+
+                    curl -fsS -X POST "http://localhost:${CENTRAL_PORT}/api/central/farms/register" \
+                      -H "Content-Type: application/json" \
+                      -d '{
+                        "runtimeInstanceId": "ci-runtime-001",
+                        "farmName": "CI Central Farm",
+                        "runtimeVersion": "1.0.0",
+                        "hostname": "ci-host"
+                      }' > target/central-register.json
+
+                    FARM_ID=$(python3 -c 'import json; print(json.load(open("target/central-register.json"))["farm"]["farmId"])')
+                    FARM_SECRET=$(python3 -c 'import json; print(json.load(open("target/central-register.json"))["farm"]["farmSecret"])')
+
+                    curl -fsS -X POST "http://localhost:${CENTRAL_PORT}/api/central/farms/${FARM_ID}/heartbeat" \
+                      -H "Content-Type: application/json" \
+                      -d "{
+                        \\"runtimeInstanceId\\": \\"ci-runtime-001\\",
+                        \\"farmSecret\\": \\"${FARM_SECRET}\\",
+                        \\"runtimeVersion\\": \\"1.0.0\\",
+                        \\"status\\": \\"ONLINE\\",
+                        \\"printerCount\\": 2,
+                        \\"cameraCount\\": 1,
+                        \\"activePrintCount\\": 1,
+                        \\"warningCount\\": 0,
+                        \\"errorCount\\": 0,
+                        \\"spaghettiAlertCount\\": 0,
+                        \\"message\\": \\"ok\\"
+                      }" > target/central-heartbeat.json
+
+                    curl -fsS "http://localhost:${CENTRAL_PORT}/api/central/farms/overview" \
+                      > target/central-overview.json
+                    curl -fsS "http://localhost:${CENTRAL_PORT}/central-dashboard" \
+                      > target/central-dashboard.html
+
+                    grep -q '"accepted":true' target/central-heartbeat.json
+                    grep -q '"status":"ONLINE"' target/central-overview.json
+                    grep -q '"printerCount":2' target/central-overview.json
+                    grep -q 'SpaghettiChef Central' target/central-dashboard.html
+
+                    sqlite3 "${CENTRAL_DB_FILE}" '.tables' > target/central-db-tables.txt
+                    grep -q 'central_farm' target/central-db-tables.txt
+
+                    stop_central
+                    trap - EXIT
+                '''
+            }
+        }
+
 
         stage('Prepare Release Bundle') {
             when {
@@ -762,6 +863,10 @@ EOF
 
                     if ls target/*-all.jar >/dev/null 2>&1; then
                       cp target/*-all.jar release/
+                    fi
+
+                    if ls target/*-central-vps.jar >/dev/null 2>&1; then
+                      cp target/*-central-vps.jar release/
                     fi
 
                     if [ -f target/operator-message-report.md ]; then
@@ -860,10 +965,15 @@ stage('Package Expert Distributions') {
             mkdir -p dist package/linux package/windows package/admin
 
             JAR_FILE=$(find target -maxdepth 1 -name 'spaghetti-chef-*-all.jar' | sort | tail -n 1)
+            CENTRAL_JAR_FILE=$(find target -maxdepth 1 -name 'spaghetti-chef-*-central-vps.jar' | sort | tail -n 1)
             test -n "${JAR_FILE}"
+            test -n "${CENTRAL_JAR_FILE}"
 
             cp "${JAR_FILE}" package/linux/spaghetti-chef.jar
             cp "${JAR_FILE}" package/windows/spaghetti-chef.jar
+            mkdir -p package/central
+            cp "${CENTRAL_JAR_FILE}" package/central/spaghetti-chef-central-vps.jar
+            cp Dockerfile.central package/central/Dockerfile
 
             cp README.md package/linux/README.md
             cp README.md package/windows/README.md
@@ -871,6 +981,28 @@ stage('Package Expert Distributions') {
             cp docs/install.md package/windows/INSTALL.md
             cp docs/quickstart.md package/linux/QUICKSTART.md
             cp docs/quickstart.md package/windows/QUICKSTART.md
+
+            cat > package/central/README.md <<'EOF'
+# SpaghettiChef Central VPS Container Artifact
+
+This package is the central read-only VPS runtime. It stores central farm
+registration and heartbeat state in its own database and does not initialize
+local printer or camera communication.
+
+Example:
+
+```sh
+docker build -f Dockerfile -t spaghettichef-central-vps .
+docker run --rm -p 8080:8080 \
+  -e SPAGHETTICHEF_MODE=central \
+  -e CENTRAL_MODE=true \
+  -v "$PWD/data:/data" \
+  spaghettichef-central-vps
+```
+
+Use `-Dspaghettichef.central.databaseFile=/data/spaghettichef-central.db`
+through `JAVA_OPTS` to place the central database on a persistent volume.
+EOF
         '''
 
         script {
@@ -911,8 +1043,9 @@ echo SpaghettiChef launcher configuration
 echo   java: %JAVA_CMD% [source=%JAVA_CMD_SOURCE%]
 echo   api port: %API_PORT% [source=%API_PORT_SOURCE%]
 echo   database file: %DATABASE_FILE% [source=%DATABASE_FILE_SOURCE%]
+echo   mode: local
 
-"%JAVA_CMD%" -Dspaghettichef.databaseFile="%DATABASE_FILE%" -Dspaghettichef.api.port="%API_PORT%" -jar spaghetti-chef.jar
+"%JAVA_CMD%" -Dspaghettichef.mode=local -Dspaghettichef.databaseFile="%DATABASE_FILE%" -Dspaghettichef.api.port="%API_PORT%" -jar spaghetti-chef.jar
 '''
         }
 
@@ -926,7 +1059,7 @@ set -eu
 API_PORT="${1:-18080}"
 DATABASE_FILE="${SPAGHETTICHEF_DATABASE_FILE:-spaghettichef.db}"
 
-exec java -Dspaghettichef.databaseFile="${DATABASE_FILE}" -Dspaghettichef.api.port="${API_PORT}" -jar spaghetti-chef.jar
+exec java -Dspaghettichef.mode=local -Dspaghettichef.databaseFile="${DATABASE_FILE}" -Dspaghettichef.api.port="${API_PORT}" -jar spaghetti-chef.jar
 EOF
             chmod +x package/linux/spaghettichef.sh
 
@@ -990,6 +1123,7 @@ EOF
             tar -C package -czf "dist/${LINUX_PACKAGE}" linux
             (cd package/windows && jar --create --file "../../dist/${WINDOWS_PACKAGE}" .)
             (cd package/admin && jar --create --file "../../dist/${ADMIN_PACKAGE}" .)
+            tar -C package -czf "dist/spaghetti-chef-${RELEASE_VERSION}-central-vps-container.tar.gz" central
             tar -czf "${RELEASE_ARCHIVE}" release
 
             if [ "${BUILD_DATASET_ASSET:-false}" = "true" ]; then

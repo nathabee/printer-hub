@@ -9,7 +9,7 @@ This roadmap separates the SpaghettiChef project into three architectural stages
 - `0.1.x` — local farm runtime architecture
 - `0.2.x` — local runtime administration and job management
 - `0.6.x` — camera replay, purge, and data management
-- `1.0.x` — central VPS multi-farm management
+- `1.0.x` — central read-only VPS viewer
 
 ---
 
@@ -210,7 +210,7 @@ Runtime validation:
 
 ```bash
 mvn exec:java \
--Dexec.mainClass="spaghettichef.Main" \
+-Dexec.mainClass="spaghettichef.local.LocalMain" \
 -Dexec.args="SIM_PORT M105 3 100 sim"
 ```
 
@@ -361,7 +361,7 @@ Example local run:
 ```bash
 mvn exec:java \
 -Dspaghettichef.api.port=18080 \
--Dexec.mainClass="spaghettichef.Main"
+-Dexec.mainClass="spaghettichef.local.LocalMain"
 ```
 
 Example verification:
@@ -2789,7 +2789,7 @@ Goals:
 * isolate native dependency handling
 * document installation and troubleshooting
 * keep camera backend replaceable behind the existing abstraction
-* keep camera settings configurable (spaghettichef.config.RuntimeDefaults : intialized with constante, persistet in database, changeable in the settings of the dashbord)
+* keep camera settings configurable (spaghettichef.shared.config.RuntimeDefaults : intialized with constante, persistet in database, changeable in the settings of the dashbord)
 
 Out of scope:
 
@@ -3340,11 +3340,11 @@ Implementation slice 1 — physical delta image writer:
 Update / verify:
 
 ```text
-src/main/java/spaghettichef/camera/CameraDeltaSetService.java
-src/main/java/spaghettichef/camera/CameraStoragePaths.java
-src/main/java/spaghettichef/camera/ImageDeltaFrameAnalyzer.java
-src/main/java/spaghettichef/persistence/CameraDeltaFrame.java
-src/main/java/spaghettichef/persistence/CameraDeltaFrameStore.java
+src/main/java/spaghettichef/local/camera/CameraDeltaSetService.java
+src/main/java/spaghettichef/local/camera/CameraStoragePaths.java
+src/main/java/spaghettichef/local/camera/ImageDeltaFrameAnalyzer.java
+src/main/java/spaghettichef/local/persistence/CameraDeltaFrame.java
+src/main/java/spaghettichef/local/persistence/CameraDeltaFrameStore.java
 ```
 
 Target:
@@ -3367,12 +3367,12 @@ Implementation slice 2 — live camera job creates delta frames:
 Update / verify:
 
 ```text
-src/main/java/spaghettichef/camera/CameraCaptureService.java
-src/main/java/spaghettichef/camera/CameraJobService.java
-src/main/java/spaghettichef/camera/CameraDeltaSetService.java
-src/main/java/spaghettichef/camera/CameraCalculationRunService.java
-src/main/java/spaghettichef/camera/CameraMonitoringTask.java
-src/main/java/spaghettichef/camera/CameraAnalysisSessionService.java
+src/main/java/spaghettichef/local/camera/CameraCaptureService.java
+src/main/java/spaghettichef/local/camera/CameraJobService.java
+src/main/java/spaghettichef/local/camera/CameraDeltaSetService.java
+src/main/java/spaghettichef/local/camera/CameraCalculationRunService.java
+src/main/java/spaghettichef/local/camera/CameraMonitoringTask.java
+src/main/java/spaghettichef/local/camera/CameraAnalysisSessionService.java
 ```
 
 Target:
@@ -3812,3 +3812,78 @@ Move calculation engine configuration out of hardcoded dashboard/service default
 Engine settings now define stable engine names, adapter type, dashboard label, default method, threshold, parameter JSON, external CLI method, executable path, timeout, enabled state, and sort order. The recalculation workflow loads enabled engines from settings, allows per-run overrides for experiment parameters, and keeps executable path and timeout as settings-only values.
 
 ---
+
+## 0.7.2 + skipped will be done after/parrallele to 1.0.x
+
+## 0.8.x  skipped will be done after/parrallele to 1.0.x
+
+## 0.9.x skipped will be done after/parrallele to 1.0.x
+
+
+---
+
+## 1.0.x — Central Read-Only VPS Viewer
+
+status: active
+
+Purpose:
+
+Introduce a central VPS platform that can safely observe one or more local
+SpaghettiChef farms without exposing the local LAN or local hardware to the
+public internet.
+
+The 1.0.x line is read-only. Local farms push selected sanitized state to the
+central VPS. The central VPS stores its own aggregate database and does not open
+inbound connections to local farms, printers, cameras, or local files.
+
+Detailed implementation notes live in [TODO-1.0.0-VPS-viewer.md](TODOs/TODO-1.0.0-VPS-viewer.md).
+
+### 1.0.0 — First Central Read-Only Slice
+
+status: done
+
+Goals:
+
+Add an explicit central mode and a separate central code path with central farm
+persistence, farm registration, heartbeat, overview, minimal read-only central
+dashboard, central database initialization, and a new central VPS build artifact.
+
+Add a clear package boundary before 1.0.1:
+
+```text
+spaghettichef.local    local farm runtime, printer/camera/job/security code
+spaghettichef.central  central read-only VPS code
+spaghettichef.shared   small shared version/log/config/message utilities
+spaghettichef.Main     compatibility dispatcher only
+```
+
+The local farm runtime remains unchanged as the owner of printer communication,
+camera capture, local jobs, local security, dangerous-action confirmation, and
+operator audit.
+
+Current central test path:
+
+```text
+local farm runtime on :18080
+central read-only viewer on :18180
+manual curl registration/heartbeat simulates the future local outbound push
+```
+
+### 1.0.x Next Slices
+
+Planned:
+
+* local-to-central push client settings
+* farm structure snapshot push
+* selected camera replay package upload
+* read-only central replay listing/player
+* VPS container deployment hardening
+* reverse proxy deployment documentation
+
+Not in 1.0.x:
+
+* remote printer control
+* central job dispatch
+* live camera streaming
+* direct VPS-to-local-farm calls
+* direct VPS-to-printer or VPS-to-camera calls

@@ -1,6 +1,6 @@
 # Test
 
-This document describes manual verification for the `0.1.x` local runtime architecture.
+This document describes manual verification for the local farm runtime.
 
 > SpaghettiChef is currently in runtime migration.
 > The focus is runtime startup, API responsiveness, background monitoring, dashboard configuration, and SQLite persistence.
@@ -21,6 +21,8 @@ Expected result:
 BUILD SUCCESS
 ```
 
+For central read-only VPS viewer testing, see `docs/test-vps.md`.
+
 ---
 
 ## JUNIT Test
@@ -37,7 +39,7 @@ Recommended test port:
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.api.port=18081
 ```
 
@@ -45,7 +47,7 @@ Optional custom database file:
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.api.port=18081 \
   -Dspaghettichef.databaseFile=spaghettichef-test.db
 ```
@@ -286,7 +288,7 @@ Start again:
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.api.port=18081
 ```
 

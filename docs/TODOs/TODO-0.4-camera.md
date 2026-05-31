@@ -761,10 +761,10 @@ This confirms the branch still uses `unassigned` instead of a real camera job id
 New files:
 
 ```text
-src/main/java/spaghettichef/persistence/CameraJob.java
-src/main/java/spaghettichef/persistence/CameraJobState.java
-src/main/java/spaghettichef/persistence/CameraJobStore.java
-src/main/java/spaghettichef/camera/CameraJobService.java
+src/main/java/spaghettichef/local/persistence/CameraJob.java
+src/main/java/spaghettichef/local/persistence/CameraJobState.java
+src/main/java/spaghettichef/local/persistence/CameraJobStore.java
+src/main/java/spaghettichef/local/camera/CameraJobService.java
 
 src/test/java/spaghettichef/persistence/CameraJobStoreTest.java
 src/test/java/spaghettichef/camera/CameraJobServiceTest.java
@@ -794,11 +794,11 @@ CameraJobService:
 Update:
 
 ```text
-src/main/java/spaghettichef/camera/CameraCaptureService.java
-src/main/java/spaghettichef/camera/CameraStoragePaths.java
-src/main/java/spaghettichef/persistence/CameraSnapshotEntry.java
-src/main/java/spaghettichef/persistence/CameraSnapshotEntryStore.java
-src/main/java/spaghettichef/persistence/DatabaseInitializer.java
+src/main/java/spaghettichef/local/camera/CameraCaptureService.java
+src/main/java/spaghettichef/local/camera/CameraStoragePaths.java
+src/main/java/spaghettichef/local/persistence/CameraSnapshotEntry.java
+src/main/java/spaghettichef/local/persistence/CameraSnapshotEntryStore.java
+src/main/java/spaghettichef/local/persistence/DatabaseInitializer.java
 ```
 
 Target:
@@ -833,8 +833,8 @@ but it must not be the camera folder owner.
 Update:
 
 ```text
-src/main/java/spaghettichef/api/RemoteApiServer.java
-src/main/java/spaghettichef/api/CameraApiHandler.java
+src/main/java/spaghettichef/local/api/RemoteApiServer.java
+src/main/java/spaghettichef/local/api/CameraApiHandler.java
 src/main/resources/dashboard/api.js
 src/main/resources/dashboard/views/admin-camera-data.js
 ```

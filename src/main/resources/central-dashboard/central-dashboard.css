@@ -1,0 +1,52 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: #18202a;
+  background: #f6f7f9;
+}
+
+main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 18px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.brand-logo {
+  width: 32px;
+  height: 32px;
+}
+
+h1 {
+  font-size: 24px;
+  margin: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid #d8dde4;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e8ee;
+  font-size: 14px;
+}
+
+th {
+  background: #eef1f5;
+}
+
+.status {
+  font-weight: 700;
+}

@@ -229,14 +229,14 @@ The implementation may run automatic purge incrementally, but it must preserve t
 Likely Java files:
 
 ```text
-spaghettichef.camera.CameraSnapshotPurgeService
-spaghettichef.camera.CameraSnapshotPurgeReport
-spaghettichef.persistence.CameraSettings
-spaghettichef.persistence.CameraSettingsStore
-spaghettichef.persistence.CameraSnapshotEntry
-spaghettichef.persistence.CameraSnapshotEntryStore
-spaghettichef.persistence.DatabaseInitializer
-spaghettichef.api.RemoteApiServer
+spaghettichef.local.camera.CameraSnapshotPurgeService
+spaghettichef.local.camera.CameraSnapshotPurgeReport
+spaghettichef.local.persistence.CameraSettings
+spaghettichef.local.persistence.CameraSettingsStore
+spaghettichef.local.persistence.CameraSnapshotEntry
+spaghettichef.local.persistence.CameraSnapshotEntryStore
+spaghettichef.local.persistence.DatabaseInitializer
+spaghettichef.local.api.RemoteApiServer
 ```
 
 Purge service inputs:
@@ -391,16 +391,16 @@ If there is no reliable `cameraJobId` on `camera_events`, leave events untouched
 Likely Java files:
 
 ```text
-spaghettichef.camera.CameraJobDeletionService
-spaghettichef.camera.CameraJobDeletionRequest
-spaghettichef.camera.CameraJobDeletionReport
-spaghettichef.persistence.CameraJobStore
-spaghettichef.persistence.CameraSnapshotEntryStore
-spaghettichef.persistence.CameraDeltaSetStore
-spaghettichef.persistence.CameraDeltaFrameStore
-spaghettichef.persistence.CameraCalculationRunStore
-spaghettichef.persistence.CameraCalculationResultStore
-spaghettichef.api.RemoteApiServer
+spaghettichef.local.camera.CameraJobDeletionService
+spaghettichef.local.camera.CameraJobDeletionRequest
+spaghettichef.local.camera.CameraJobDeletionReport
+spaghettichef.local.persistence.CameraJobStore
+spaghettichef.local.persistence.CameraSnapshotEntryStore
+spaghettichef.local.persistence.CameraDeltaSetStore
+spaghettichef.local.persistence.CameraDeltaFrameStore
+spaghettichef.local.persistence.CameraCalculationRunStore
+spaghettichef.local.persistence.CameraCalculationResultStore
+spaghettichef.local.api.RemoteApiServer
 ```
 
 ## API Direction
