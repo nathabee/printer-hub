@@ -17,6 +17,9 @@ import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -255,8 +258,8 @@ class CentralApiServerTest {
 
             HttpResponse<String> push = pushStructure(context, registration, "runtime-1", """
                     "generatedAt":"2026-05-31T10:30:00Z",
-                    "printers":[{"printerId":"p1","displayName":"Ender 3","enabled":true,"status":"PRINTING"}],
-                    "cameras":[{"cameraId":"cam1","displayName":"Front Camera","printerId":"p1","enabled":true}]
+                    "printers":[{"printerId":"printer-1","displayName":"Ender 3","enabled":true,"status":"PRINTING"}],
+                    "cameras":[{"cameraId":"camera-1","displayName":"Front Camera","printerId":"printer-1","enabled":true}]
                     """);
 
             assertEquals(200, push.statusCode());
@@ -266,11 +269,17 @@ class CentralApiServerTest {
             HttpResponse<String> get = context.get("/api/central/farms/" + registration.farmId() + "/structure");
 
             assertEquals(200, get.statusCode());
-            assertTrue(get.body().contains("\"farmId\":\"" + registration.farmId() + "\""));
-            assertTrue(get.body().contains("\"printerId\":\"p1\""));
-            assertTrue(get.body().contains("\"cameraId\":\"cam1\""));
-            assertTrue(get.body().contains("\"structureUpdatedAt\":\""));
+            Map<String, Object> responseJson = CentralJson.parseObject(get.body());
+            assertEquals(registration.farmId(), responseJson.get("farmId"));
+            assertNotNull(responseJson.get("structureUpdatedAt"));
+            assertStructureContains(responseJson.get("structure"), "printer-1", "camera-1");
             assertFalse(get.body().contains("farmSecret"));
+
+            String storedStructureJson = storedStructureJson(registration.farmId());
+            Map<String, Object> storedStructure = CentralJson.parseObject(storedStructureJson);
+            assertStructureContains(storedStructure, "printer-1", "camera-1");
+            assertFalse(storedStructureJson.contains("farmSecret"));
+            assertFalse(storedStructureJson.contains("runtimeInstanceId"));
         } finally {
             context.close();
         }
@@ -460,10 +469,41 @@ class CentralApiServerTest {
     private int countFarms() throws Exception {
         try (Connection connection = CentralDatabase.getConnection();
                 PreparedStatement statement = connection.prepareStatement("SELECT COUNT(*) FROM central_farm");
-                java.sql.ResultSet resultSet = statement.executeQuery()) {
+                ResultSet resultSet = statement.executeQuery()) {
             assertTrue(resultSet.next());
             return resultSet.getInt(1);
         }
+    }
+
+    private String storedStructureJson(String farmId) throws Exception {
+        try (Connection connection = CentralDatabase.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT structure_json FROM central_farm WHERE farm_id = ?")) {
+            statement.setString(1, farmId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertTrue(resultSet.next());
+                return resultSet.getString(1);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertStructureContains(Object structureObject, String printerId, String cameraId) {
+        assertTrue(structureObject instanceof Map<?, ?>);
+        Map<String, Object> structure = (Map<String, Object>) structureObject;
+        assertEquals("2026-05-31T10:30:00Z", structure.get("generatedAt"));
+        assertTrue(structure.get("printers") instanceof List<?>);
+        assertTrue(structure.get("cameras") instanceof List<?>);
+        List<Object> printers = (List<Object>) structure.get("printers");
+        List<Object> cameras = (List<Object>) structure.get("cameras");
+        assertTrue(printers.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .anyMatch(printer -> printerId.equals(printer.get("printerId"))));
+        assertTrue(cameras.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .anyMatch(camera -> cameraId.equals(camera.get("cameraId"))));
     }
 
     private void setLastSeen(String farmId, String instant) throws Exception {

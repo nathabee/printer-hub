@@ -19,7 +19,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -179,11 +181,12 @@ public final class CentralApiServer {
 
     private void handleStructurePush(HttpExchange exchange, String farmId) throws IOException {
         String body = readBody(exchange);
+        Map<String, Object> request = CentralJson.parseObject(body);
         CentralFarm farm = farmService.updateStructure(new FarmStructureSnapshotRequest(
                 farmId,
-                requiredJsonString(body, "runtimeInstanceId"),
-                requiredJsonString(body, "farmSecret"),
-                publicStructureJson(body)));
+                requiredJsonString(request, "runtimeInstanceId"),
+                requiredJsonString(request, "farmSecret"),
+                publicStructureJson(request)));
         sendJson(exchange, 200, "{\"accepted\":true,\"structureUpdatedAt\":"
                 + nullableString(farm.structureUpdatedAt().toString()) + "}");
     }
@@ -301,26 +304,20 @@ public final class CentralApiServer {
         return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
     }
 
-    private String publicStructureJson(String body) {
-        String sanitized = removeJsonStringField(body, "farmSecret");
-        sanitized = removeJsonStringField(sanitized, "runtimeInstanceId");
-        return sanitized;
+    private String publicStructureJson(Map<String, Object> request) {
+        LinkedHashMap<String, Object> structure = new LinkedHashMap<>();
+        structure.put("generatedAt", request.get("generatedAt"));
+        structure.put("printers", arrayField(request, "printers"));
+        structure.put("cameras", arrayField(request, "cameras"));
+        return CentralJson.stringify(structure);
     }
 
-    private String removeJsonStringField(String body, String fieldName) {
-        String field = Pattern.quote(fieldName);
-        String valuePattern = "\"(?:\\\\.|[^\"])*\"";
-        String withoutLeadingField = body.replaceFirst(
-                "\\{\\s*\"" + field + "\"\\s*:\\s*" + valuePattern + "\\s*,", "{");
-        if (!withoutLeadingField.equals(body)) {
-            return withoutLeadingField;
+    private List<?> arrayField(Map<String, Object> object, String fieldName) {
+        Object value = object.get(fieldName);
+        if (!(value instanceof List<?> list)) {
+            throw new IllegalArgumentException(fieldName + " must be an array");
         }
-        String withoutTrailingField = body.replaceFirst(
-                ",\\s*\"" + field + "\"\\s*:\\s*" + valuePattern + "\\s*\\}", "}");
-        if (!withoutTrailingField.equals(body)) {
-            return withoutTrailingField;
-        }
-        return body.replaceFirst("\"" + field + "\"\\s*:\\s*" + valuePattern, "");
+        return list;
     }
 
     private void validateRegistrationToken(HttpExchange exchange) {
@@ -341,6 +338,14 @@ public final class CentralApiServer {
 
     private String requiredJsonString(String body, String fieldName) {
         String value = optionalJsonString(body, fieldName, null);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return value.trim();
+    }
+
+    private String requiredJsonString(Map<String, Object> object, String fieldName) {
+        String value = CentralJson.stringField(object, fieldName);
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
         }
