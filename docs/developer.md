@@ -28,7 +28,7 @@ Real hardware remains optional for manual checks.
 
 ## Main source areas
 
-### `src/main/java/spaghettichef/Main.java`
+### `src/main/java/spaghettichef/local/LocalMain.java`
 
 Runtime entry point.
 
@@ -40,7 +40,7 @@ Responsibilities:
 - keep the process alive
 - register shutdown handling
 
-### `src/main/java/spaghettichef/api/`
+### `src/main/java/spaghettichef/local/api/`
 
 Embedded REST API layer.
 
@@ -56,7 +56,7 @@ Responsibilities:
 - expose dashboard resources
 - translate runtime failures into controlled HTTP responses
 
-### `src/main/java/spaghettichef/runtime/`
+### `src/main/java/spaghettichef/local/runtime/`
 
 Runtime backbone.
 
@@ -75,7 +75,7 @@ Responsibilities:
 - keep current runtime state per printer
 - coordinate startup and shutdown
 
-### `src/main/java/spaghettichef/monitoring/`
+### `src/main/java/spaghettichef/local/monitoring/`
 
 Monitoring layer.
 
@@ -93,7 +93,7 @@ Responsibilities:
 - persist snapshots and events
 - deduplicate repeated failure events
 
-### `src/main/java/spaghettichef/persistence/`
+### `src/main/java/spaghettichef/local/persistence/`
 
 SQLite persistence layer.
 
@@ -115,7 +115,7 @@ Responsibilities:
 - persist events
 - apply snapshot persistence rules
 
-### `src/main/java/spaghettichef/serial/`
+### `src/main/java/spaghettichef/local/serial/`
 
 Serial and simulation implementations.
 
@@ -125,7 +125,7 @@ Main classes:
 - `JSerialCommPortAdapter`
 - `SimulatedPrinterPort`
 
-### `src/main/java/spaghettichef/SerialConnection.java`
+### `src/main/java/spaghettichef/local/SerialConnection.java`
 
 Real serial communication implementation used for `real` mode.
 
@@ -202,7 +202,7 @@ mvn clean verify
 
 ```bash id="p452q8"
 mvn exec:java \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.api.port=8080 \
   -Dspaghettichef.monitoring.intervalSeconds=1 \
   -Dspaghettichef.databaseFile=spaghettichef.db

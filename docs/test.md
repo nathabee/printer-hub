@@ -39,7 +39,7 @@ Recommended test port:
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.api.port=18081
 ```
 
@@ -47,7 +47,7 @@ Optional custom database file:
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.api.port=18081 \
   -Dspaghettichef.databaseFile=spaghettichef-test.db
 ```
@@ -288,7 +288,7 @@ Start again:
 
 ```bash
 mvn exec:java \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.api.port=18081
 ```
 

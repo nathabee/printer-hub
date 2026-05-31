@@ -179,8 +179,8 @@ Not part of this step:
 
 Main code:
 
-* `src/main/java/spaghettichef/serial/SimulatedPrinterPort.java`
-* `src/main/java/spaghettichef/runtime/PrinterRuntimeNodeFactory.java`
+* `src/main/java/spaghettichef/local/serial/SimulatedPrinterPort.java`
+* `src/main/java/spaghettichef/local/runtime/PrinterRuntimeNodeFactory.java`
 
 Tests:
 

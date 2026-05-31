@@ -585,7 +585,7 @@ Start the local runtime with an explicit database file and API port:
 
 ```bash
 mvn \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.databaseFile="spaghettichef.db" \
   -Dspaghettichef.api.port=18080 \
   exec:java
@@ -708,22 +708,26 @@ spaghetti-chef/
 ├── src/
 │   ├── main/
 │   │   ├── java/spaghettichef/
-│   │   │   ├── api/
-│   │   │   ├── camera/
-│   │   │   ├── command/
-│   │   │   ├── config/
-│   │   │   ├── job/
-│   │   │   ├── monitoring/
-│   │   │   ├── persistence/
-│   │   │   ├── runtime/
-│   │   │   ├── security/
-│   │   │   ├── serial/
-│   │   │   └── ...
+│   │   │   ├── Main.java
+│   │   │   ├── local/
+│   │   │   │   ├── api/
+│   │   │   │   ├── camera/
+│   │   │   │   ├── command/
+│   │   │   │   ├── config/
+│   │   │   │   ├── job/
+│   │   │   │   ├── monitoring/
+│   │   │   │   ├── persistence/
+│   │   │   │   ├── runtime/
+│   │   │   │   ├── security/
+│   │   │   │   └── serial/
+│   │   │   ├── central/
+│   │   │   │   ├── api/
+│   │   │   │   ├── persistence/
+│   │   │   │   └── service/
+│   │   │   └── shared/
 │   │   └── resources/
-│   │       └── dashboard/
-│   │           ├── components/
-│   │           ├── views/
-│   │           └── ...
+│   │       ├── dashboard/
+│   │       └── central-dashboard/
 │   └── test/
 │       └── java/spaghettichef/
 ├── rust/

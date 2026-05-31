@@ -485,6 +485,17 @@ Codex must not remove or weaken the existing `0.3.0` local authorization, danger
 
 Codex should add central functionality as a new mode, package, module, route group, or clearly separated implementation, following existing project conventions.
 
+Implemented 1.0.0 package boundary:
+
+```text
+src/main/java/spaghettichef/Main.java              compatibility dispatcher only
+src/main/java/spaghettichef/local/                local farm runtime
+src/main/java/spaghettichef/central/              central read-only VPS runtime
+src/main/java/spaghettichef/shared/               small shared utilities only
+```
+
+The local and central code paths must not import each other. Shared code should stay small and generic.
+
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## start
 
-mvn exec:java   -Dspaghettichef.databaseFile="spaghettichef-real.db"   -Dspaghettichef.api.port=18080   -Dexec.mainClass="spaghettichef.Main"
+mvn exec:java   -Dspaghettichef.databaseFile="spaghettichef-real.db"   -Dspaghettichef.api.port=18080   -Dexec.mainClass="spaghettichef.local.LocalMain"
 [INFO] Scanning for projects...
 [INFO] 
 [INFO] -----------------------< spaghettichef:spaghetti-chef >-----------------------

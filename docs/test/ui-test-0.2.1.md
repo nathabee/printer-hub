@@ -5,7 +5,7 @@
  
 
 ```text
-mvn exec:java   -Dspaghettichef.databaseFile="spaghettichef-real.db"   -Dspaghettichef.api.port=18080   -Dexec.mainClass="spaghettichef.Main"
+mvn exec:java   -Dspaghettichef.databaseFile="spaghettichef-real.db"   -Dspaghettichef.api.port=18080   -Dexec.mainClass="spaghettichef.local.LocalMain"
 
 # open in browser :
 http://localhost:18080/dashboard

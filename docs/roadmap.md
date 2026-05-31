@@ -210,7 +210,7 @@ Runtime validation:
 
 ```bash
 mvn exec:java \
--Dexec.mainClass="spaghettichef.Main" \
+-Dexec.mainClass="spaghettichef.local.LocalMain" \
 -Dexec.args="SIM_PORT M105 3 100 sim"
 ```
 
@@ -361,7 +361,7 @@ Example local run:
 ```bash
 mvn exec:java \
 -Dspaghettichef.api.port=18080 \
--Dexec.mainClass="spaghettichef.Main"
+-Dexec.mainClass="spaghettichef.local.LocalMain"
 ```
 
 Example verification:
@@ -2789,7 +2789,7 @@ Goals:
 * isolate native dependency handling
 * document installation and troubleshooting
 * keep camera backend replaceable behind the existing abstraction
-* keep camera settings configurable (spaghettichef.config.RuntimeDefaults : intialized with constante, persistet in database, changeable in the settings of the dashbord)
+* keep camera settings configurable (spaghettichef.shared.config.RuntimeDefaults : intialized with constante, persistet in database, changeable in the settings of the dashbord)
 
 Out of scope:
 
@@ -3340,11 +3340,11 @@ Implementation slice 1 — physical delta image writer:
 Update / verify:
 
 ```text
-src/main/java/spaghettichef/camera/CameraDeltaSetService.java
-src/main/java/spaghettichef/camera/CameraStoragePaths.java
-src/main/java/spaghettichef/camera/ImageDeltaFrameAnalyzer.java
-src/main/java/spaghettichef/persistence/CameraDeltaFrame.java
-src/main/java/spaghettichef/persistence/CameraDeltaFrameStore.java
+src/main/java/spaghettichef/local/camera/CameraDeltaSetService.java
+src/main/java/spaghettichef/local/camera/CameraStoragePaths.java
+src/main/java/spaghettichef/local/camera/ImageDeltaFrameAnalyzer.java
+src/main/java/spaghettichef/local/persistence/CameraDeltaFrame.java
+src/main/java/spaghettichef/local/persistence/CameraDeltaFrameStore.java
 ```
 
 Target:
@@ -3367,12 +3367,12 @@ Implementation slice 2 — live camera job creates delta frames:
 Update / verify:
 
 ```text
-src/main/java/spaghettichef/camera/CameraCaptureService.java
-src/main/java/spaghettichef/camera/CameraJobService.java
-src/main/java/spaghettichef/camera/CameraDeltaSetService.java
-src/main/java/spaghettichef/camera/CameraCalculationRunService.java
-src/main/java/spaghettichef/camera/CameraMonitoringTask.java
-src/main/java/spaghettichef/camera/CameraAnalysisSessionService.java
+src/main/java/spaghettichef/local/camera/CameraCaptureService.java
+src/main/java/spaghettichef/local/camera/CameraJobService.java
+src/main/java/spaghettichef/local/camera/CameraDeltaSetService.java
+src/main/java/spaghettichef/local/camera/CameraCalculationRunService.java
+src/main/java/spaghettichef/local/camera/CameraMonitoringTask.java
+src/main/java/spaghettichef/local/camera/CameraAnalysisSessionService.java
 ```
 
 Target:
@@ -3847,6 +3847,15 @@ Goals:
 Add an explicit central mode and a separate central code path with central farm
 persistence, farm registration, heartbeat, overview, minimal read-only central
 dashboard, central database initialization, and a new central VPS build artifact.
+
+Add a clear package boundary before 1.0.1:
+
+```text
+spaghettichef.local    local farm runtime, printer/camera/job/security code
+spaghettichef.central  central read-only VPS code
+spaghettichef.shared   small shared version/log/config/message utilities
+spaghettichef.Main     compatibility dispatcher only
+```
 
 The local farm runtime remains unchanged as the owner of printer communication,
 camera capture, local jobs, local security, dangerous-action confirmation, and

@@ -2,12 +2,12 @@ package spaghettichef.central;
 
 import java.util.concurrent.CountDownLatch;
 
-import spaghettichef.OperationMessages;
+import spaghettichef.shared.OperationMessages;
 import spaghettichef.central.api.CentralApiServer;
 import spaghettichef.central.persistence.CentralDatabaseInitializer;
 import spaghettichef.central.persistence.CentralFarmStore;
 import spaghettichef.central.service.CentralFarmService;
-import spaghettichef.config.RuntimeDefaults;
+import spaghettichef.shared.config.RuntimeDefaults;
 
 public final class CentralMain {
     private CentralMain() {

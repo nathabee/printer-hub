@@ -116,7 +116,7 @@ pipeline {
                       echo "Using database file ${DB_FILE}"
 
                       mvn -B -ntp exec:java \
-                        -Dexec.mainClass="spaghettichef.Main" \
+                        -Dexec.mainClass="spaghettichef.local.LocalMain" \
                         -Dspaghettichef.api.port="${API_PORT}" \
                         -Dspaghettichef.monitoring.intervalSeconds=1 \
                         -Dspaghettichef.databaseFile="${DB_FILE}" \
@@ -426,7 +426,7 @@ PY
                       echo "Using database file ${DB_FILE}"
 
                       mvn -B -ntp exec:java \
-                        -Dexec.mainClass="spaghettichef.Main" \
+                        -Dexec.mainClass="spaghettichef.local.LocalMain" \
                         -Dspaghettichef.api.port="${ROBUST_PORT}" \
                         -Dspaghettichef.monitoring.intervalSeconds=1 \
                         -Dspaghettichef.databaseFile="${DB_FILE}" \
@@ -1043,8 +1043,9 @@ echo SpaghettiChef launcher configuration
 echo   java: %JAVA_CMD% [source=%JAVA_CMD_SOURCE%]
 echo   api port: %API_PORT% [source=%API_PORT_SOURCE%]
 echo   database file: %DATABASE_FILE% [source=%DATABASE_FILE_SOURCE%]
+echo   mode: local
 
-"%JAVA_CMD%" -Dspaghettichef.databaseFile="%DATABASE_FILE%" -Dspaghettichef.api.port="%API_PORT%" -jar spaghetti-chef.jar
+"%JAVA_CMD%" -Dspaghettichef.mode=local -Dspaghettichef.databaseFile="%DATABASE_FILE%" -Dspaghettichef.api.port="%API_PORT%" -jar spaghetti-chef.jar
 '''
         }
 
@@ -1058,7 +1059,7 @@ set -eu
 API_PORT="${1:-18080}"
 DATABASE_FILE="${SPAGHETTICHEF_DATABASE_FILE:-spaghettichef.db}"
 
-exec java -Dspaghettichef.databaseFile="${DATABASE_FILE}" -Dspaghettichef.api.port="${API_PORT}" -jar spaghetti-chef.jar
+exec java -Dspaghettichef.mode=local -Dspaghettichef.databaseFile="${DATABASE_FILE}" -Dspaghettichef.api.port="${API_PORT}" -jar spaghetti-chef.jar
 EOF
             chmod +x package/linux/spaghettichef.sh
 

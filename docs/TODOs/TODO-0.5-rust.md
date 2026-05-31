@@ -307,7 +307,7 @@ No Rust REST backend.
 ## New Java package
 
 ```text
-src/main/java/spaghettichef/camera/analysis/
+src/main/java/spaghettichef/local/camera/analysis/
 ```
 
 ## New Java files
@@ -428,10 +428,10 @@ INVALID_RESPONSE
 ## Java files likely touched
 
 ```text
-src/main/java/spaghettichef/camera/CameraCalculationRunService.java
-src/main/java/spaghettichef/persistence/CameraCalculationRun.java
-src/main/java/spaghettichef/persistence/CameraCalculationRunStore.java
-src/main/java/spaghettichef/persistence/DatabaseInitializer.java
+src/main/java/spaghettichef/local/camera/CameraCalculationRunService.java
+src/main/java/spaghettichef/local/persistence/CameraCalculationRun.java
+src/main/java/spaghettichef/local/persistence/CameraCalculationRunStore.java
+src/main/java/spaghettichef/local/persistence/DatabaseInitializer.java
 ```
 
 ## Acceptance checklist
@@ -485,8 +485,8 @@ Failure must be visible as diagnostic data.
 ## Java files likely touched
 
 ```text
-src/main/java/spaghettichef/camera/CameraCalculationRunService.java
-src/main/java/spaghettichef/api/CameraApiHandler.java
+src/main/java/spaghettichef/local/camera/CameraCalculationRunService.java
+src/main/java/spaghettichef/local/api/CameraApiHandler.java
 src/main/resources/dashboard/views/admin-camera-data.js
 src/main/resources/dashboard/api.js
 ```

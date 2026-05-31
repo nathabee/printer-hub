@@ -184,8 +184,23 @@ class CentralApiServerTest {
 
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("SpaghettiChef Central"));
+            assertTrue(response.body().contains("/central-dashboard/favicon.svg"));
             assertFalse(response.body().toLowerCase(java.util.Locale.ROOT).contains("start print"));
             assertFalse(response.body().toLowerCase(java.util.Locale.ROOT).contains("emergency stop"));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void centralDashboardFaviconReusesLocalDashboardIcon() throws Exception {
+        TestContext context = createContext("dashboard-favicon.db");
+        try {
+            HttpResponse<String> response = context.get("/central-dashboard/favicon.svg");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.headers().firstValue("content-type").orElse("").contains("image/svg+xml"));
+            assertTrue(response.body().contains("<svg"));
         } finally {
             context.close();
         }

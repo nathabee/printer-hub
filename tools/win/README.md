@@ -40,7 +40,12 @@ Example:
 SPAGHETTICHEF_JAVA=C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot\bin\java.exe
 SPAGHETTICHEF_DATABASE_FILE=C:\spaghettichef\data\spaghettichef.db
 SPAGHETTICHEF_API_PORT=18080
+SPAGHETTICHEF_MODE=local
 ```
+
+The Windows LAN package is for the local farm runtime. Keep
+`SPAGHETTICHEF_MODE=local` here; the central read-only VPS uses the separate
+central artifact.
 
 ## Camera Helpers
 

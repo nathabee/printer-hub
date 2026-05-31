@@ -3,17 +3,18 @@ package spaghettichef.central.api;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import spaghettichef.AppVersion;
-import spaghettichef.OperationMessages;
-import spaghettichef.SpaghettiChefLog;
+import spaghettichef.shared.AppVersion;
+import spaghettichef.shared.OperationMessages;
+import spaghettichef.shared.SpaghettiChefLog;
 import spaghettichef.central.service.CentralFarm;
 import spaghettichef.central.service.CentralFarmOverview;
 import spaghettichef.central.service.CentralFarmService;
 import spaghettichef.central.service.FarmHeartbeatRequest;
 import spaghettichef.central.service.FarmRegistrationRequest;
-import spaghettichef.config.RuntimeDefaults;
+import spaghettichef.shared.config.RuntimeDefaults;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -164,44 +165,27 @@ public final class CentralApiServer {
             sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
             return;
         }
-        String body = """
-                <!doctype html>
-                <html lang="en">
-                <head>
-                  <meta charset="utf-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1">
-                  <title>SpaghettiChef Central</title>
-                  <style>
-                    body { margin: 0; font-family: system-ui, sans-serif; color: #18202a; background: #f6f7f9; }
-                    main { max-width: 1120px; margin: 0 auto; padding: 28px 18px; }
-                    h1 { font-size: 24px; margin: 0 0 18px; }
-                    table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #d8dde4; }
-                    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e8ee; font-size: 14px; }
-                    th { background: #eef1f5; }
-                    .status { font-weight: 700; }
-                  </style>
-                </head>
-                <body>
-                <main>
-                  <h1>SpaghettiChef Central</h1>
-                  <table>
-                    <thead><tr><th>Farm</th><th>Status</th><th>Printers</th><th>Cameras</th><th>Active Prints</th><th>Alerts</th><th>Last Seen</th></tr></thead>
-                    <tbody id="farms"><tr><td colspan="7">Loading...</td></tr></tbody>
-                  </table>
-                </main>
-                <script>
-                fetch('/api/central/farms/overview').then(r => r.json()).then(data => {
-                  const rows = data.farms.map(item => {
-                    const f = item.farm;
-                    return `<tr><td>${f.farmName}</td><td class="status">${item.status}</td><td>${f.printerCount}</td><td>${f.cameraCount}</td><td>${f.activePrintCount}</td><td>${f.spaghettiAlertCount}</td><td>${f.lastSeenAt || ''}</td></tr>`;
-                  }).join('') || '<tr><td colspan="7">No farms registered.</td></tr>';
-                  document.getElementById('farms').innerHTML = rows;
-                });
-                </script>
-                </body>
-                </html>
-                """;
-        sendHtml(exchange, 200, body);
+
+        String path = exchange.getRequestURI().getPath();
+
+        if ("/central-dashboard".equals(path) || "/central-dashboard/".equals(path)) {
+            sendResource(exchange, "central-dashboard/index.html", "text/html; charset=utf-8");
+            return;
+        }
+        if ("/central-dashboard/favicon.svg".equals(path)) {
+            sendResource(exchange, "dashboard/favicon.svg", "image/svg+xml");
+            return;
+        }
+        if ("/central-dashboard/central-dashboard.css".equals(path)) {
+            sendResource(exchange, "central-dashboard/central-dashboard.css", "text/css; charset=utf-8");
+            return;
+        }
+        if ("/central-dashboard/central-dashboard.js".equals(path)) {
+            sendResource(exchange, "central-dashboard/central-dashboard.js", "application/javascript; charset=utf-8");
+            return;
+        }
+
+        sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(path)));
     }
 
     private void safeHandle(HttpExchange exchange, ExchangeHandler handler) throws IOException {
@@ -285,8 +269,21 @@ public final class CentralApiServer {
         send(exchange, statusCode, body, "text/html; charset=utf-8");
     }
 
+    private void sendResource(HttpExchange exchange, String resourcePath, String contentType) throws IOException {
+        try (InputStream inputStream = CentralApiServer.class.getClassLoader().getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(resourcePath)));
+                return;
+            }
+            sendBytes(exchange, 200, inputStream.readAllBytes(), contentType);
+        }
+    }
+
     private void send(HttpExchange exchange, int statusCode, String body, String contentType) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        sendBytes(exchange, statusCode, body.getBytes(StandardCharsets.UTF_8), contentType);
+    }
+
+    private void sendBytes(HttpExchange exchange, int statusCode, byte[] bytes, String contentType) throws IOException {
         Headers headers = exchange.getResponseHeaders();
         headers.set("Content-Type", contentType);
         exchange.sendResponseHeaders(statusCode, bytes.length);

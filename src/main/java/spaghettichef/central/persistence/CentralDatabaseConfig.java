@@ -1,6 +1,6 @@
 package spaghettichef.central.persistence;
 
-import spaghettichef.config.RuntimeDefaults;
+import spaghettichef.shared.config.RuntimeDefaults;
 
 public final class CentralDatabaseConfig {
     public static final String CENTRAL_DATABASE_FILE_PROPERTY = "spaghettichef.central.databaseFile";

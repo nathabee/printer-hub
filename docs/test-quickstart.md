@@ -9,7 +9,7 @@ what do do after change for snhell local test?
 mvn -DskipTests compile
 
 mvn \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.databaseFile=spaghettichef-local.db \
   -Dspaghettichef.api.port=18080 \
   exec:java

@@ -61,10 +61,10 @@ Expected result:
 Likely impacted files:
 
 ```text
-src/main/java/spaghettichef/security/LocalRole.java
-src/main/java/spaghettichef/security/Permission.java
-src/main/java/spaghettichef/security/RoleProfile.java
-src/main/java/spaghettichef/security/AuthorizationService.java
+src/main/java/spaghettichef/local/security/LocalRole.java
+src/main/java/spaghettichef/local/security/Permission.java
+src/main/java/spaghettichef/local/security/RoleProfile.java
+src/main/java/spaghettichef/local/security/AuthorizationService.java
 src/main/java/spaghettichef/OperationMessages.java
 ```
 
@@ -120,10 +120,10 @@ Expected result:
 Likely impacted files:
 
 ```text
-src/main/java/spaghettichef/persistence/SecuritySettingsStore.java
-src/main/java/spaghettichef/persistence/RoleProfileStore.java
-src/main/java/spaghettichef/persistence/DatabaseInitializer.java
-src/main/java/spaghettichef/api/RemoteApiServer.java
+src/main/java/spaghettichef/local/persistence/SecuritySettingsStore.java
+src/main/java/spaghettichef/local/persistence/RoleProfileStore.java
+src/main/java/spaghettichef/local/persistence/DatabaseInitializer.java
+src/main/java/spaghettichef/local/api/RemoteApiServer.java
 src/main/resources/dashboard/api.js
 src/main/resources/dashboard/state.js
 src/main/resources/dashboard/views/settings.js
@@ -198,9 +198,9 @@ Expected result:
 Likely impacted files:
 
 ```text
-src/main/java/spaghettichef/api/RemoteApiServer.java
-src/main/java/spaghettichef/security/AuthorizationService.java
-src/main/java/spaghettichef/security/ActionPermissionResolver.java
+src/main/java/spaghettichef/local/api/RemoteApiServer.java
+src/main/java/spaghettichef/local/security/AuthorizationService.java
+src/main/java/spaghettichef/local/security/ActionPermissionResolver.java
 src/test/java/spaghettichef/api/RemoteApiServerTest.java
 ```
 
@@ -258,9 +258,9 @@ Expected result:
 Likely impacted files:
 
 ```text
-src/main/java/spaghettichef/security/DangerousAction.java
-src/main/java/spaghettichef/security/DangerousActionGuard.java
-src/main/java/spaghettichef/api/RemoteApiServer.java
+src/main/java/spaghettichef/local/security/DangerousAction.java
+src/main/java/spaghettichef/local/security/DangerousActionGuard.java
+src/main/java/spaghettichef/local/api/RemoteApiServer.java
 src/main/resources/dashboard/dashboard.js
 src/main/resources/dashboard/views/printer-prepare.js
 src/main/resources/dashboard/views/printer-control.js
@@ -351,10 +351,10 @@ Expected result:
 Likely impacted files:
 
 ```text
-src/main/java/spaghettichef/persistence/PrinterEventStore.java
-src/main/java/spaghettichef/persistence/OperatorAuditStore.java
-src/main/java/spaghettichef/security/AuthorizationService.java
-src/main/java/spaghettichef/api/RemoteApiServer.java
+src/main/java/spaghettichef/local/persistence/PrinterEventStore.java
+src/main/java/spaghettichef/local/persistence/OperatorAuditStore.java
+src/main/java/spaghettichef/local/security/AuthorizationService.java
+src/main/java/spaghettichef/local/api/RemoteApiServer.java
 src/main/resources/dashboard/views/printer-history.js
 src/main/resources/dashboard/views/monitoring.js
 ```

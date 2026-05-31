@@ -130,7 +130,7 @@ For development, Maven can start SpaghettiChef directly:
 
 ```bash
 mvn \
-  -Dexec.mainClass="spaghettichef.Main" \
+  -Dexec.mainClass="spaghettichef.local.LocalMain" \
   -Dspaghettichef.api.port=18080 \
   -Dspaghettichef.monitoring.intervalSeconds=1 \
   -Dspaghettichef.databaseFile=spaghettichef.db \
