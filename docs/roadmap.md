@@ -3813,9 +3813,17 @@ Engine settings now define stable engine names, adapter type, dashboard label, d
 
 ---
 
-## 0.7.2 + skipped will be done after/parrallele to 1.0.x
+## 0.8.x — Dataset And Engine Workbench API Foundation
 
-## 0.8.x  skipped will be done after/parrallele to 1.0.x
+status: planned
+
+Purpose:
+
+Expose SpaghettiChef dataset, engine, calculation-run, baseline, report, and ML-export provider APIs for the external BenchChef workbench.
+
+Detailed implementation notes live in [TODO-0.8-workbench-api-foundation.md](TODOs/TODO-0.8-workbench-api-foundation.md).
+
+---
 
 ## 0.9.x skipped will be done after/parrallele to 1.0.x
 

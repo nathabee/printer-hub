@@ -2776,6 +2776,9 @@ POST   /admin/camera/delta-sets/{deltaSetId}/calculation-runs
 
 GET    /admin/camera/delta-frames/{deltaFrameId}/file?printerId={printerId}
 
+GET    /admin/camera/calculation-engine-settings
+PUT    /admin/camera/calculation-engine-settings/{engineName}
+
 GET    /admin/camera/calculation-runs/{calculationRunId}
 GET    /admin/camera/calculation-runs/{calculationRunId}/results
 GET    /admin/camera/calculation-runs/{calculationRunId}/trace
