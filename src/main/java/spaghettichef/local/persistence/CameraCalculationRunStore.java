@@ -117,6 +117,33 @@ public final class CameraCalculationRunStore {
         }
     }
 
+    public List<CameraCalculationRun> findByPrinterIdAndDeltaSetId(String printerId, long deltaSetId) {
+        String sql = selectColumns() + """
+                FROM camera_calculation_runs
+                WHERE printer_id = ?
+                    AND delta_set_id = ?
+                ORDER BY created_at DESC, id DESC;
+                """;
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(deltaSetId, "deltaSetId"));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<CameraCalculationRun> runs = new ArrayList<>();
+                while (resultSet.next()) {
+                    runs.add(mapRow(resultSet));
+                }
+                return runs;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to load camera calculation runs", exception);
+        }
+    }
+
     public List<CameraCalculationRun> findByCameraJobId(long cameraJobId) {
         String sql = selectColumns() + """
                 FROM camera_calculation_runs
@@ -129,6 +156,33 @@ public final class CameraCalculationRunStore {
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
             statement.setLong(1, requirePositive(cameraJobId, "cameraJobId"));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<CameraCalculationRun> runs = new ArrayList<>();
+                while (resultSet.next()) {
+                    runs.add(mapRow(resultSet));
+                }
+                return runs;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to load camera calculation runs", exception);
+        }
+    }
+
+    public List<CameraCalculationRun> findByPrinterIdAndCameraJobId(String printerId, long cameraJobId) {
+        String sql = selectColumns() + """
+                FROM camera_calculation_runs
+                WHERE printer_id = ?
+                    AND camera_job_id = ?
+                ORDER BY created_at DESC, id DESC;
+                """;
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(cameraJobId, "cameraJobId"));
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<CameraCalculationRun> runs = new ArrayList<>();
@@ -156,6 +210,21 @@ public final class CameraCalculationRunStore {
         }
     }
 
+    public int deleteByPrinterIdAndCameraJobId(String printerId, long cameraJobId) {
+        String sql = "DELETE FROM camera_calculation_runs WHERE printer_id = ? AND camera_job_id = ?;";
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(cameraJobId, "cameraJobId"));
+            return statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to delete camera calculation runs", exception);
+        }
+    }
+
     public int deleteByDeltaSetId(long deltaSetId) {
         String sql = "DELETE FROM camera_calculation_runs WHERE delta_set_id = ?;";
 
@@ -164,6 +233,21 @@ public final class CameraCalculationRunStore {
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
             statement.setLong(1, requirePositive(deltaSetId, "deltaSetId"));
+            return statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to delete camera calculation runs", exception);
+        }
+    }
+
+    public int deleteByPrinterIdAndDeltaSetId(String printerId, long deltaSetId) {
+        String sql = "DELETE FROM camera_calculation_runs WHERE printer_id = ? AND delta_set_id = ?;";
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(deltaSetId, "deltaSetId"));
             return statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to delete camera calculation runs", exception);
@@ -303,5 +387,13 @@ public final class CameraCalculationRunStore {
         }
 
         return value;
+    }
+
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+
+        return value.trim();
     }
 }

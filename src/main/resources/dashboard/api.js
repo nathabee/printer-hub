@@ -523,8 +523,8 @@ export async function previewCameraSnapshotRecalculation(jobId, parameters = {})
 }
 
 export async function generateCameraDeltaSet(jobId, parameters = {}) {
-  const query = parameters.printerId ? `?printerId=${encodeURIComponent(parameters.printerId)}` : "";
-  return requestJson(`/admin/camera/snapshot/jobs/${encodeURIComponent(jobId)}/delta-sets${query}`, {
+  const printerId = requiredPrinterId(parameters.printerId);
+  return requestJson(`/admin/printers/${encodeURIComponent(printerId)}/camera/jobs/${encodeURIComponent(jobId)}/delta-sets`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -534,20 +534,17 @@ export async function generateCameraDeltaSet(jobId, parameters = {}) {
 }
 
 export async function getCameraDeltaSets(jobId, printerId) {
-  const query = printerId ? `?printerId=${encodeURIComponent(printerId)}` : "";
-  const data = await requestJson(`/admin/camera/snapshot/jobs/${encodeURIComponent(jobId)}/delta-sets${query}`);
+  const data = await requestJson(`/admin/printers/${encodeURIComponent(requiredPrinterId(printerId))}/camera/jobs/${encodeURIComponent(jobId)}/delta-sets`);
   return Array.isArray(data.deltaSets) ? data.deltaSets : [];
 }
 
 export async function getCameraDeltaFrames(deltaSetId, printerId) {
-  const query = printerId ? `?printerId=${encodeURIComponent(printerId)}` : "";
-  const data = await requestJson(`/admin/camera/delta-sets/${encodeURIComponent(deltaSetId)}/frames${query}`);
+  const data = await requestJson(`/admin/printers/${encodeURIComponent(requiredPrinterId(printerId))}/camera/delta-sets/${encodeURIComponent(deltaSetId)}/frames`);
   return Array.isArray(data.frames) ? data.frames : [];
 }
 
 export async function deleteCameraDeltaSet(deltaSetId, printerId, options = {}) {
-  const query = printerId ? `?printerId=${encodeURIComponent(printerId)}` : "";
-  return requestJson(`/admin/camera/delta-sets/${encodeURIComponent(deltaSetId)}${query}`, {
+  return requestJson(`/admin/printers/${encodeURIComponent(requiredPrinterId(printerId))}/camera/delta-sets/${encodeURIComponent(deltaSetId)}`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json"
@@ -562,19 +559,25 @@ export async function deleteCameraDeltaSet(deltaSetId, printerId, options = {}) 
 }
 
 export async function getCameraCalculationRuns(deltaSetId, printerId) {
-  const query = printerId ? `?printerId=${encodeURIComponent(printerId)}` : "";
-  const data = await requestJson(`/admin/camera/delta-sets/${encodeURIComponent(deltaSetId)}/calculation-runs${query}`);
+  const data = await requestJson(`/admin/printers/${encodeURIComponent(requiredPrinterId(printerId))}/camera/delta-sets/${encodeURIComponent(deltaSetId)}/calculation-runs`);
   return Array.isArray(data.calculationRuns) ? data.calculationRuns : [];
 }
 
-export async function runCameraCalculation(deltaSetId, parameters = {}) {
-  return requestJson(`/admin/camera/delta-sets/${encodeURIComponent(deltaSetId)}/calculation-runs`, {
+export async function runCameraCalculation(deltaSetId, printerId, parameters = {}) {
+  return requestJson(`/admin/printers/${encodeURIComponent(requiredPrinterId(printerId))}/camera/delta-sets/${encodeURIComponent(deltaSetId)}/calculation-runs`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(parameters)
   });
+}
+
+function requiredPrinterId(printerId) {
+  if (!printerId || !String(printerId).trim()) {
+    throw new Error("printerId is required");
+  }
+  return String(printerId).trim();
 }
 
 export async function getCameraCalculationTrace(calculationRunId, printerId) {

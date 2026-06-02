@@ -300,7 +300,9 @@ public final class CameraAnalysisSessionService {
             return Path.of(existingDelta.get().deltaPath());
         }
 
-        Optional<CameraDeltaSet> liveDeltaSet = deltaSetStore.findByCameraJobId(cameraJobId).stream()
+        Optional<CameraDeltaSet> liveDeltaSet = deltaSetStore.findByPrinterIdAndCameraJobId(
+                        latestEntry.printerId(),
+                        cameraJobId).stream()
                 .filter(deltaSet -> "live-image-delta".equals(deltaSet.methodName()))
                 .findFirst();
         if (liveDeltaSet.isPresent()) {

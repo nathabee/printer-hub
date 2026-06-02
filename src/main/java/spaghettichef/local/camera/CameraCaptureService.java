@@ -183,14 +183,8 @@ public final class CameraCaptureService {
 
     public CameraCaptureResult captureForCameraJob(String printerId, long cameraJobId) {
         CameraSettings settings = settingsService.load(requirePrinterId(printerId));
-        CameraJob cameraJob = cameraJobService.findById(cameraJobId)
+        CameraJob cameraJob = cameraJobService.findByPrinterIdAndId(settings.printerId(), cameraJobId)
                 .orElseThrow(() -> new IllegalStateException("Camera job not found: " + cameraJobId));
-
-        if (!settings.printerId().equals(cameraJob.printerId())) {
-            throw new IllegalStateException("Camera job " + cameraJobId
-                    + " belongs to printer " + cameraJob.printerId()
-                    + " but capture was requested for " + settings.printerId());
-        }
 
         if (!"RUNNING".equalsIgnoreCase(cameraJob.state().name())) {
             throw new IllegalStateException("Camera job " + cameraJobId

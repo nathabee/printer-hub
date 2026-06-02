@@ -1,9 +1,219 @@
-# TO DO
+## 0.4.x — Camera Monitoring & Visual Safety Layer
 
-This file is the short-term working specification for the active 0.4.x camera work.
+status: in progress
 
-The roadmap stays as the milestone overview. This file contains the concrete implementation detail needed before coding.
+Purpose:
 
+Add printer-side visual monitoring as a parallel subsystem of the local PrinterHub runtime. The camera layer observes configured printers, captures snapshots, exposes camera state through the REST API and dashboard, and later detects visual print anomalies such as spaghetti failures.
+
+The camera subsystem must remain separate from serial communication, SD upload, and job execution internals. It may request safety actions only through controlled runtime services.
+ 
+### 0.4.0 — Camera Monitoring Foundation
+
+status: done
+
+Goals:
+
+- introduce a dedicated `printerhub.camera` package
+- define `CameraDevice` abstraction
+- support simulated camera and snapshot-folder camera sources
+- persist camera settings per printer
+- persist camera events
+- capture latest snapshot per configured printer
+- expose camera status and snapshot endpoints
+- add a selected-printer Camera dashboard view
+- keep real OpenCV/webcam support behind the abstraction and optional for later
+- keep camera disabled by default
+
+Out of scope:
+
+- spaghetti detection
+- OpenCV native dependency
+- automatic print pause
+- streaming video
+- changes to SD upload or serial communication
+
+---
+
+### 0.4.1 — Cross-Platform Camera Capture Scripts
+
+status: planned
+
+Goals:
+
+- add dedicated camera tooling under `tools/camera/`
+- keep Linux and Windows capture scripts separated:
+  - `tools/camera/linux/`
+  - `tools/camera/win/`
+- add one-shot snapshot capture scripts
+- add loop-based snapshot capture scripts
+- use `ffmpeg` as the first real capture backend
+- support Linux V4L2 devices such as `/dev/video0`
+- support Windows DirectShow camera names such as `"AUKEY Webcam"`
+- write camera files to persistent data directories
+- keep `latest.jpg` overwritten on each capture cycle
+- keep `previous.jpg` for future delta analysis
+- optionally archive one snapshot every configured interval, for example every 5 minutes
+- apply archive retention cleanup to avoid filling the data directory
+- document camera discovery commands for Linux and Windows
+- document the expected camera storage layout
+
+Suggested tool structure:
+
+```text
+tools
+├── camera
+│   ├── linux
+│   │   ├── camera-capture-once.sh
+│   │   └── camera-capture-loop.sh
+│   ├── win
+│   │   ├── camera-capture-once.ps1
+│   │   └── camera-capture-loop.ps1
+│   └── README.md
+└── win
+    ├── r.ps1
+    ├── run.env.example
+    ├── s.ps1
+    ├── t.ps1
+    ├── u.ps1
+    └── v.ps1
+```
+
+Suggested storage layout:
+
+```text
+data/camera/<printerId>/
+  latest.jpg
+  previous.jpg
+  delta.jpg
+  archive/
+    20260518_180000.jpg
+    20260518_180500.jpg
+```
+
+Windows runtime storage target:
+
+```text
+C:\ph\data\camera\<printerId>\
+```
+
+Linux development storage target:
+
+```text
+./data/camera/<printerId>/
+```
+
+Out of scope:
+
+* spaghetti detection
+* frame analysis
+* OpenCV or JavaCV integration
+* automatic printer intervention
+* dashboard camera polish beyond showing existing files
+* storing image blobs in SQLite
+
+Notes:
+
+* scripts are a bridge/proving layer, not the final product architecture
+* real PrinterHub runtime should later manage capture through Java services
+* image files should stay on filesystem
+* SQLite should only store metadata/events later
+* do not save every frame forever
+* use overwritten live files plus sparse archive and retention cleanup
+
+---
+
+### 0.4.2 — Frame Analysis & Spaghetti Heuristic Detection
+
+status: planned
+
+Goals:
+
+* introduce `FrameAnalyzer`
+* compare consecutive frames
+* use `latest.jpg` and `previous.jpg` as the first analysis inputs
+* calculate anomaly indicators
+* calculate a visual delta score
+* optionally generate `delta.jpg`
+* introduce `SpaghettiDetectionService`
+* expose confidence score and reason codes
+* persist suspected visual anomalies
+* show analysis state in dashboard
+
+Out of scope:
+
+* automatic printer intervention
+* hard stop/abort behavior
+* direct serial access from camera code
+
+---
+
+### 0.4.3 — Camera Safety Intervention
+
+status: planned
+
+Goals:
+
+* introduce a safety decision layer
+* require repeated high-confidence detections before action
+* persist `SPAGHETTI_SUSPECTED` and `SPAGHETTI_CONFIRMED`
+* optionally pause SD print using controlled command flow
+* persist safety action result
+* show safety intervention in printer/job history
+* keep safety actions disabled by default
+
+Out of scope:
+
+* automatic abort as default behavior
+* direct serial access from camera code
+
+---
+
+### 0.4.4 — Real Webcam Backend
+
+status: planned
+
+Goals:
+
+* add real webcam implementation behind `CameraDevice`
+* support Linux camera device paths
+* support Windows camera names or indexes
+* support `ffmpeg` command-based capture as the first backend
+* evaluate OpenCV Java bindings or JavaCV only after ffmpeg capture is proven
+* isolate native dependency handling
+* document installation and troubleshooting
+* keep camera backend replaceable behind the existing abstraction
+
+Out of scope:
+
+* making OpenCV mandatory
+* streaming video
+* bypassing the `CameraDevice` abstraction
+
+---
+
+### 0.4.5 — Camera Dashboard Polish
+
+status: planned
+
+Goals:
+
+* improve camera cards
+* add latest snapshot refresh
+* show last frame age
+* show anomaly confidence history
+* show camera event timeline
+* add camera settings editor
+* add safety mode indicator
+* show archive availability
+* show capture backend status
+* show camera storage path and retention status
+
+Out of scope:
+
+* changing SD upload logic
+* changing serial communication ownership
+ 
 ---
 
 ## 0.4.6 — Camera Dashboard Job Debug

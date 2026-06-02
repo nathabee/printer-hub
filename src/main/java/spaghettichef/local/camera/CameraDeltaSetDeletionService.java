@@ -60,11 +60,8 @@ public final class CameraDeltaSetDeletionService {
                 : request;
         effectiveRequest.requireConfirmed();
 
-        CameraDeltaSet deltaSet = deltaSetStore.findById(deltaSetId)
+        CameraDeltaSet deltaSet = deltaSetStore.findByPrinterIdAndId(normalizedPrinterId, deltaSetId)
                 .orElseThrow(() -> new IllegalArgumentException("camera delta set not found: " + deltaSetId));
-        if (!normalizedPrinterId.equals(deltaSet.printerId())) {
-            throw new IllegalArgumentException("camera delta set does not belong to printer: " + normalizedPrinterId);
-        }
 
         CameraSettings settings = settingsService.load(normalizedPrinterId);
         Path expectedDeltaDirectory = CameraStoragePaths.deltasDirectory(
@@ -84,21 +81,25 @@ public final class CameraDeltaSetDeletionService {
 
         if (effectiveRequest.deleteDeltaFiles()) {
             deltaFiles = deleteDeltaFiles(
-                    deltaFrameStore.findByDeltaSetId(deltaSet.requireId()),
+                    deltaFrameStore.findByPrinterIdAndDeltaSetId(normalizedPrinterId, deltaSet.requireId()),
                     expectedDeltaDirectory,
                     failedFiles);
         }
 
         if (effectiveRequest.deleteCalculationRuns()) {
-            for (CameraCalculationRun run : calculationRunStore.findByDeltaSetId(deltaSet.requireId())) {
+            for (CameraCalculationRun run : calculationRunStore.findByPrinterIdAndDeltaSetId(
+                    normalizedPrinterId,
+                    deltaSet.requireId())) {
                 deletedCalculationResultRows += calculationResultStore.deleteByCalculationRunId(run.requireId());
             }
-            deletedCalculationRunRows = calculationRunStore.deleteByDeltaSetId(deltaSet.requireId());
+            deletedCalculationRunRows = calculationRunStore.deleteByPrinterIdAndDeltaSetId(
+                    normalizedPrinterId,
+                    deltaSet.requireId());
         }
 
         if (effectiveRequest.deleteDeltaRows()) {
-            deletedDeltaRows = deltaFrameStore.deleteByDeltaSetId(deltaSet.requireId());
-            deletedDeltaSetRows = deltaSetStore.deleteById(deltaSet.requireId());
+            deletedDeltaRows = deltaFrameStore.deleteByPrinterIdAndDeltaSetId(normalizedPrinterId, deltaSet.requireId());
+            deletedDeltaSetRows = deltaSetStore.deleteByPrinterIdAndId(normalizedPrinterId, deltaSet.requireId());
         }
 
         String message = failedFiles.isEmpty()

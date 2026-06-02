@@ -76,11 +76,8 @@ public final class CameraJobDeletionService {
                 : request;
         effectiveRequest.requireConfirmed();
 
-        CameraJob cameraJob = cameraJobStore.findById(cameraJobId)
+        CameraJob cameraJob = cameraJobStore.findByPrinterIdAndId(normalizedPrinterId, cameraJobId)
                 .orElseThrow(() -> new IllegalArgumentException("camera job not found: " + cameraJobId));
-        if (!normalizedPrinterId.equals(cameraJob.printerId())) {
-            throw new IllegalArgumentException("camera job does not belong to printer: " + normalizedPrinterId);
-        }
 
         CameraSettings settings = settingsService.load(normalizedPrinterId);
         Path printerCameraDirectory = CameraStoragePaths
@@ -109,25 +106,29 @@ public final class CameraJobDeletionService {
 
         if (effectiveRequest.deleteDeltaFiles()) {
             deltaFiles = deleteDeltaFiles(
-                    deltaFrameStore.findByCameraJobId(cameraJobId),
+                    deltaFrameStore.findByPrinterIdAndCameraJobId(normalizedPrinterId, cameraJobId),
                     printerCameraDirectory,
                     failedFiles);
         }
 
         if (effectiveRequest.deleteCalculationRuns()) {
-            for (CameraCalculationRun run : calculationRunStore.findByCameraJobId(cameraJobId)) {
+            for (CameraCalculationRun run : calculationRunStore.findByPrinterIdAndCameraJobId(
+                    normalizedPrinterId,
+                    cameraJobId)) {
                 deletedCalculationResultRows += calculationResultStore.deleteByCalculationRunId(run.requireId());
             }
-            deletedCalculationRunRows = calculationRunStore.deleteByCameraJobId(cameraJobId);
+            deletedCalculationRunRows = calculationRunStore.deleteByPrinterIdAndCameraJobId(
+                    normalizedPrinterId,
+                    cameraJobId);
         }
 
         if (effectiveRequest.deleteDeltaRows()) {
-            deletedDeltaRows = deltaFrameStore.deleteByCameraJobId(cameraJobId);
-            deletedDeltaSetRows = deltaSetStore.deleteByCameraJobId(cameraJobId);
+            deletedDeltaRows = deltaFrameStore.deleteByPrinterIdAndCameraJobId(normalizedPrinterId, cameraJobId);
+            deletedDeltaSetRows = deltaSetStore.deleteByPrinterIdAndCameraJobId(normalizedPrinterId, cameraJobId);
         }
 
         if (effectiveRequest.deleteCameraEvents()) {
-            deletedCameraEventRows = eventStore.deleteByCameraJobId(cameraJobId);
+            deletedCameraEventRows = eventStore.deleteByPrinterIdAndCameraJobId(normalizedPrinterId, cameraJobId);
         }
 
         if (effectiveRequest.deleteSnapshotRows()) {

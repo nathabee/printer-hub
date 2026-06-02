@@ -442,7 +442,7 @@ async function handleAdminCameraRunCalculation(deltaSetId) {
   const parsedConfidence = Number.parseFloat(confidenceInput?.value || "");
 
   try {
-    const result = await runCameraCalculation(deltaSetId, {
+    const result = await runCameraCalculation(deltaSetId, state.adminCameraPrinterId, {
       methodName: methodInput?.value?.trim() || "spaghetti-heuristic",
       engineName: engineInput?.value?.trim() || "JAVA_BASIC_DELTA",
       cliMethod: cliMethodInput?.value?.trim() || undefined,

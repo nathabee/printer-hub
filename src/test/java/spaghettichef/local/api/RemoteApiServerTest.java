@@ -1229,7 +1229,7 @@ class RemoteApiServerTest {
 
             HttpResponse<String> createDeltaSetResponse = context.request(
                     "POST",
-                    "/admin/camera/snapshot/jobs/" + cameraJobId + "/delta-sets?printerId=printer-1",
+                    "/admin/printers/printer-1/camera/jobs/" + cameraJobId + "/delta-sets",
                     """
                             {"deltaSnapshotStep":1,"methodName":"image-delta","message":"api test"}
                             """);
@@ -1243,12 +1243,15 @@ class RemoteApiServerTest {
             assertNotNull(deltaSetId);
 
             HttpResponse<String> deltaSetsResponse = context.get(
-                    "/admin/camera/snapshot/jobs/" + cameraJobId + "/delta-sets?printerId=printer-1");
+                    "/admin/printers/printer-1/camera/jobs/" + cameraJobId + "/delta-sets");
             assertEquals(200, deltaSetsResponse.statusCode());
             assertTrue(deltaSetsResponse.body().contains("\"deltaSets\":["));
             assertTrue(deltaSetsResponse.body().contains("\"generatedDeltaCount\":2"));
 
-            HttpResponse<String> framesResponse = context.get("/admin/camera/delta-sets/" + deltaSetId + "/frames");
+            assertEquals(404, context.get("/admin/camera/delta-sets/" + deltaSetId + "/frames").statusCode());
+
+            HttpResponse<String> framesResponse = context.get(
+                    "/admin/printers/printer-1/camera/delta-sets/" + deltaSetId + "/frames");
             assertEquals(200, framesResponse.statusCode());
             assertTrue(framesResponse.body().contains("\"frames\":["));
             assertTrue(framesResponse.body().contains("\"fromSnapshotId\":1"));
@@ -1259,13 +1262,13 @@ class RemoteApiServerTest {
 
             HttpResponse<String> firstRunResponse = context.request(
                     "POST",
-                    "/admin/camera/delta-sets/" + deltaSetId + "/calculation-runs",
+                    "/admin/printers/printer-1/camera/delta-sets/" + deltaSetId + "/calculation-runs",
                     """
                             {"methodName":"threshold-v1","confidenceThreshold":0.25,"message":"first run"}
                             """);
             HttpResponse<String> secondRunResponse = context.request(
                     "POST",
-                    "/admin/camera/delta-sets/" + deltaSetId + "/calculation-runs",
+                    "/admin/printers/printer-1/camera/delta-sets/" + deltaSetId + "/calculation-runs",
                     """
                             {"methodName":"threshold-v1","confidenceThreshold":0.75,"message":"second run"}
                             """);
@@ -1281,7 +1284,7 @@ class RemoteApiServerTest {
             assertNotNull(secondRunId);
 
             HttpResponse<String> runsResponse = context.get(
-                    "/admin/camera/delta-sets/" + deltaSetId + "/calculation-runs");
+                    "/admin/printers/printer-1/camera/delta-sets/" + deltaSetId + "/calculation-runs");
             assertEquals(200, runsResponse.statusCode());
             assertTrue(runsResponse.body().contains("\"calculationRuns\":["));
             assertTrue(runsResponse.body().contains("\"id\":" + firstRunId));

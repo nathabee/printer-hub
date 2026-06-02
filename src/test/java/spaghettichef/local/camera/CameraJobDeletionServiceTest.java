@@ -104,7 +104,8 @@ class CameraJobDeletionServiceTest {
                         job.requireId(),
                         CameraJobDeletionRequest.safeDefault(CameraJobDeletionRequest.CONFIRMATION)));
 
-        assertEquals("camera job does not belong to printer: printer-2", exception.getMessage());
+        assertEquals("camera job not found: 1", exception.getMessage());
+        assertTrue(stores.cameraJobStore().findByPrinterIdAndId("printer-1", job.requireId()).isPresent());
     }
 
     @Test

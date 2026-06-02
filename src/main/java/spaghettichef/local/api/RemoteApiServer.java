@@ -864,6 +864,11 @@ public final class RemoteApiServer {
         }
 
         String prefix = "/admin/camera/snapshot/jobs/";
+        if (path.startsWith("/admin/printers/")) {
+            handleAdminPrinterCamera(exchange, path);
+            return;
+        }
+
         if (path.startsWith("/admin/camera/snapshot/files/")) {
             handleAdminCameraSnapshotFile(exchange, path);
             return;
@@ -876,11 +881,6 @@ public final class RemoteApiServer {
 
         if (path.startsWith("/admin/camera/storage/")) {
             handleAdminCameraStorage(exchange, path);
-            return;
-        }
-
-        if (path.startsWith("/admin/camera/delta-sets/")) {
-            handleAdminCameraDeltaSet(exchange, path);
             return;
         }
 
@@ -984,37 +984,6 @@ public final class RemoteApiServer {
             return;
         }
 
-        if (parts.length == 2 && "delta-sets".equals(parts[1])) {
-            long cameraJobId = parsePositiveLong(jobId, "cameraJobId");
-
-            if ("GET".equalsIgnoreCase(method)) {
-                sendJson(exchange, 200, cameraDeltaSetsJson(cameraDeltaSetStore.findByCameraJobId(cameraJobId)));
-                return;
-            }
-
-            if ("POST".equalsIgnoreCase(method)) {
-                String body = readBody(exchange);
-                String requestedPrinterId = printerId == null || printerId.isBlank()
-                        ? requiredJsonString(body, "printerId")
-                        : printerId;
-                int deltaSnapshotStep = optionalJsonInteger(body, "deltaSnapshotStep", 1);
-                String methodName = optionalJsonString(body, "methodName", null);
-                String message = optionalJsonString(body, "message", null);
-
-                CameraDeltaSetGenerationResult result = cameraDeltaSetService.generate(
-                        requestedPrinterId,
-                        cameraJobId,
-                        deltaSnapshotStep,
-                        methodName,
-                        message);
-                sendJson(exchange, 201, cameraDeltaSetGenerationResultJson(result));
-                return;
-            }
-
-            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
-            return;
-        }
-
         if (parts.length == 2 && "recalculate-preview".equals(parts[1])) {
             if (!"POST".equalsIgnoreCase(method)) {
                 sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
@@ -1032,82 +1001,114 @@ public final class RemoteApiServer {
         sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(path)));
     }
 
-    private void handleAdminCameraDeltaSet(HttpExchange exchange, String path) throws IOException {
+    private void handleAdminPrinterCamera(HttpExchange exchange, String path) throws IOException {
         String method = exchange.getRequestMethod();
-        String remaining = path.substring("/admin/camera/delta-sets/".length());
+        String prefix = "/admin/printers/";
+        String remaining = path.substring(prefix.length());
         String[] parts = remaining.split("/");
-        if (parts.length < 1 || parts[0].isBlank()) {
+        if (parts.length < 3 || parts[0].isBlank() || !"camera".equals(parts[1])) {
             sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(path)));
             return;
         }
 
-        long deltaSetId = parsePositiveLong(URLDecoder.decode(parts[0], StandardCharsets.UTF_8), "deltaSetId");
+        String printerId = URLDecoder.decode(parts[0], StandardCharsets.UTF_8);
 
-        if (parts.length == 1 && "GET".equalsIgnoreCase(method)) {
-            Optional<CameraDeltaSet> deltaSet = cameraDeltaSetStore.findById(deltaSetId);
-            if (deltaSet.isEmpty()) {
-                sendJson(exchange, 404, errorJson("camera_delta_set_not_found"));
-                return;
-            }
+        if (parts.length >= 5 && "jobs".equals(parts[2])) {
+            long cameraJobId = parsePositiveLong(URLDecoder.decode(parts[3], StandardCharsets.UTF_8), "cameraJobId");
 
-            sendJson(exchange, 200, "{\"deltaSet\":" + cameraDeltaSetJson(deltaSet.get()) + "}");
-            return;
-        }
+            if (parts.length == 5 && "delta-sets".equals(parts[4])) {
+                if ("GET".equalsIgnoreCase(method)) {
+                    sendJson(exchange, 200, cameraDeltaSetsJson(
+                            cameraDeltaSetStore.findByPrinterIdAndCameraJobId(printerId, cameraJobId)));
+                    return;
+                }
 
-        if (parts.length == 1 && "DELETE".equalsIgnoreCase(method)) {
-            String printerId = queryParameter(exchange.getRequestURI().getRawQuery(), "printerId");
-            if (printerId == null || printerId.isBlank()) {
-                sendJson(exchange, 400, errorJson("printerId is required"));
-                return;
-            }
+                if ("POST".equalsIgnoreCase(method)) {
+                    String body = readBody(exchange);
+                    int deltaSnapshotStep = optionalJsonInteger(body, "deltaSnapshotStep", 1);
+                    String methodName = optionalJsonString(body, "methodName", null);
+                    String message = optionalJsonString(body, "message", null);
 
-            String body = readBody(exchange);
-            CameraDeltaSetDeletionRequest request = new CameraDeltaSetDeletionRequest(
-                    optionalJsonBoolean(body, "deleteDeltaFiles", true),
-                    optionalJsonBoolean(body, "deleteDeltaRows", true),
-                    optionalJsonBoolean(body, "deleteCalculationRuns", true),
-                    optionalJsonString(body, "requiredConfirmation", null));
+                    CameraDeltaSetGenerationResult result = cameraDeltaSetService.generate(
+                            printerId,
+                            cameraJobId,
+                            deltaSnapshotStep,
+                            methodName,
+                            message);
+                    sendJson(exchange, 201, cameraDeltaSetGenerationResultJson(result));
+                    return;
+                }
 
-            CameraDeltaSetDeletionReport report = cameraDeltaSetDeletionService.delete(printerId, deltaSetId, request);
-            sendJson(exchange, 200, cameraDeltaSetDeletionReportJson(report));
-            return;
-        }
-
-        if (parts.length == 2 && "frames".equals(parts[1])) {
-            if (!"GET".equalsIgnoreCase(method)) {
                 sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
                 return;
             }
-
-            sendJson(exchange, 200,
-                    cameraDeltaFramesJson(deltaSetId, cameraDeltaFrameStore.findByDeltaSetId(deltaSetId)));
-            return;
         }
 
-        if (parts.length == 2 && "calculation-runs".equals(parts[1])) {
-            if ("GET".equalsIgnoreCase(method)) {
-                sendJson(exchange, 200, cameraCalculationRunsJson(
-                        deltaSetId,
-                        cameraCalculationRunStore.findByDeltaSetId(deltaSetId)));
+        if (parts.length >= 4 && "delta-sets".equals(parts[2])) {
+            long deltaSetId = parsePositiveLong(URLDecoder.decode(parts[3], StandardCharsets.UTF_8), "deltaSetId");
+
+            if (parts.length == 4 && "GET".equalsIgnoreCase(method)) {
+                Optional<CameraDeltaSet> deltaSet = cameraDeltaSetStore.findByPrinterIdAndId(printerId, deltaSetId);
+                if (deltaSet.isEmpty()) {
+                    sendJson(exchange, 404, errorJson("camera_delta_set_not_found"));
+                    return;
+                }
+
+                sendJson(exchange, 200, "{\"deltaSet\":" + cameraDeltaSetJson(deltaSet.get()) + "}");
                 return;
             }
 
-            if ("POST".equalsIgnoreCase(method)) {
+            if (parts.length == 4 && "DELETE".equalsIgnoreCase(method)) {
                 String body = readBody(exchange);
-                CameraCalculationRun run = cameraCalculationRunService.run(
-                        deltaSetId,
-                        optionalJsonString(body, "methodName", null),
-                        optionalJsonDoubleObject(body, "confidenceThreshold"),
-                        optionalJsonString(body, "parameterJson", null),
-                        optionalJsonString(body, "message", null),
-                        optionalJsonString(body, "engineName", null),
-                        optionalJsonString(body, "cliMethod", null));
-                sendJson(exchange, 201, "{\"calculationRun\":" + cameraCalculationRunJson(run) + "}");
+                CameraDeltaSetDeletionRequest request = new CameraDeltaSetDeletionRequest(
+                        optionalJsonBoolean(body, "deleteDeltaFiles", true),
+                        optionalJsonBoolean(body, "deleteDeltaRows", true),
+                        optionalJsonBoolean(body, "deleteCalculationRuns", true),
+                        optionalJsonString(body, "requiredConfirmation", null));
+
+                CameraDeltaSetDeletionReport report = cameraDeltaSetDeletionService.delete(printerId, deltaSetId, request);
+                sendJson(exchange, 200, cameraDeltaSetDeletionReportJson(report));
                 return;
             }
 
-            sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
-            return;
+            if (parts.length == 5 && "frames".equals(parts[4])) {
+                if (!"GET".equalsIgnoreCase(method)) {
+                    sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+                    return;
+                }
+
+                sendJson(exchange, 200, cameraDeltaFramesJson(
+                        deltaSetId,
+                        cameraDeltaFrameStore.findByPrinterIdAndDeltaSetId(printerId, deltaSetId)));
+                return;
+            }
+
+            if (parts.length == 5 && "calculation-runs".equals(parts[4])) {
+                if ("GET".equalsIgnoreCase(method)) {
+                    sendJson(exchange, 200, cameraCalculationRunsJson(
+                            deltaSetId,
+                            cameraCalculationRunStore.findByPrinterIdAndDeltaSetId(printerId, deltaSetId)));
+                    return;
+                }
+
+                if ("POST".equalsIgnoreCase(method)) {
+                    String body = readBody(exchange);
+                    CameraCalculationRun run = cameraCalculationRunService.run(
+                            printerId,
+                            deltaSetId,
+                            optionalJsonString(body, "methodName", null),
+                            optionalJsonDoubleObject(body, "confidenceThreshold"),
+                            optionalJsonString(body, "parameterJson", null),
+                            optionalJsonString(body, "message", null),
+                            optionalJsonString(body, "engineName", null),
+                            optionalJsonString(body, "cliMethod", null));
+                    sendJson(exchange, 201, "{\"calculationRun\":" + cameraCalculationRunJson(run) + "}");
+                    return;
+                }
+
+                sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+                return;
+            }
         }
 
         sendJson(exchange, 404, errorJson(OperationMessages.resourceNotFound(path)));

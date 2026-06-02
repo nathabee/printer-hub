@@ -74,11 +74,16 @@ public final class CameraDeltaSetService {
             throw new IllegalArgumentException("deltaSnapshotStep must be greater than zero");
         }
 
-        CameraJob cameraJob = cameraJobStore.findById(cameraJobId)
-                .orElseThrow(() -> new IllegalArgumentException("camera job not found: " + cameraJobId));
-        if (!cameraJob.printerId().equals(normalizedPrinterId)) {
-            throw new IllegalArgumentException("camera job does not belong to printer: " + normalizedPrinterId);
+        Optional<CameraJob> scopedCameraJob = cameraJobStore.findByPrinterIdAndId(normalizedPrinterId, cameraJobId);
+        if (scopedCameraJob.isEmpty()) {
+            Optional<CameraJob> sameNumberDifferentPrinter = cameraJobStore.findById(cameraJobId)
+                    .filter(job -> !job.printerId().equals(normalizedPrinterId));
+            if (sameNumberDifferentPrinter.isPresent()) {
+                throw new IllegalArgumentException("camera job does not belong to printer: " + normalizedPrinterId);
+            }
+            throw new IllegalArgumentException("camera job not found: " + cameraJobId);
         }
+        CameraJob cameraJob = scopedCameraJob.get();
 
         List<CameraSnapshotEntry> snapshots = snapshotEntryStore.findByPrinterIdAndJobId(
                 normalizedPrinterId,
@@ -149,7 +154,10 @@ public final class CameraDeltaSetService {
             generatedCount++;
         }
 
-        CameraDeltaSet updatedDeltaSet = deltaSetStore.updateGeneratedDeltaCount(deltaSet.requireId(), generatedCount);
+        CameraDeltaSet updatedDeltaSet = deltaSetStore.updateGeneratedDeltaCount(
+                normalizedPrinterId,
+                deltaSet.requireId(),
+                generatedCount);
         return new CameraDeltaSetGenerationResult(
                 updatedDeltaSet,
                 snapshots.size(),

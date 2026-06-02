@@ -257,7 +257,7 @@ public final class CameraStorageSyncService {
             String deltaSetKey = deltaSetDirectory.getFileName().toString();
             counts.scannedDeltaSetFolders++;
             List<Path> deltaFiles = listFilesIfDirectory(deltaSetDirectory, "_delta.jpg");
-            CameraDeltaSet deltaSet = findStorageDeltaSet(cameraJob.requireId(), deltaSetKey)
+            CameraDeltaSet deltaSet = findStorageDeltaSet(printerId, cameraJob.requireId(), deltaSetKey)
                     .orElseGet(() -> createDeltaSet(
                             printerId,
                             cameraJob,
@@ -279,7 +279,7 @@ public final class CameraStorageSyncService {
                 counts.scannedDeltaFiles++;
                 String deltaPath = file.toAbsolutePath().normalize().toString();
                 seenPaths.add(deltaPath);
-                if (deltaFrameStore.findByDeltaPath(deltaSet.requireId(), deltaPath).isPresent()) {
+                if (deltaFrameStore.findByPrinterIdAndDeltaPath(printerId, deltaSet.requireId(), deltaPath).isPresent()) {
                     continue;
                 }
 
@@ -315,12 +315,12 @@ public final class CameraStorageSyncService {
             }
 
             if (!request.dryRun()) {
-                deltaSetStore.updateCounts(deltaSet.requireId(), snapshotsBySourceId.size(), deltaFiles.size());
+                deltaSetStore.updateCounts(printerId, deltaSet.requireId(), snapshotsBySourceId.size(), deltaFiles.size());
                 counts.updatedDeltaSets++;
             }
 
             if (request.deleteRowsForMissingFiles()) {
-                for (CameraDeltaFrame frame : deltaFrameStore.findByDeltaSetId(deltaSet.requireId())) {
+                for (CameraDeltaFrame frame : deltaFrameStore.findByPrinterIdAndDeltaSetId(printerId, deltaSet.requireId())) {
                     if (!seenPaths.contains(frame.deltaPath()) && isUnder(frame.deltaPath(), storageRoot)) {
                         counts.deletedDeltaFrameRows++;
                         if (!request.dryRun()) {
@@ -370,12 +370,12 @@ public final class CameraStorageSyncService {
         }
 
         return parsePositiveLong(cameraJobKey)
-                .flatMap(cameraJobStore::findById)
-                .filter(job -> printerId.equals(job.printerId()));
+                .flatMap(id -> cameraJobStore.findByPrinterIdAndId(printerId, id));
     }
 
-    private Optional<CameraDeltaSet> findStorageDeltaSet(long cameraJobId, String deltaSetKey) {
+    private Optional<CameraDeltaSet> findStorageDeltaSet(String printerId, long cameraJobId, String deltaSetKey) {
         Optional<CameraDeltaSet> byDescription = deltaSetStore.findByCameraJobId(cameraJobId).stream()
+                .filter(deltaSet -> printerId.equals(deltaSet.printerId()))
                 .filter(deltaSet -> deltaSet.messageOptional().filter(storageDeltaSetDescription(deltaSetKey)::equals).isPresent())
                 .findFirst();
         if (byDescription.isPresent()) {
@@ -383,7 +383,7 @@ public final class CameraStorageSyncService {
         }
 
         return parsePositiveLong(deltaSetKey)
-                .flatMap(deltaSetStore::findById)
+                .flatMap(id -> deltaSetStore.findByPrinterIdAndId(printerId, id))
                 .filter(deltaSet -> deltaSet.cameraJobId() == cameraJobId);
     }
 

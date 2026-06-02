@@ -106,13 +106,30 @@ public final class CameraCalculationRunService {
             String message,
             String engineName,
             String cliMethod) {
+        return run(null, deltaSetId, methodName, confidenceThreshold, parameterJson, message, engineName, cliMethod);
+    }
+
+    public CameraCalculationRun run(
+            String printerId,
+            long deltaSetId,
+            String methodName,
+            Double confidenceThreshold,
+            String parameterJson,
+            String message,
+            String engineName,
+            String cliMethod) {
         if (deltaSetId <= 0L) {
             throw new IllegalArgumentException("deltaSetId must be greater than zero");
         }
 
-        CameraDeltaSet deltaSet = deltaSetStore.findById(deltaSetId)
+        CameraDeltaSet deltaSet = printerId == null || printerId.isBlank()
+                ? deltaSetStore.findById(deltaSetId)
+                .orElseThrow(() -> new IllegalArgumentException("camera delta set not found: " + deltaSetId))
+                : deltaSetStore.findByPrinterIdAndId(printerId, deltaSetId)
                 .orElseThrow(() -> new IllegalArgumentException("camera delta set not found: " + deltaSetId));
-        List<CameraDeltaFrame> frames = deltaFrameStore.findByDeltaSetId(deltaSetId);
+        List<CameraDeltaFrame> frames = deltaFrameStore.findByPrinterIdAndDeltaSetId(
+                deltaSet.printerId(),
+                deltaSet.requireId());
         Instant createdAt = clock.instant();
         CameraCalculationEngineSettings settings = resolveEngineSettings(engineName);
         double threshold = normalizeThreshold(confidenceThreshold, settings.defaultConfidenceThreshold());

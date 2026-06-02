@@ -63,6 +63,7 @@ public final class CameraJobService {
                 .resolve(Long.toString(created.requireId()));
 
         return cameraJobStore.updateSnapshotDirectory(
+                settings.printerId(),
                 created.requireId(),
                 snapshotDirectory.toString(),
                 now);
@@ -103,6 +104,7 @@ public final class CameraJobService {
                 .resolve(Long.toString(created.requireId()));
 
         return cameraJobStore.updateSnapshotDirectory(
+                settings.printerId(),
                 created.requireId(),
                 snapshotDirectory.toString(),
                 now);
@@ -115,6 +117,7 @@ public final class CameraJobService {
         }
 
         return Optional.of(cameraJobStore.markStopped(
+                active.get().printerId(),
                 active.get().requireId(),
                 spaghettichef.local.persistence.CameraJobState.COMPLETED,
                 clock.instant(),
@@ -128,6 +131,14 @@ public final class CameraJobService {
 
     return cameraJobStore.findById(cameraJobId);
 }
+
+    public Optional<CameraJob> findByPrinterIdAndId(String printerId, long cameraJobId) {
+        if (cameraJobId <= 0L) {
+            throw new IllegalArgumentException("cameraJobId must be greater than zero");
+        }
+
+        return cameraJobStore.findByPrinterIdAndId(requireText(printerId, "printerId"), cameraJobId);
+    }
 
 
     private Optional<String> activePrintJobId(String printerId) {

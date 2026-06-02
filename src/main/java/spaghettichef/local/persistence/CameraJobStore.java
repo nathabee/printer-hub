@@ -4,7 +4,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +27,7 @@ public final class CameraJobStore {
     private CameraJob insert(CameraJob job) {
         String sql = """
                 INSERT INTO camera_jobs (
+                    id,
                     printer_id,
                     linked_print_job_id,
                     analysis_session_id,
@@ -43,23 +43,18 @@ public final class CameraJobStore {
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """;
 
         try (
                 Connection connection = Database.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)
+                PreparedStatement statement = connection.prepareStatement(sql)
         ) {
-            bind(statement, job);
+            long id = nextId(connection, job.printerId());
+            CameraJob saved = job.withId(id);
+            bind(statement, saved);
             statement.executeUpdate();
-
-            try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
-                if (generatedKeys.next()) {
-                    return job.withId(generatedKeys.getLong(1));
-                }
-            }
-
-            throw new IllegalStateException("Failed to read generated camera job id");
+            return saved;
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to save camera job", exception);
         }
@@ -83,15 +78,17 @@ public final class CameraJobStore {
                     message = ?,
                     created_at = ?,
                     updated_at = ?
-                WHERE id = ?;
+                WHERE printer_id = ?
+                    AND id = ?;
                 """;
 
         try (
                 Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
-            bind(statement, job);
-            statement.setLong(15, job.requireId());
+            bindForUpdate(statement, job);
+            statement.setString(15, job.printerId());
+            statement.setLong(16, job.requireId());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to update camera job", exception);
@@ -113,6 +110,37 @@ public final class CameraJobStore {
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
             statement.setLong(1, id);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return Optional.empty();
+                }
+
+                return Optional.of(mapRow(resultSet));
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to load camera job", exception);
+        }
+    }
+
+    public Optional<CameraJob> findByPrinterIdAndId(String printerId, long id) {
+        String normalizedPrinterId = requireText(printerId, "printerId");
+        if (id <= 0L) {
+            throw new IllegalArgumentException("id must be greater than zero");
+        }
+
+        String sql = selectColumns() + """
+                FROM camera_jobs
+                WHERE printer_id = ?
+                    AND id = ?;
+                """;
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, normalizedPrinterId);
+            statement.setLong(2, id);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (!resultSet.next()) {
@@ -216,8 +244,28 @@ public final class CameraJobStore {
         return updated;
     }
 
+    public CameraJob updateSnapshotDirectory(
+            String printerId,
+            long id,
+            String snapshotDirectory,
+            Instant updatedAt) {
+        CameraJob current = findByPrinterIdAndId(printerId, id)
+                .orElseThrow(() -> new IllegalArgumentException("camera job not found: " + id));
+        CameraJob updated = current.withSnapshotDirectory(snapshotDirectory, updatedAt);
+        save(updated);
+        return updated;
+    }
+
     public CameraJob markStopped(long id, CameraJobState state, Instant stoppedAt, String message) {
         CameraJob current = findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("camera job not found: " + id));
+        CameraJob updated = current.stopped(state, stoppedAt, message);
+        save(updated);
+        return updated;
+    }
+
+    public CameraJob markStopped(String printerId, long id, CameraJobState state, Instant stoppedAt, String message) {
+        CameraJob current = findByPrinterIdAndId(printerId, id)
                 .orElseThrow(() -> new IllegalArgumentException("camera job not found: " + id));
         CameraJob updated = current.stopped(state, stoppedAt, message);
         save(updated);
@@ -265,7 +313,41 @@ public final class CameraJobStore {
                 """;
     }
 
+    private static long nextId(Connection connection, String printerId) throws SQLException {
+        String sql = "SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM camera_jobs WHERE printer_id = ?;";
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, requireText(printerId, "printerId"));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getLong("next_id");
+                }
+            }
+        }
+
+        throw new IllegalStateException("Failed to allocate camera job id");
+    }
+
     private static void bind(PreparedStatement statement, CameraJob job) throws SQLException {
+        statement.setLong(1, job.requireId());
+        statement.setString(2, job.printerId());
+        statement.setString(3, job.linkedPrintJobId().orElse(null));
+        statement.setString(4, job.analysisSessionId().orElse(null));
+        statement.setString(5, job.state().name());
+        statement.setString(6, job.startedAt().toString());
+        statement.setString(7, job.stoppedAt().map(Instant::toString).orElse(null));
+        statement.setInt(8, job.captureIntervalSeconds());
+        statement.setInt(9, job.retainedSnapshots());
+        statement.setString(10, job.sourceType());
+        statement.setString(11, job.sourceDescription().orElse(null));
+        statement.setString(12, job.snapshotDirectory());
+        statement.setString(13, job.message().orElse(null));
+        statement.setString(14, job.createdAt().toString());
+        statement.setString(15, job.updatedAt().toString());
+    }
+
+    private static void bindForUpdate(PreparedStatement statement, CameraJob job) throws SQLException {
         statement.setString(1, job.printerId());
         statement.setString(2, job.linkedPrintJobId().orElse(null));
         statement.setString(3, job.analysisSessionId().orElse(null));
