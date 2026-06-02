@@ -100,6 +100,33 @@ public final class CameraDeltaFrameStore {
         }
     }
 
+    public List<CameraDeltaFrame> findByPrinterIdAndDeltaSetId(String printerId, long deltaSetId) {
+        String sql = selectColumns() + """
+                FROM camera_delta_frames
+                WHERE printer_id = ?
+                    AND delta_set_id = ?
+                ORDER BY from_captured_at ASC, id ASC;
+                """;
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(deltaSetId, "deltaSetId"));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<CameraDeltaFrame> frames = new ArrayList<>();
+                while (resultSet.next()) {
+                    frames.add(mapRow(resultSet));
+                }
+                return frames;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to load camera delta frames", exception);
+        }
+    }
+
     public List<CameraDeltaFrame> findByCameraJobId(long cameraJobId) {
         String sql = selectColumns() + """
                 FROM camera_delta_frames
@@ -112,6 +139,33 @@ public final class CameraDeltaFrameStore {
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
             statement.setLong(1, requirePositive(cameraJobId, "cameraJobId"));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<CameraDeltaFrame> frames = new ArrayList<>();
+                while (resultSet.next()) {
+                    frames.add(mapRow(resultSet));
+                }
+                return frames;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to load camera delta frames", exception);
+        }
+    }
+
+    public List<CameraDeltaFrame> findByPrinterIdAndCameraJobId(String printerId, long cameraJobId) {
+        String sql = selectColumns() + """
+                FROM camera_delta_frames
+                WHERE printer_id = ?
+                    AND camera_job_id = ?
+                ORDER BY from_captured_at ASC, id ASC;
+                """;
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(cameraJobId, "cameraJobId"));
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<CameraDeltaFrame> frames = new ArrayList<>();
@@ -187,6 +241,40 @@ public final class CameraDeltaFrameStore {
         }
     }
 
+    public Optional<CameraDeltaFrame> findByPrinterIdAndDeltaPath(String printerId, long deltaSetId, String deltaPath) {
+        if (deltaPath == null || deltaPath.isBlank()) {
+            throw new IllegalArgumentException("deltaPath must not be blank");
+        }
+
+        String sql = selectColumns() + """
+                FROM camera_delta_frames
+                WHERE printer_id = ?
+                    AND delta_set_id = ?
+                    AND delta_path = ?
+                ORDER BY id DESC
+                LIMIT 1;
+                """;
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(deltaSetId, "deltaSetId"));
+            statement.setString(3, deltaPath.trim());
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return Optional.empty();
+                }
+
+                return Optional.of(mapRow(resultSet));
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to load camera delta frame", exception);
+        }
+    }
+
     public int deleteById(long id) {
         String sql = "DELETE FROM camera_delta_frames WHERE id = ?;";
 
@@ -215,6 +303,21 @@ public final class CameraDeltaFrameStore {
         }
     }
 
+    public int deleteByPrinterIdAndCameraJobId(String printerId, long cameraJobId) {
+        String sql = "DELETE FROM camera_delta_frames WHERE printer_id = ? AND camera_job_id = ?;";
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(cameraJobId, "cameraJobId"));
+            return statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to delete camera delta frames", exception);
+        }
+    }
+
     public int deleteByDeltaSetId(long deltaSetId) {
         String sql = "DELETE FROM camera_delta_frames WHERE delta_set_id = ?;";
 
@@ -223,6 +326,21 @@ public final class CameraDeltaFrameStore {
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
             statement.setLong(1, requirePositive(deltaSetId, "deltaSetId"));
+            return statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to delete camera delta frames", exception);
+        }
+    }
+
+    public int deleteByPrinterIdAndDeltaSetId(String printerId, long deltaSetId) {
+        String sql = "DELETE FROM camera_delta_frames WHERE printer_id = ? AND delta_set_id = ?;";
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requireText(printerId, "printerId"));
+            statement.setLong(2, requirePositive(deltaSetId, "deltaSetId"));
             return statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to delete camera delta frames", exception);
@@ -242,6 +360,14 @@ public final class CameraDeltaFrameStore {
         statement.setDouble(10, frame.changedPixelRatio());
         statement.setDouble(11, frame.averagePixelDelta());
         statement.setString(12, frame.createdAt().toString());
+    }
+
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+
+        return value.trim();
     }
 
     private static String selectColumns() {

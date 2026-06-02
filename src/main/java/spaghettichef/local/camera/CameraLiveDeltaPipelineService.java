@@ -86,7 +86,7 @@ public final class CameraLiveDeltaPipelineService {
         long toSnapshotId = requireSnapshotId(to);
 
         CameraDeltaSet deltaSet = liveDeltaSet(settings, cameraJobId, snapshots.size());
-        if (deltaFrameAlreadyExists(deltaSet.requireId(), toSnapshotId)) {
+        if (deltaFrameAlreadyExists(settings.printerId(), deltaSet.requireId(), toSnapshotId)) {
             return Optional.empty();
         }
 
@@ -124,8 +124,10 @@ public final class CameraLiveDeltaPipelineService {
                 analysis.averagePixelDelta(),
                 createdAt));
 
-        List<CameraDeltaFrame> frames = deltaFrameStore.findByDeltaSetId(deltaSet.requireId());
-        deltaSetStore.updateCounts(deltaSet.requireId(), snapshots.size(), frames.size());
+        List<CameraDeltaFrame> frames = deltaFrameStore.findByPrinterIdAndDeltaSetId(
+                settings.printerId(),
+                deltaSet.requireId());
+        deltaSetStore.updateCounts(settings.printerId(), deltaSet.requireId(), snapshots.size(), frames.size());
 
         CameraCalculationRun run = liveCalculationRun(settings, cameraJobId, deltaSet.requireId());
         SpaghettiDetectionResult detection = spaghettiDetectionService.detect(analysis);
@@ -146,7 +148,7 @@ public final class CameraLiveDeltaPipelineService {
     }
 
     private CameraDeltaSet liveDeltaSet(CameraSettings settings, long cameraJobId, int sourceSnapshotCount) {
-        return deltaSetStore.findByCameraJobId(cameraJobId).stream()
+        return deltaSetStore.findByPrinterIdAndCameraJobId(settings.printerId(), cameraJobId).stream()
                 .filter(deltaSet -> LIVE_DELTA_METHOD.equals(deltaSet.methodName()))
                 .findFirst()
                 .orElseGet(() -> deltaSetStore.save(new CameraDeltaSet(
@@ -162,7 +164,7 @@ public final class CameraLiveDeltaPipelineService {
     }
 
     private CameraCalculationRun liveCalculationRun(CameraSettings settings, long cameraJobId, long deltaSetId) {
-        return calculationRunStore.findByDeltaSetId(deltaSetId).stream()
+        return calculationRunStore.findByPrinterIdAndDeltaSetId(settings.printerId(), deltaSetId).stream()
                 .filter(run -> LIVE_CALCULATION_METHOD.equals(run.methodName()))
                 .findFirst()
                 .orElseGet(() -> calculationRunStore.save(new CameraCalculationRun(
@@ -177,8 +179,8 @@ public final class CameraLiveDeltaPipelineService {
                         LIVE_CALCULATION_MESSAGE)));
     }
 
-    private boolean deltaFrameAlreadyExists(long deltaSetId, long toSnapshotId) {
-        return deltaFrameStore.findByDeltaSetId(deltaSetId).stream()
+    private boolean deltaFrameAlreadyExists(String printerId, long deltaSetId, long toSnapshotId) {
+        return deltaFrameStore.findByPrinterIdAndDeltaSetId(printerId, deltaSetId).stream()
                 .anyMatch(frame -> frame.toSnapshotId() == toSnapshotId);
     }
 

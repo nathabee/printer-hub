@@ -2036,19 +2036,19 @@ Response shape:
 ## Delta Set Endpoints
 
 ```text
-GET    /admin/camera/snapshot/jobs/{cameraJobId}/delta-sets
-POST   /admin/camera/snapshot/jobs/{cameraJobId}/delta-sets
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
+POST   /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
 
-GET    /admin/camera/delta-sets/{deltaSetId}
-DELETE /admin/camera/delta-sets/{deltaSetId}?printerId={printerId}
-GET    /admin/camera/delta-sets/{deltaSetId}/frames
-GET    /admin/camera/delta-sets/{deltaSetId}/calculation-runs
-POST   /admin/camera/delta-sets/{deltaSetId}/calculation-runs
+GET    /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}
+DELETE /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}
+GET    /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/frames
+GET    /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
+POST   /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
 ```
 
 ---
 
-## GET /admin/camera/snapshot/jobs/{cameraJobId}/delta-sets
+## GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
 
 Lists delta sets for a camera job.
 
@@ -2074,23 +2074,14 @@ Response shape:
 
 ---
 
-## POST /admin/camera/snapshot/jobs/{cameraJobId}/delta-sets
+## POST /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
 
 Generates a delta set from retained snapshots.
-
-Optional query:
-
-```text
-printerId={printerId}
-```
-
-If `printerId` is not provided in the query, it must be provided in the body.
 
 Request body:
 
 ```json
 {
-  "printerId": "p1",
   "deltaSnapshotStep": 1,
   "methodName": "image-delta",
   "message": "step 1 delta set"
@@ -2120,7 +2111,7 @@ Response shape:
 
 ---
 
-## GET /admin/camera/delta-sets/{deltaSetId}
+## GET /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}
 
 Returns one delta set.
 
@@ -2144,7 +2135,7 @@ Response shape:
 
 ---
 
-## DELETE /admin/camera/delta-sets/{deltaSetId}?printerId={printerId}
+## DELETE /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}
 
 Deletes a delta set and optionally its related rows/files/runs.
 
@@ -2179,7 +2170,7 @@ Response shape:
 
 ---
 
-## GET /admin/camera/delta-sets/{deltaSetId}/frames
+## GET /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/frames
 
 Lists delta frames for a delta set.
 
@@ -2229,8 +2220,8 @@ Possible errors:
 ## Calculation Run Endpoints
 
 ```text
-GET  /admin/camera/delta-sets/{deltaSetId}/calculation-runs
-POST /admin/camera/delta-sets/{deltaSetId}/calculation-runs
+GET  /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
+POST /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
 
 GET  /admin/camera/calculation-engine-settings
 PUT  /admin/camera/calculation-engine-settings/{engineName}
@@ -2243,7 +2234,7 @@ GET  /admin/camera/calculation-runs/{calculationRunId}/compare?rightRunId={right
 
 ---
 
-## GET /admin/camera/delta-sets/{deltaSetId}/calculation-runs
+## GET /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
 
 Lists calculation runs for a delta set.
 
@@ -2275,7 +2266,7 @@ Response shape:
 
 ---
 
-## POST /admin/camera/delta-sets/{deltaSetId}/calculation-runs
+## POST /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
 
 Runs a calculation over all delta frames of a delta set.
 
@@ -2765,14 +2756,14 @@ POST   /admin/camera/storage/{printerId}/sync
 
 DELETE /admin/camera/jobs/{cameraJobId}?printerId={printerId}
 
-GET    /admin/camera/snapshot/jobs/{cameraJobId}/delta-sets
-POST   /admin/camera/snapshot/jobs/{cameraJobId}/delta-sets
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
+POST   /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
 
-GET    /admin/camera/delta-sets/{deltaSetId}
-DELETE /admin/camera/delta-sets/{deltaSetId}?printerId={printerId}
-GET    /admin/camera/delta-sets/{deltaSetId}/frames
-GET    /admin/camera/delta-sets/{deltaSetId}/calculation-runs
-POST   /admin/camera/delta-sets/{deltaSetId}/calculation-runs
+GET    /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}
+DELETE /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}
+GET    /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/frames
+GET    /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
+POST   /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
 
 GET    /admin/camera/delta-frames/{deltaFrameId}/file?printerId={printerId}
 

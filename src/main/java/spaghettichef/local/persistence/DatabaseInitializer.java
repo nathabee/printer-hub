@@ -325,7 +325,7 @@ public final class DatabaseInitializer {
     private void createCameraJobsTable(Statement statement) throws SQLException {
         String sql = """
                 CREATE TABLE IF NOT EXISTS camera_jobs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INTEGER NOT NULL,
                     printer_id TEXT NOT NULL,
                     linked_print_job_id TEXT,
                     analysis_session_id TEXT,
@@ -339,7 +339,8 @@ public final class DatabaseInitializer {
                     snapshot_directory TEXT NOT NULL,
                     message TEXT,
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(printer_id, id)
                 );
                 """;
 
@@ -349,7 +350,7 @@ public final class DatabaseInitializer {
     private void createCameraDeltaSetsTable(Statement statement) throws SQLException {
         String sql = """
                 CREATE TABLE IF NOT EXISTS camera_delta_sets (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INTEGER NOT NULL,
                     printer_id TEXT NOT NULL,
                     camera_job_id INTEGER NOT NULL,
                     method_name TEXT NOT NULL,
@@ -357,7 +358,9 @@ public final class DatabaseInitializer {
                     source_snapshot_count INTEGER NOT NULL,
                     generated_delta_count INTEGER NOT NULL,
                     created_at TEXT NOT NULL,
-                    message TEXT
+                    message TEXT,
+                    UNIQUE(printer_id, id),
+                    UNIQUE(printer_id, camera_job_id, id)
                 );
                 """;
 

@@ -3819,9 +3819,107 @@ status: planned
 
 Purpose:
 
-Expose SpaghettiChef dataset, engine, calculation-run, baseline, report, and ML-export provider APIs for the external BenchChef workbench.
+ 
 
 Detailed implementation notes live in [TODO-0.8-workbench-api-foundation.md](TODOs/TODO-0.8-workbench-api-foundation.md).
+
+ 
+
+Prepare deterministic engine evaluation and future ML readiness inside SpaghettiChef.
+
+### Scope
+
+```text
+dataset inspection APIs
+dataset validation
+dataset metadata
+label distribution
+camera job dataset navigation
+snapshot browsing
+delta browsing
+engine registry
+calculation run registry
+calculation result inspection
+baseline comparison support
+parameter exploration support
+ML preparation metadata
+```
+
+---
+
+### 0.8.0 — Dataset Workbench Foundation
+
+```text
+dataset list
+dataset detail
+dataset metadata
+dataset validation
+missing file visibility
+label statistics
+```
+
+---
+
+### 0.8.1 — Dataset Navigation
+
+```text
+camera job browser
+snapshot browser
+delta browser
+dataset structure inspection
+preview support
+```
+
+---
+
+### 0.8.2 — Engine And Calculation Review
+
+```text
+engine registry
+enabled engines
+calculation run list
+calculation result detail
+score display
+decision display
+debug result visibility
+```
+
+---
+
+### 0.8.3 — Baseline Evaluation Support
+
+```text
+true positive tracking
+false positive tracking
+false negative tracking
+baseline summaries
+processing time summaries
+comparison-ready outputs
+```
+
+---
+
+### 0.8.4 — Parameter Exploration Support
+
+```text
+parameter variant support
+threshold experimentation support
+comparison support
+parameter metadata
+```
+
+---
+
+### 0.8.5 — ML Preparation Support
+
+```text
+dataset export metadata
+split metadata
+label metadata
+model metadata preparation
+inference contract preparation
+```
+
 
 ---
 

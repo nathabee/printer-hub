@@ -97,7 +97,8 @@ class CameraDeltaSetDeletionServiceTest {
                         target.requireId(),
                         CameraDeltaSetDeletionRequest.safeDefault(CameraDeltaSetDeletionRequest.CONFIRMATION)));
 
-        assertEquals("camera delta set does not belong to printer: printer-2", exception.getMessage());
+        assertEquals("camera delta set not found: 1", exception.getMessage());
+        assertTrue(stores.deltaSetStore().findByPrinterIdAndId("printer-1", target.requireId()).isPresent());
     }
 
     @Test

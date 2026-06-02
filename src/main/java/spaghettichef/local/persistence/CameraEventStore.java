@@ -163,6 +163,21 @@ public final class CameraEventStore {
         }
     }
 
+    public int deleteByPrinterIdAndCameraJobId(String printerId, long cameraJobId) {
+        String sql = "DELETE FROM camera_events WHERE printer_id = ? AND camera_job_id = ?;";
+
+        try (
+                Connection connection = Database.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)
+        ) {
+            statement.setString(1, requirePrinterId(printerId));
+            statement.setLong(2, requirePositive(cameraJobId, "cameraJobId"));
+            return statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to delete camera events", exception);
+        }
+    }
+
     private CameraEvent mapEvent(ResultSet resultSet) throws SQLException {
         return new CameraEvent(
                 resultSet.getLong("id"),
