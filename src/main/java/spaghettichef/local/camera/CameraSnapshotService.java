@@ -106,12 +106,9 @@ public final class CameraSnapshotService {
 
     private Path printerDirectory(String printerId) {
         String normalizedPrinterId = requirePrinterId(printerId);
-        CameraSettings settings = settingsService.load(normalizedPrinterId);
+        settingsService.load(normalizedPrinterId);
 
-        return CameraStoragePaths
-                .resolveBaseDirectory(settings.storageDirectory())
-                .resolve(safePathSegment(normalizedPrinterId))
-                .normalize();
+        return CameraStoragePaths.cameraDirectory(normalizedPrinterId).normalize();
     }
 
     private static String encodeRelativePath(String relativePath) {

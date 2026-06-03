@@ -200,7 +200,6 @@ function cameraSettingsPayload(form) {
   const captureCropEnabled = form.querySelector("#cameraCaptureCropEnabledInput")?.checked === true;
   const sourceTypeInput = form.querySelector("#cameraSourceTypeInput");
   const sourceValueInput = form.querySelector("#cameraSourceValueInput");
-  const storageDirectoryInput = form.querySelector("#cameraStorageDirectoryInput");
   const captureIntervalInput = form.querySelector("#cameraCaptureIntervalSecondsInput");
   const retentionInput = form.querySelector("#cameraRetentionSnapshotCountInput");
   const purgeRetentionFrequencyInput = form.querySelector("#cameraPurgeRetentionFrequencyInput");
@@ -222,7 +221,6 @@ function cameraSettingsPayload(form) {
     enabled,
     sourceType: enabled ? sourceType : "disabled",
     sourceValue: sourceValueInput?.value?.trim() || "",
-    storageDirectory: storageDirectoryInput?.value?.trim() || "camera",
     captureIntervalSeconds: positiveInteger(captureIntervalInput?.value, 10),
     retentionSnapshotCount: positiveInteger(retentionInput?.value, 20),
     purgeAutomatically,

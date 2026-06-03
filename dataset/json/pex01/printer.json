@@ -3,5 +3,6 @@
   "displayName": "Printer Example 01",
   "portName": "dataset://pex01",
   "mode": "sim",
+  "storageDirectory": "dataset/pex01",
   "enabled": true
 }

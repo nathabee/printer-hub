@@ -141,10 +141,9 @@ public final class CameraSnapshotManagementService {
 
 
     private boolean isInsidePrinterCameraDirectory(String printerId, Path candidatePath) {
-        CameraSettings settings = settingsService.load(printerId);
+        settingsService.load(printerId);
         Path printerDirectory = CameraStoragePaths
-                .resolveBaseDirectory(settings.storageDirectory())
-                .resolve(safePathSegment(printerId))
+                .cameraDirectory(printerId)
                 .normalize();
 
         return candidatePath.startsWith(printerDirectory);

@@ -91,7 +91,6 @@ public final class CameraLiveDeltaPipelineService {
         }
 
         Path deltaPath = CameraStoragePaths.deltaFramePath(
-                settings.storageDirectory(),
                 settings.printerId(),
                 cameraJobId,
                 deltaSet.requireId(),

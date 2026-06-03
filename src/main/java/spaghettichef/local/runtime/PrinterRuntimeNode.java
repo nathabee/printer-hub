@@ -9,6 +9,7 @@ public final class PrinterRuntimeNode {
     private final String displayName;
     private final String portName;
     private final String mode;
+    private final String storageDirectory;
     private final PrinterPort printerPort;
 
     private volatile boolean enabled;
@@ -20,6 +21,25 @@ public final class PrinterRuntimeNode {
             String displayName,
             String portName,
             String mode,
+            PrinterPort printerPort,
+            boolean enabled
+    ) {
+        this(
+                id,
+                displayName,
+                portName,
+                mode,
+                PrinterRuntimeNodeFactory.defaultStorageDirectory(id),
+                printerPort,
+                enabled);
+    }
+
+    public PrinterRuntimeNode(
+            String id,
+            String displayName,
+            String portName,
+            String mode,
+            String storageDirectory,
             PrinterPort printerPort,
             boolean enabled
     ) {
@@ -35,6 +55,9 @@ public final class PrinterRuntimeNode {
         if (mode == null || mode.isBlank()) {
             throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("mode"));
         }
+        if (storageDirectory == null || storageDirectory.isBlank()) {
+            throw new IllegalArgumentException(OperationMessages.fieldMustNotBeBlank("storageDirectory"));
+        }
         if (printerPort == null) {
             throw new IllegalArgumentException(OperationMessages.PRINTER_PORT_MUST_NOT_BE_NULL);
         }
@@ -43,6 +66,7 @@ public final class PrinterRuntimeNode {
         this.displayName = displayName.trim();
         this.portName = portName.trim();
         this.mode = mode.trim();
+        this.storageDirectory = storageDirectory.trim();
         this.printerPort = printerPort;
         this.enabled = enabled;
         this.executionInProgress = false;
@@ -63,6 +87,10 @@ public final class PrinterRuntimeNode {
 
     public String mode() {
         return mode;
+    }
+
+    public String storageDirectory() {
+        return storageDirectory;
     }
 
     public PrinterPort printerPort() {

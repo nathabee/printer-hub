@@ -79,10 +79,9 @@ public final class CameraJobDeletionService {
         CameraJob cameraJob = cameraJobStore.findByPrinterIdAndId(normalizedPrinterId, cameraJobId)
                 .orElseThrow(() -> new IllegalArgumentException("camera job not found: " + cameraJobId));
 
-        CameraSettings settings = settingsService.load(normalizedPrinterId);
+        settingsService.load(normalizedPrinterId);
         Path printerCameraDirectory = CameraStoragePaths
-                .resolveBaseDirectory(settings.storageDirectory())
-                .resolve(safePathSegment(normalizedPrinterId))
+                .cameraDirectory(normalizedPrinterId)
                 .toAbsolutePath()
                 .normalize();
 

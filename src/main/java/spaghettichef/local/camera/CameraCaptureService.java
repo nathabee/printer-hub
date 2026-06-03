@@ -206,7 +206,7 @@ public final class CameraCaptureService {
                     + " ffmpegVideoSize=" + settings.ffmpegVideoSize().orElse("")
                     + " ffmpegTimeoutMs=" + settings.ffmpegTimeoutMs()
                     + " ffmpegJpegQuality=" + settings.ffmpegJpegQuality()
-                    + " storageDirectory=" + CameraStoragePaths.resolveBaseDirectory(settings.storageDirectory()));
+                    + " storageDirectory=" + CameraStoragePaths.cameraDirectory(settings.printerId()));
         }
 
         if (!settings.enabled()) {
@@ -295,7 +295,7 @@ public final class CameraCaptureService {
                     + " enabled=" + settings.enabled()
                     + " sourceType=" + settings.sourceType().wireValue()
                     + " sourceValue=" + settings.sourceValue().orElse("")
-                    + " storageDirectory=" + CameraStoragePaths.resolveBaseDirectory(settings.storageDirectory()));
+                    + " storageDirectory=" + CameraStoragePaths.cameraDirectory(settings.printerId()));
         }
 
         if (!settings.enabled()) {
@@ -423,9 +423,9 @@ public final class CameraCaptureService {
     private PersistedCameraFramePaths persistFrame(CameraSettings settings, CameraFrame frame, CameraJob cameraJob) {
 
         String extension = extensionFor(frame.contentType());
-        Path printerDirectory = CameraStoragePaths.printerDirectory(settings.storageDirectory(), frame.printerId());
+        Path printerDirectory = CameraStoragePaths.cameraDirectory(frame.printerId());
         Path snapshotsDirectory = CameraStoragePaths
-                .snapshotsDirectory(settings.storageDirectory(), frame.printerId(), cameraJob.requireId());
+                .snapshotsDirectory(frame.printerId(), cameraJob.requireId());
         Path latestPath = printerDirectory.resolve("latest" + extension);
         Path previousPath = printerDirectory.resolve("previous" + extension);
         Path deltaPath = printerDirectory.resolve("delta.jpg");
@@ -455,7 +455,6 @@ public final class CameraCaptureService {
                     frame.sourceDescription().orElse(null)));
             long snapshotEntryId = requireSnapshotEntryId(snapshotEntry);
             Path snapshotPath = CameraStoragePaths.snapshotPathForEntryId(
-                    settings.storageDirectory(),
                     frame.printerId(),
                     cameraJob.requireId(),
                     snapshotEntryId,
@@ -552,7 +551,7 @@ public final class CameraCaptureService {
 
     private PersistedDiagnosticFramePaths persistDiagnosticFrame(CameraSettings settings, CameraFrame frame) {
         String extension = extensionFor(frame.contentType());
-        Path printerDirectory = CameraStoragePaths.printerDirectory(settings.storageDirectory(), frame.printerId());
+        Path printerDirectory = CameraStoragePaths.cameraDirectory(frame.printerId());
         Path latestPath = printerDirectory.resolve("latest" + extension);
         Path previousPath = printerDirectory.resolve("previous" + extension);
         Path deltaPath = printerDirectory.resolve("delta.jpg");

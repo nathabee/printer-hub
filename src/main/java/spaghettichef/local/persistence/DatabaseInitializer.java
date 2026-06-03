@@ -116,9 +116,9 @@ public final class DatabaseInitializer {
                     "INTEGER NOT NULL DEFAULT " + RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS);
             ensureColumn(connection, "camera_settings", "ffmpeg_jpeg_quality",
                     "INTEGER NOT NULL DEFAULT " + RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY);
-            ensureColumn(connection, "camera_settings", "storage_directory",
-                    "TEXT NOT NULL DEFAULT '" + RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY + "'");
             ensureColumn(connection, "camera_settings", "diagnostic_logging_enabled", "INTEGER NOT NULL DEFAULT 0");
+            ensureColumn(connection, "configured_printers", "storage_directory",
+                    "TEXT NOT NULL DEFAULT '" + RuntimeDefaults.DEFAULT_PRINTER_STORAGE_DIRECTORY + "'");
             ensureColumn(connection, "camera_settings", "purge_automatically", "INTEGER NOT NULL DEFAULT 0");
             ensureColumn(connection, "camera_settings", "purge_retention_frequency", "INTEGER NOT NULL DEFAULT 5");
             ensureColumn(connection, "camera_settings", "capture_crop_enabled", "INTEGER NOT NULL DEFAULT 0");
@@ -478,6 +478,7 @@ public final class DatabaseInitializer {
                     name TEXT NOT NULL,
                     port_name TEXT NOT NULL,
                     mode TEXT NOT NULL,
+                    storage_directory TEXT NOT NULL,
                     enabled INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -570,7 +571,6 @@ public final class DatabaseInitializer {
                     ffmpeg_video_size TEXT DEFAULT '640x480',
                     ffmpeg_timeout_ms INTEGER NOT NULL DEFAULT 5000,
                     ffmpeg_jpeg_quality INTEGER NOT NULL DEFAULT 3,
-                    storage_directory TEXT NOT NULL DEFAULT 'camera',
                     diagnostic_logging_enabled INTEGER NOT NULL DEFAULT 0,
                     purge_automatically INTEGER NOT NULL DEFAULT 0,
                     purge_retention_frequency INTEGER NOT NULL DEFAULT 5,

@@ -101,9 +101,8 @@ public final class CameraDeltaSetService {
                 createdAt,
                 message));
 
-        CameraSettings settings = cameraSettingsStore.loadOrDefault(normalizedPrinterId);
+        cameraSettingsStore.loadOrDefault(normalizedPrinterId);
         Path deltaDirectory = CameraStoragePaths.deltasDirectory(
-                settings.storageDirectory(),
                 normalizedPrinterId,
                 cameraJobId,
                 deltaSet.requireId());
@@ -120,7 +119,6 @@ public final class CameraDeltaSetService {
             CameraSnapshotEntry from = snapshots.get(fromIndex);
             CameraSnapshotEntry to = snapshots.get(toIndex);
             Path deltaPath = CameraStoragePaths.deltaFramePath(
-                    settings.storageDirectory(),
                     normalizedPrinterId,
                     cameraJobId,
                     deltaSet.requireId(),

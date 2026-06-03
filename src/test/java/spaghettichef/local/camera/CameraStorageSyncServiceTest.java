@@ -12,6 +12,8 @@ import spaghettichef.local.persistence.CameraSettingsStore;
 import spaghettichef.local.persistence.CameraSnapshotEntry;
 import spaghettichef.local.persistence.CameraSnapshotEntryStore;
 import spaghettichef.local.persistence.DatabaseInitializer;
+import spaghettichef.local.persistence.PrinterConfigurationStore;
+import spaghettichef.local.runtime.PrinterRuntimeNodeFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,7 +40,7 @@ class CameraStorageSyncServiceTest {
     void dryRunReportsCameraStorageReconciliationWithoutWritingRows() throws Exception {
         useDatabase("camera-storage-sync-dry-run.db");
         createCameraStorage();
-        saveCameraSettings(tempDir.resolve("camera-storage/pex01"));
+        savePrinterAndCameraSettings(tempDir.resolve("camera-storage/pex01"));
 
         CameraStorageSyncReport report = service().sync("pex01", request(true, false));
 
@@ -57,7 +59,7 @@ class CameraStorageSyncServiceTest {
     void syncCreatesJobsSnapshotsDeltaSetsAndFramesFromConfiguredStorage() throws Exception {
         useDatabase("camera-storage-sync.db");
         createCameraStorage();
-        saveCameraSettings(tempDir.resolve("camera-storage/pex01"));
+        savePrinterAndCameraSettings(tempDir.resolve("camera-storage/pex01"));
 
         CameraStorageSyncReport report = service().sync("pex01", request(false, false));
 
@@ -78,7 +80,7 @@ class CameraStorageSyncServiceTest {
     void secondSyncIsIdempotent() throws Exception {
         useDatabase("camera-storage-sync-idempotent.db");
         createCameraStorage();
-        saveCameraSettings(tempDir.resolve("camera-storage/pex01"));
+        savePrinterAndCameraSettings(tempDir.resolve("camera-storage/pex01"));
 
         service().sync("pex01", request(false, false));
         CameraStorageSyncReport second = service().sync("pex01", request(false, false));
@@ -93,11 +95,11 @@ class CameraStorageSyncServiceTest {
     void syncDeletesRowsForMissingFilesWhenRequested() throws Exception {
         useDatabase("camera-storage-sync-delete-missing.db");
         createCameraStorage();
-        saveCameraSettings(tempDir.resolve("camera-storage/pex01"));
+        savePrinterAndCameraSettings(tempDir.resolve("camera-storage/pex01"));
         CameraStorageSyncService syncService = service();
         syncService.sync("pex01", request(false, false));
-        Files.delete(tempDir.resolve("camera-storage/pex01/snapshots/2/001299_snapshot.jpg"));
-        Files.delete(tempDir.resolve("camera-storage/pex01/deltas/2/1/001298_001299_delta.jpg"));
+        Files.delete(tempDir.resolve("camera-storage/pex01/camera/snapshots/2/001299_snapshot.jpg"));
+        Files.delete(tempDir.resolve("camera-storage/pex01/camera/deltas/2/1/001298_001299_delta.jpg"));
 
         CameraStorageSyncReport report = syncService.sync("pex01", request(false, true));
 
@@ -109,7 +111,7 @@ class CameraStorageSyncServiceTest {
     void syncReactivatesDeletedSnapshotRowsWhenFileExistsAgain() throws Exception {
         useDatabase("camera-storage-sync-reactivate.db");
         createCameraStorage();
-        saveCameraSettings(tempDir.resolve("camera-storage/pex01"));
+        savePrinterAndCameraSettings(tempDir.resolve("camera-storage/pex01"));
         CameraStorageSyncService syncService = service();
         syncService.sync("pex01", request(false, false));
         CameraJob job = new CameraJobStore().findByPrinterId("pex01").get(0);
@@ -128,7 +130,7 @@ class CameraStorageSyncServiceTest {
     void syncAlsoSupportsRuntimeStorageRootThatContainsPrinterFolders() throws Exception {
         useDatabase("camera-storage-sync-base-root.db");
         createCameraStorage();
-        saveCameraSettings(tempDir.resolve("camera-storage"));
+        savePrinterAndCameraSettings(tempDir.resolve("camera-storage/pex01"));
 
         CameraStorageSyncReport report = service().sync("pex01", request(false, false));
 
@@ -161,7 +163,7 @@ class CameraStorageSyncServiceTest {
     }
 
     private void createCameraStorage() throws Exception {
-        Path contentRoot = tempDir.resolve("camera-storage/pex01");
+        Path contentRoot = tempDir.resolve("camera-storage/pex01/camera");
         Files.createDirectories(contentRoot.resolve("snapshots/2"));
         Files.createDirectories(contentRoot.resolve("deltas/2/1"));
         Files.write(contentRoot.resolve("snapshots/2/001298_snapshot.jpg"), new byte[] {1});
@@ -169,12 +171,19 @@ class CameraStorageSyncServiceTest {
         Files.write(contentRoot.resolve("deltas/2/1/001298_001299_delta.jpg"), new byte[] {3});
     }
 
-    private void saveCameraSettings(Path storageDirectory) {
+    private void savePrinterAndCameraSettings(Path storageDirectory) {
+        new PrinterConfigurationStore().save(PrinterRuntimeNodeFactory.create(
+                "pex01",
+                "PEX 01",
+                "SIM_PORT",
+                "sim",
+                storageDirectory.toString(),
+                true));
         new CameraSettingsStore().save(new CameraSettings(
                 "pex01",
                 true,
                 CameraSourceType.SNAPSHOT_FOLDER,
-                storageDirectory.toString(),
+                storageDirectory.resolve("camera").toString(),
                 5,
                 100,
                 true,
@@ -187,7 +196,6 @@ class CameraStorageSyncServiceTest {
                 "640x480",
                 5000,
                 3,
-                storageDirectory.toString(),
                 true,
                 Instant.parse("2026-05-28T12:00:00Z")));
     }

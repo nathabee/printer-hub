@@ -1991,6 +1991,10 @@ public final class RemoteApiServer {
                     requiredJsonString(body, "displayName"),
                     requiredJsonString(body, "portName"),
                     requiredJsonString(body, "mode"),
+                    optionalJsonString(
+                            body,
+                            "storageDirectory",
+                            PrinterRuntimeNodeFactory.defaultStorageDirectory(requiredJsonString(body, "id"))),
                     optionalJsonBoolean(body, "enabled", true));
 
             boolean registered = false;
@@ -2121,6 +2125,7 @@ public final class RemoteApiServer {
                     requiredJsonString(body, "displayName"),
                     requiredJsonString(body, "portName"),
                     requiredJsonString(body, "mode"),
+                    optionalJsonString(body, "storageDirectory", oldNode.storageDirectory()),
                     enabled);
 
             monitoringScheduler.stopMonitoring(printerId);
@@ -3473,6 +3478,7 @@ public final class RemoteApiServer {
                 + "\"name\":\"" + escapeJson(node.displayName()) + "\","
                 + "\"portName\":\"" + escapeJson(node.portName()) + "\","
                 + "\"mode\":\"" + escapeJson(node.mode()) + "\","
+                + "\"storageDirectory\":\"" + escapeJson(node.storageDirectory()) + "\","
                 + "\"serialPortKind\":\"" + escapeJson(SerialPortGuidance.kind(node.mode(), node.portName())) + "\","
                 + "\"stableSerialPath\":" + SerialPortGuidance.stable(node.mode(), node.portName()) + ","
                 + "\"serialPathWarning\":"

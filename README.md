@@ -300,7 +300,7 @@ flowchart TB
 A camera job owns retained source snapshots for one camera run.
 
 ```text
-data/camera/<printerId>/
+data/printers/<printerId>/camera/
 ├── latest.jpg
 ├── previous.jpg
 ├── delta.jpg
@@ -388,8 +388,8 @@ Example:
 cd rust/img-analyzer
 
 cargo run -- \
-  --from-snapshot ../../camera/p1/previous.jpg \
-  --to-snapshot ../../camera/p1/latest.jpg \
+  --from-snapshot ../../printers/p1/camera/previous.jpg \
+  --to-snapshot ../../printers/p1/camera/latest.jpg \
   --method delta-basic \
   --threshold 0.20
 ```
@@ -638,8 +638,8 @@ Run against two image files:
 
 ```bash
 cargo run -- \
-  --from-snapshot ../../camera/p1/previous.jpg \
-  --to-snapshot ../../camera/p1/latest.jpg \
+  --from-snapshot ../../printers/p1/camera/previous.jpg \
+  --to-snapshot ../../printers/p1/camera/latest.jpg \
   --method delta-basic \
   --threshold 0.20
 ```

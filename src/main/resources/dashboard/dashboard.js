@@ -1771,6 +1771,7 @@ async function handleSavePrinter(form) {
   const printerNameInput = form.querySelector("#printerNameInput");
   const printerPortInput = form.querySelector("#printerPortInput");
   const printerModeInput = form.querySelector("#printerModeInput");
+  const printerStorageDirectoryInput = form.querySelector("#printerStorageDirectoryInput");
 
   const printerId = printerIdInput.value.trim();
   const editingPrinterId = form.dataset.editingPrinterId || "";
@@ -1781,6 +1782,7 @@ async function handleSavePrinter(form) {
     displayName: printerNameInput.value.trim(),
     portName: printerPortInput.value.trim(),
     mode: printerModeInput.value.trim(),
+    storageDirectory: printerStorageDirectoryInput.value.trim() || `printers/${printerId}`,
     enabled: existingPrinter?.enabled ?? true
   };
 
@@ -2830,8 +2832,9 @@ function fillPrinterForm(printer) {
   const printerNameInput = document.getElementById("printerNameInput");
   const printerPortInput = document.getElementById("printerPortInput");
   const printerModeInput = document.getElementById("printerModeInput");
+  const printerStorageDirectoryInput = document.getElementById("printerStorageDirectoryInput");
 
-  if (!form || !printerIdInput || !printerNameInput || !printerPortInput || !printerModeInput) {
+  if (!form || !printerIdInput || !printerNameInput || !printerPortInput || !printerModeInput || !printerStorageDirectoryInput) {
     return;
   }
 
@@ -2839,12 +2842,14 @@ function fillPrinterForm(printer) {
   printerNameInput.value = printer.displayName || printer.name || "";
   printerPortInput.value = printer.portName || "";
   printerModeInput.value = printer.mode || "real";
+  printerStorageDirectoryInput.value = printer.storageDirectory || `printers/${printer.id || "printer"}`;
   form.dataset.editingPrinterId = printer.id || "";
 }
 
 function clearPrinterForm() {
   const form = document.getElementById("printerConfigForm");
   const printerModeInput = document.getElementById("printerModeInput");
+  const printerStorageDirectoryInput = document.getElementById("printerStorageDirectoryInput");
 
   if (!form) {
     return;
@@ -2855,6 +2860,9 @@ function clearPrinterForm() {
 
   if (printerModeInput) {
     printerModeInput.value = "real";
+  }
+  if (printerStorageDirectoryInput) {
+    printerStorageDirectoryInput.value = "";
   }
 }
 

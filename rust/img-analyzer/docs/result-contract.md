@@ -50,7 +50,7 @@ No progress messages, diagnostics, warnings, or logs may be written to `stdout`.
 Examples:
 
 ```text
-Input file not found: ../../camera/p1/snapshots/1/002523_snapshot.jpg
+Input file not found: ../../data/printers/p1/camera/snapshots/1/002523_snapshot.jpg
 ```
 
 ```text

@@ -332,7 +332,7 @@ public final class CameraAnalysisSessionService {
             return parent.getParent().getParent();
         }
 
-        return storageDirectory.resolve(safePathSegment(printerId));
+        return CameraStoragePaths.cameraDirectory(printerId);
     }
 
     private static long requireSnapshotEntryId(CameraSnapshotEntry entry) {
@@ -341,10 +341,6 @@ public final class CameraAnalysisSessionService {
         }
 
         return entry.id();
-    }
-
-    private static String safePathSegment(String value) {
-        return value.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
     private static String requireText(String value, String fieldName) {

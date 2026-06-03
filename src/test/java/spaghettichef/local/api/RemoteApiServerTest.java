@@ -1081,9 +1081,21 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.configurationStore.save(
                     PrinterRuntimeNodeFactory.create("printer-2", "Printer 2", "SIM_PORT_2", "sim", true));
             context.printerRegistry.register(
@@ -1093,8 +1105,8 @@ class RemoteApiServerTest {
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s"}
-                            """.formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default"}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             HttpResponse<String> captureResponse = context.request(
@@ -1109,8 +1121,8 @@ class RemoteApiServerTest {
             assertTrue(captureResponse.body().contains("\"width\":320"));
             assertTrue(captureResponse.body().contains("\"height\":240"));
 
-            assertTrue(Files.exists(cameraStorageDirectory.resolve("printer-1").resolve("latest.jpg")));
-            assertFalse(Files.isDirectory(cameraStorageDirectory.resolve("printer-1").resolve("snapshots")));
+            assertTrue(Files.exists(cameraStorageDirectory.resolve("camera").resolve("latest.jpg")));
+            assertFalse(Files.isDirectory(cameraStorageDirectory.resolve("camera").resolve("snapshots")));
 
             HttpResponse<String> activeJobResponse = context.get("/printers/printer-1/camera/jobs/active");
             assertEquals(200, activeJobResponse.statusCode());
@@ -1136,17 +1148,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s","captureIntervalSeconds":1,"retentionSnapshotCount":20}
-                            """
-                            .formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","captureIntervalSeconds":1,"retentionSnapshotCount":20}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             String cameraJobId = startCameraJobAndWaitForSnapshots(
@@ -1203,17 +1226,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s","captureIntervalSeconds":1,"retentionSnapshotCount":20}
-                            """
-                            .formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","captureIntervalSeconds":1,"retentionSnapshotCount":20}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             String cameraJobId = startCameraJobAndWaitForSnapshots(
@@ -1351,17 +1385,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s","captureIntervalSeconds":1,"retentionSnapshotCount":20}
-                            """
-                            .formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","captureIntervalSeconds":1,"retentionSnapshotCount":20}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             String printer1CameraJobId = startCameraJobAndWaitForSnapshots(
@@ -1389,12 +1434,12 @@ class RemoteApiServerTest {
                     20,
                     "simulated",
                     "default",
-                    cameraStorageDirectory.resolve("printer-2").resolve("snapshots").resolve("2").toString(),
+                    cameraStorageDirectory.resolve("camera").resolve("snapshots").resolve("2").toString(),
                     "test"));
             long printer2CameraJobId = printer2CameraJob.requireId();
 
             Path printer2SnapshotDirectory = cameraStorageDirectory
-                    .resolve("printer-2")
+                    .resolve("camera")
                     .resolve("snapshots")
                     .resolve(Long.toString(printer2CameraJobId));
             Files.createDirectories(printer2SnapshotDirectory);
@@ -1437,7 +1482,7 @@ class RemoteApiServerTest {
             assertTrue(previewResponse.body().contains("camera_recalculate_preview_not_implemented"));
 
             Path snapshotsDirectory = cameraStorageDirectory
-                    .resolve("printer-1")
+                    .resolve("camera")
                     .resolve("snapshots")
                     .resolve(printer1CameraJobId);
             try (var snapshots = Files.list(snapshotsDirectory)) {
@@ -1474,16 +1519,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s"}
-                            """.formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default"}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             HttpResponse<String> captureResponse = context.request(
@@ -1514,16 +1571,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s"}
-                            """.formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default"}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             HttpResponse<String> captureResponse = context.request(
@@ -1550,17 +1619,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","analysisEnabled":true,"storageDirectory":"%s"}
-                            """
-                            .formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","analysisEnabled":true}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             HttpResponse<String> startResponse = context.request(
@@ -3223,7 +3303,7 @@ class RemoteApiServerTest {
         assertNotNull(cameraJobId);
 
         Path snapshotsDirectory = cameraStorageDirectory
-                .resolve(printerId)
+                .resolve("camera")
                 .resolve("snapshots")
                 .resolve(cameraJobId);
 

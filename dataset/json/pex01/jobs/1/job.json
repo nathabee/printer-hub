@@ -10,14 +10,14 @@
   "message": "Imported archived runtime camera job 1",
   "source": {
     "layout": "runtime-archive",
-    "snapshotDirectory": "snapshots/1"
+    "snapshotDirectory": "camera/snapshots/1"
   },
   "deltaSets": [
     {
       "datasetDeltaSetKey": "1",
       "deltaSnapshotStep": 1,
       "methodName": "dataset-image-delta",
-      "deltaDirectory": "deltas/1/1"
+      "deltaDirectory": "camera/deltas/1/1"
     }
   ]
 }

@@ -101,7 +101,6 @@ export function renderCameraSettingsCard(settings) {
           <legend>Camera source</legend>
           <div class="form-grid">
             <label>Source type<select id="cameraSourceTypeInput" name="sourceType"><option value="disabled" ${sourceType === "disabled" ? "selected" : ""}>disabled</option><option value="simulated" ${sourceType === "simulated" ? "selected" : ""}>simulated</option><option value="snapshot-folder" ${sourceType === "snapshot-folder" ? "selected" : ""}>snapshot-folder</option><option value="ffmpeg" ${sourceType === "ffmpeg" ? "selected" : ""}>ffmpeg webcam</option></select></label>
-            <label>Storage directory<input id="cameraStorageDirectoryInput" name="storageDirectory" type="text" value="${escapeHtml(settings?.storageDirectory || "camera")}" placeholder="camera or C:\\spaghettichef\\data\\camera"></label>
             <label>Source value<input id="cameraSourceValueInput" name="sourceValue" type="text" value="${escapeHtml(settings?.sourceValue || "")}" placeholder="/dev/video0 or video=Integrated Camera"></label>
             <label>ffmpeg command<input id="cameraFfmpegCommandInput" name="ffmpegCommand" type="text" value="${escapeHtml(settings?.ffmpegCommand || "ffmpeg")}" placeholder="ffmpeg"></label>
             <label>ffmpeg input format<input id="cameraFfmpegInputFormatInput" name="ffmpegInputFormat" type="text" value="${escapeHtml(settings?.ffmpegInputFormat || "")}" placeholder="v4l2 or dshow"></label>

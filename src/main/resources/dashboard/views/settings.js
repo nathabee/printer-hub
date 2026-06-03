@@ -384,6 +384,11 @@ function renderPrinterAdministrationSettingsCard(printers, printerConfigDisabled
           </select>
         </label>
 
+        <label>
+          Storage directory
+          <input id="printerStorageDirectoryInput" name="storageDirectory" type="text" placeholder="printers/printer-1" required>
+        </label>
+
         <div class="form-actions">
           <button type="submit" ${printerConfigDisabled}>Save printer</button>
           <button id="clearPrinterFormButton" type="button" class="secondary-button" ${printerConfigDisabled}>Clear form</button>
@@ -510,6 +515,7 @@ function renderConfiguredPrinter(printer) {
         <div>
           <h3>${escapeHtml(printer.displayName || printer.name || printer.id)}</h3>
           <p class="meta">${escapeHtml(printer.id)} · ${escapeHtml(printer.portName || "n/a")} · ${escapeHtml(printer.mode || "n/a")}</p>
+          <p class="meta">${escapeHtml(printer.storageDirectory || "n/a")}</p>
         </div>
         <div class="badge-row">
           <span class="badge ${printer.enabled ? "badge-enabled" : "badge-disabled"}">${printer.enabled ? "enabled" : "disabled"}</span>

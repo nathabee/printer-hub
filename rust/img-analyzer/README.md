@@ -73,8 +73,8 @@ Example:
 
 ```bash
 cargo run -- \
-  --from-snapshot ../../camera/p1/snapshots/1/002523_snapshot.jpg \
-  --to-snapshot ../../camera/p1/snapshots/1/002524_snapshot.jpg \
+  --from-snapshot ../../data/printers/p1/camera/snapshots/1/002523_snapshot.jpg \
+  --to-snapshot ../../data/printers/p1/camera/snapshots/1/002524_snapshot.jpg \
   --method delta-basic \
   --threshold 0.20
 ```
@@ -83,9 +83,9 @@ Example with optional delta frame:
 
 ```bash
 cargo run -- \
-  --from-snapshot ../../camera/p1/snapshots/1/002523_snapshot.jpg \
-  --to-snapshot ../../camera/p1/snapshots/1/002524_snapshot.jpg \
-  --delta-frame ../../camera/p1/deltas/1/1/002523_002524_delta.jpg \
+  --from-snapshot ../../data/printers/p1/camera/snapshots/1/002523_snapshot.jpg \
+  --to-snapshot ../../data/printers/p1/camera/snapshots/1/002524_snapshot.jpg \
+  --delta-frame ../../data/printers/p1/camera/deltas/1/1/002523_002524_delta.jpg \
   --method delta-basic \
   --threshold 0.20
 ```

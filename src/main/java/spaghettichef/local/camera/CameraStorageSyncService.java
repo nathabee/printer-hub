@@ -415,12 +415,7 @@ public final class CameraStorageSyncService {
     }
 
     private static Path cameraStorageRoot(CameraSettings settings) {
-        Path configuredRoot = CameraStoragePaths.resolveBaseDirectory(settings.storageDirectory());
-        if (Files.isDirectory(configuredRoot.resolve("snapshots"))
-                || Files.isDirectory(configuredRoot.resolve("deltas"))) {
-            return configuredRoot;
-        }
-        return CameraStoragePaths.printerDirectory(settings.storageDirectory(), settings.printerId());
+        return CameraStoragePaths.cameraDirectory(settings.printerId());
     }
 
     private static List<Path> listDirectoriesIfPresent(Path root) {

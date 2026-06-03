@@ -119,27 +119,27 @@ After sync, the imported data should be usable like locally captured camera data
 Snapshot files are stored under:
 
 ```text
-dataset/{printerId}/snapshots/{cameraJobId}/
+dataset/{printerId}/camera/snapshots/{cameraJobId}/
 ```
 
 Example:
 
 ```text
-dataset/pex01/snapshots/1/001298_snapshot.jpg
-dataset/pex01/snapshots/1/001299_snapshot.jpg
+dataset/pex01/camera/snapshots/1/001298_snapshot.jpg
+dataset/pex01/camera/snapshots/1/001299_snapshot.jpg
 ```
 
 Delta files are stored under:
 
 ```text
-dataset/{printerId}/deltas/{cameraJobId}/{deltaSetId}/
+dataset/{printerId}/camera/deltas/{cameraJobId}/{deltaSetId}/
 ```
 
 Example:
 
 ```text
-dataset/pex01/deltas/1/1/001298_001299_delta.jpg
-dataset/pex01/deltas/1/1/001299_001300_delta.jpg
+dataset/pex01/camera/deltas/1/1/001298_001299_delta.jpg
+dataset/pex01/camera/deltas/1/1/001299_001300_delta.jpg
 ```
 
 The job ids and delta-set ids use the real runtime folder names. They are not padded.
@@ -147,10 +147,10 @@ The job ids and delta-set ids use the real runtime folder names. They are not pa
 Valid job folders:
 
 ```text
-snapshots/1/
-snapshots/2/
-deltas/1/1/
-deltas/2/1/
+camera/snapshots/1/
+camera/snapshots/2/
+camera/deltas/1/1/
+camera/deltas/2/1/
 ```
 
 Do not rename them to:
@@ -255,8 +255,7 @@ Example:
 {
   "enabled": true,
   "sourceType": "snapshot-folder",
-  "sourceValue": "dataset/pex01",
-  "storageDirectory": "dataset/pex01",
+  "sourceValue": "dataset/pex01/camera",
   "captureIntervalSeconds": 5,
   "retentionSnapshotCount": 100,
   "analysisEnabled": true,
@@ -299,14 +298,14 @@ Example for archived job `1`:
   "message": "Imported archived runtime camera job 1",
   "source": {
     "layout": "runtime-archive",
-    "snapshotDirectory": "snapshots/1"
+    "snapshotDirectory": "camera/snapshots/1"
   },
   "deltaSets": [
     {
       "datasetDeltaSetKey": "1",
       "deltaSnapshotStep": 1,
       "methodName": "dataset-image-delta",
-      "deltaDirectory": "deltas/1/1"
+      "deltaDirectory": "camera/deltas/1/1"
     }
   ]
 }
@@ -468,8 +467,8 @@ Expected request shape:
 Synchronization rules:
 
 * load camera settings for `{printerId}` from the database
-* use configured `cameraSettings.storageDirectory` as the source of truth
-* scan runtime storage folders such as `snapshots/{cameraJobId}` and `deltas/{cameraJobId}/{deltaSetId}`
+* use configured printer `storageDirectory` plus the `camera/` child as the source of truth
+* scan runtime storage folders such as `camera/snapshots/{cameraJobId}` and `camera/deltas/{cameraJobId}/{deltaSetId}`
 * create missing camera jobs from discovered storage folders
 * create missing snapshot rows for existing snapshot files
 * reactivate snapshot rows marked as deleted if the file exists again

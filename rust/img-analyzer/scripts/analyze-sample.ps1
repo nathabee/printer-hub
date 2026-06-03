@@ -39,9 +39,9 @@ function Require-File {
 
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         Write-Error "Missing ${Label}: ${Path}"
-        $CameraRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "data/camera"))
+        $CameraRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "data/printers"))
         if ($Path.StartsWith($CameraRoot)) {
-            Write-Error "Expected SpaghettiChef camera data under: $CameraRoot"
+            Write-Error "Expected SpaghettiChef camera data under: $CameraRoot/<printer-id>/camera"
             Write-Error "Capture snapshots first, or pass explicit paths to existing image files."
         }
         exit 2
