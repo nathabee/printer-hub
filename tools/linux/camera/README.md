@@ -49,18 +49,18 @@ ffmpeg video size: 640x480
 
 ```bash
 CAMERA_DEVICE=/dev/video0 \
-tools/linux/camera/camera-capture-once.sh ./data/camera/p1/latest.jpg
+tools/linux/camera/camera-capture-once.sh ./data/printers/p1/camera/latest.jpg
 ```
 
 ## Run Capture Loop
 
 ```bash
 CAMERA_DEVICE=/dev/video0 \
-CAMERA_BASE_DIR=./data/camera \
+CAMERA_BASE_DIR=./data/printers/p1/camera \
 CAMERA_INTERVAL_SECONDS=2 \
 CAMERA_ARCHIVE_INTERVAL_SECONDS=300 \
 CAMERA_RETENTION_HOURS=24 \
-tools/linux/camera/camera-capture-loop.sh p1
+tools/linux/camera/camera-capture-loop.sh
 ```
 
 ## Quick Archive Test
@@ -68,7 +68,7 @@ tools/linux/camera/camera-capture-loop.sh p1
 ```bash
 CAMERA_DEVICE=/dev/video0 \
 CAMERA_ARCHIVE_INTERVAL_SECONDS=10 \
-tools/linux/camera/camera-capture-loop.sh p1
+tools/linux/camera/camera-capture-loop.sh
 ```
 
 ## Expected Result
@@ -76,8 +76,8 @@ tools/linux/camera/camera-capture-loop.sh p1
 After the loop has run for 15 to 20 seconds:
 
 ```bash
-ls -lh ./data/camera/p1
-ls -lh ./data/camera/p1/archive
+ls -lh ./data/printers/p1/camera
+ls -lh ./data/printers/p1/camera/snapshots
 ```
 
 Expected files:
@@ -85,7 +85,7 @@ Expected files:
 ```text
 latest.jpg
 previous.jpg
-archive/*.jpg
+snapshots/*.jpg
 ```
 
 ## Storage Layout
@@ -93,10 +93,9 @@ archive/*.jpg
 When the database is `./data/spaghettichef.db`, the default camera storage is:
 
 ```text
-./data/camera/<printerId>/
+./data/printers/<printerId>/camera/
 ├── latest.jpg
 ├── previous.jpg
-├── archive/
 └── snapshots/
 ```
 

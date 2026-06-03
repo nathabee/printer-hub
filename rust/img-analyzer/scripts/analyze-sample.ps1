@@ -49,19 +49,19 @@ function Require-File {
 }
 
 if ([string]::IsNullOrWhiteSpace($CameraRoot)) {
-    $CameraRoot = Join-Path $RepoRoot "camera"
+    $CameraRoot = Join-Path $RepoRoot "data/printers/$PrinterId/camera"
 } else {
     $CameraRoot = Resolve-SamplePath $CameraRoot
 }
 
 if ([string]::IsNullOrWhiteSpace($FromSnapshot)) {
-    $FromSnapshot = Join-Path $CameraRoot "$PrinterId/snapshots/$CameraJobId/$($FromSequence.ToString("000000"))_snapshot.jpg"
+    $FromSnapshot = Join-Path $CameraRoot "snapshots/$CameraJobId/$($FromSequence.ToString("000000"))_snapshot.jpg"
 } else {
     $FromSnapshot = Resolve-SamplePath $FromSnapshot
 }
 
 if ([string]::IsNullOrWhiteSpace($ToSnapshot)) {
-    $ToSnapshot = Join-Path $CameraRoot "$PrinterId/snapshots/$CameraJobId/$($ToSequence.ToString("000000"))_snapshot.jpg"
+    $ToSnapshot = Join-Path $CameraRoot "snapshots/$CameraJobId/$($ToSequence.ToString("000000"))_snapshot.jpg"
 } else {
     $ToSnapshot = Resolve-SamplePath $ToSnapshot
 }
@@ -69,7 +69,7 @@ if ([string]::IsNullOrWhiteSpace($ToSnapshot)) {
 if ($NoDeltaFrame) {
     $DeltaFrame = ""
 } elseif ([string]::IsNullOrWhiteSpace($DeltaFrame)) {
-    $DefaultDelta = Join-Path $CameraRoot "$PrinterId/deltas/$CameraJobId/$DeltaSetId/$($FromSequence.ToString("000000"))_$($ToSequence.ToString("000000"))_delta.jpg"
+    $DefaultDelta = Join-Path $CameraRoot "deltas/$CameraJobId/$DeltaSetId/$($FromSequence.ToString("000000"))_$($ToSequence.ToString("000000"))_delta.jpg"
     if (Test-Path -LiteralPath $DefaultDelta -PathType Leaf) {
         $DeltaFrame = $DefaultDelta
     }

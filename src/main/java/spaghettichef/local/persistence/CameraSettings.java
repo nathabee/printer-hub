@@ -44,7 +44,6 @@ public final class CameraSettings {
     private final String ffmpegVideoSize;
     private final int ffmpegTimeoutMs;
     private final int ffmpegJpegQuality;
-    private final String storageDirectory;
     private final boolean diagnosticLoggingEnabled;
     private final Instant updatedAt;
 
@@ -78,7 +77,47 @@ public final class CameraSettings {
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_VIDEO_SIZE,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY,
-                RuntimeDefaults.CAMERA_STORAGE_SUBDIRECTORY,
+                false,
+                DEFAULT_PURGE_AUTOMATICALLY,
+                DEFAULT_PURGE_RETENTION_FREQUENCY,
+                updatedAt);
+    }
+
+    public CameraSettings(
+            String printerId,
+            boolean enabled,
+            CameraSourceType sourceType,
+            String sourceValue,
+            int captureIntervalSeconds,
+            int retentionSnapshotCount,
+            boolean analysisEnabled,
+            boolean safetyEnabled,
+            boolean pauseOnConfirmedSpaghetti,
+            double confidenceThreshold,
+            int confirmationsRequired,
+            String ffmpegCommand,
+            String ffmpegInputFormat,
+            String ffmpegVideoSize,
+            int ffmpegTimeoutMs,
+            int ffmpegJpegQuality,
+            Instant updatedAt) {
+        this(
+                printerId,
+                enabled,
+                sourceType,
+                sourceValue,
+                captureIntervalSeconds,
+                retentionSnapshotCount,
+                analysisEnabled,
+                safetyEnabled,
+                pauseOnConfirmedSpaghetti,
+                confidenceThreshold,
+                confirmationsRequired,
+                ffmpegCommand,
+                ffmpegInputFormat,
+                ffmpegVideoSize,
+                ffmpegTimeoutMs,
+                ffmpegJpegQuality,
                 false,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -121,7 +160,6 @@ public final class CameraSettings {
                 ffmpegVideoSize,
                 ffmpegTimeoutMs,
                 ffmpegJpegQuality,
-                RuntimeDefaults.CAMERA_STORAGE_SUBDIRECTORY,
                 diagnosticLoggingEnabled,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -166,195 +204,6 @@ public final class CameraSettings {
                 ffmpegVideoSize,
                 ffmpegTimeoutMs,
                 ffmpegJpegQuality,
-                RuntimeDefaults.CAMERA_STORAGE_SUBDIRECTORY,
-                diagnosticLoggingEnabled,
-                purgeAutomatically,
-                purgeRetentionFrequency,
-                updatedAt);
-    }
-
-    public CameraSettings(
-            String printerId,
-            boolean enabled,
-            CameraSourceType sourceType,
-            String sourceValue,
-            int captureIntervalSeconds,
-            int retentionSnapshotCount,
-            boolean analysisEnabled,
-            boolean safetyEnabled,
-            boolean pauseOnConfirmedSpaghetti,
-            double confidenceThreshold,
-            int confirmationsRequired,
-            String ffmpegCommand,
-            String ffmpegInputFormat,
-            String ffmpegVideoSize,
-            int ffmpegTimeoutMs,
-            int ffmpegJpegQuality,
-            boolean diagnosticLoggingEnabled,
-            boolean purgeAutomatically,
-            int purgeRetentionFrequency,
-            boolean captureCropEnabled,
-            int captureCropX1Percent,
-            int captureCropY1Percent,
-            int captureCropX2Percent,
-            int captureCropY2Percent,
-            Instant updatedAt) {
-        this(
-                printerId,
-                enabled,
-                sourceType,
-                sourceValue,
-                captureIntervalSeconds,
-                retentionSnapshotCount,
-                analysisEnabled,
-                safetyEnabled,
-                pauseOnConfirmedSpaghetti,
-                confidenceThreshold,
-                confirmationsRequired,
-                ffmpegCommand,
-                ffmpegInputFormat,
-                ffmpegVideoSize,
-                ffmpegTimeoutMs,
-                ffmpegJpegQuality,
-                RuntimeDefaults.CAMERA_STORAGE_SUBDIRECTORY,
-                diagnosticLoggingEnabled,
-                purgeAutomatically,
-                purgeRetentionFrequency,
-                captureCropEnabled,
-                captureCropX1Percent,
-                captureCropY1Percent,
-                captureCropX2Percent,
-                captureCropY2Percent,
-                updatedAt);
-    }
-
-    public CameraSettings(
-            String printerId,
-            boolean enabled,
-            CameraSourceType sourceType,
-            String sourceValue,
-            int captureIntervalSeconds,
-            int retentionSnapshotCount,
-            boolean analysisEnabled,
-            boolean safetyEnabled,
-            boolean pauseOnConfirmedSpaghetti,
-            double confidenceThreshold,
-            int confirmationsRequired,
-            String ffmpegCommand,
-            String ffmpegInputFormat,
-            String ffmpegVideoSize,
-            int ffmpegTimeoutMs,
-            int ffmpegJpegQuality,
-            String storageDirectory,
-            Instant updatedAt) {
-        this(
-                printerId,
-                enabled,
-                sourceType,
-                sourceValue,
-                captureIntervalSeconds,
-                retentionSnapshotCount,
-                analysisEnabled,
-                safetyEnabled,
-                pauseOnConfirmedSpaghetti,
-                confidenceThreshold,
-                confirmationsRequired,
-                ffmpegCommand,
-                ffmpegInputFormat,
-                ffmpegVideoSize,
-                ffmpegTimeoutMs,
-                ffmpegJpegQuality,
-                storageDirectory,
-                false,
-                DEFAULT_PURGE_AUTOMATICALLY,
-                DEFAULT_PURGE_RETENTION_FREQUENCY,
-                updatedAt);
-    }
-
-    public CameraSettings(
-            String printerId,
-            boolean enabled,
-            CameraSourceType sourceType,
-            String sourceValue,
-            int captureIntervalSeconds,
-            int retentionSnapshotCount,
-            boolean analysisEnabled,
-            boolean safetyEnabled,
-            boolean pauseOnConfirmedSpaghetti,
-            double confidenceThreshold,
-            int confirmationsRequired,
-            String ffmpegCommand,
-            String ffmpegInputFormat,
-            String ffmpegVideoSize,
-            int ffmpegTimeoutMs,
-            int ffmpegJpegQuality,
-            String storageDirectory,
-            boolean diagnosticLoggingEnabled,
-            Instant updatedAt) {
-        this(
-                printerId,
-                enabled,
-                sourceType,
-                sourceValue,
-                captureIntervalSeconds,
-                retentionSnapshotCount,
-                analysisEnabled,
-                safetyEnabled,
-                pauseOnConfirmedSpaghetti,
-                confidenceThreshold,
-                confirmationsRequired,
-                ffmpegCommand,
-                ffmpegInputFormat,
-                ffmpegVideoSize,
-                ffmpegTimeoutMs,
-                ffmpegJpegQuality,
-                storageDirectory,
-                diagnosticLoggingEnabled,
-                DEFAULT_PURGE_AUTOMATICALLY,
-                DEFAULT_PURGE_RETENTION_FREQUENCY,
-                updatedAt);
-    }
-
-    public CameraSettings(
-            String printerId,
-            boolean enabled,
-            CameraSourceType sourceType,
-            String sourceValue,
-            int captureIntervalSeconds,
-            int retentionSnapshotCount,
-            boolean analysisEnabled,
-            boolean safetyEnabled,
-            boolean pauseOnConfirmedSpaghetti,
-            double confidenceThreshold,
-            int confirmationsRequired,
-            String ffmpegCommand,
-            String ffmpegInputFormat,
-            String ffmpegVideoSize,
-            int ffmpegTimeoutMs,
-            int ffmpegJpegQuality,
-            String storageDirectory,
-            boolean diagnosticLoggingEnabled,
-            boolean purgeAutomatically,
-            int purgeRetentionFrequency,
-            Instant updatedAt) {
-        this(
-                printerId,
-                enabled,
-                sourceType,
-                sourceValue,
-                captureIntervalSeconds,
-                retentionSnapshotCount,
-                analysisEnabled,
-                safetyEnabled,
-                pauseOnConfirmedSpaghetti,
-                confidenceThreshold,
-                confirmationsRequired,
-                ffmpegCommand,
-                ffmpegInputFormat,
-                ffmpegVideoSize,
-                ffmpegTimeoutMs,
-                ffmpegJpegQuality,
-                storageDirectory,
                 diagnosticLoggingEnabled,
                 purgeAutomatically,
                 purgeRetentionFrequency,
@@ -383,7 +232,6 @@ public final class CameraSettings {
             String ffmpegVideoSize,
             int ffmpegTimeoutMs,
             int ffmpegJpegQuality,
-            String storageDirectory,
             boolean diagnosticLoggingEnabled,
             boolean purgeAutomatically,
             int purgeRetentionFrequency,
@@ -419,10 +267,6 @@ public final class CameraSettings {
         this.ffmpegVideoSize = normalizeNullableText(ffmpegVideoSize);
         this.ffmpegTimeoutMs = requirePositive(ffmpegTimeoutMs, "ffmpegTimeoutMs");
         this.ffmpegJpegQuality = requirePositive(ffmpegJpegQuality, "ffmpegJpegQuality");
-        this.storageDirectory = requireTextOrDefault(
-                storageDirectory,
-                RuntimeDefaults.CAMERA_STORAGE_SUBDIRECTORY,
-                "storageDirectory");
         this.diagnosticLoggingEnabled = diagnosticLoggingEnabled;
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
 
@@ -458,7 +302,6 @@ public final class CameraSettings {
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_VIDEO_SIZE,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY,
-                RuntimeDefaults.CAMERA_STORAGE_SUBDIRECTORY,
                 false,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -483,7 +326,6 @@ public final class CameraSettings {
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_VIDEO_SIZE,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY,
-                RuntimeDefaults.CAMERA_STORAGE_SUBDIRECTORY,
                 false,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -580,10 +422,6 @@ public final class CameraSettings {
 
     public int ffmpegJpegQuality() {
         return ffmpegJpegQuality;
-    }
-
-    public String storageDirectory() {
-        return storageDirectory;
     }
 
     public boolean diagnosticLoggingEnabled() {

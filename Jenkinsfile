@@ -1219,13 +1219,14 @@ EOF
 
               test -d dataset
               test -f dataset/README.md
-              test -f dataset/manifest.json
+              test -f dataset/json/manifest.json
               test -f dataset/scripts/initdataset.sh
               test -f dataset/scripts/validate-dataset.sh
               test -d dataset/pex01
-              test -f dataset/pex01/printer.json
-              test -f dataset/pex01/camera-settings.json
-              test -d dataset/pex01/jobs
+              test -d dataset/pex01/camera
+              test -f dataset/json/pex01/printer.json
+              test -f dataset/json/pex01/camera-settings.json
+              test -d dataset/json/pex01/jobs
 
               chmod +x dataset/scripts/initdataset.sh
               chmod +x dataset/scripts/validate-dataset.sh

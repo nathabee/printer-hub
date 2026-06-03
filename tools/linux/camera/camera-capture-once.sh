@@ -4,7 +4,7 @@ set -euo pipefail
 DEVICE="${CAMERA_DEVICE:-/dev/video0}"
 WIDTH="${CAMERA_WIDTH:-1280}"
 HEIGHT="${CAMERA_HEIGHT:-720}"
-OUTPUT_FILE="${1:-./data/camera/p1/latest.jpg}"
+OUTPUT_FILE="${1:-./data/printers/p1/camera/latest.jpg}"
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "[camera] ffmpeg is not installed or not available in PATH" >&2

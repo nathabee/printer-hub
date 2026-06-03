@@ -28,6 +28,8 @@ import spaghettichef.local.persistence.CameraSettingsStore;
 import spaghettichef.local.persistence.CameraSnapshotEntry;
 import spaghettichef.local.persistence.CameraSnapshotEntryStore;
 import spaghettichef.local.persistence.DatabaseInitializer;
+import spaghettichef.local.persistence.PrinterConfigurationStore;
+import spaghettichef.local.runtime.PrinterRuntimeNodeFactory;
 
 class CameraDeltaSetDeletionServiceTest {
 
@@ -56,7 +58,8 @@ class CameraDeltaSetDeletionServiceTest {
         CameraCalculationRun otherRun = saveCalculationRun(stores.calculationRunStore(), "printer-1", 1L, other.requireId());
         stores.calculationResultStore().save(result(targetRun.requireId(), 1L));
         stores.calculationResultStore().save(result(otherRun.requireId(), 2L));
-        Path preview = tempDir.resolve("camera").resolve("printer-1").resolve("latest.jpg");
+        Path preview = cameraDirectory("printer-1").resolve("latest.jpg");
+        Files.createDirectories(preview.getParent());
         Files.write(preview, new byte[] {9});
 
         CameraDeltaSetDeletionReport report = service(stores).delete(
@@ -128,6 +131,7 @@ class CameraDeltaSetDeletionServiceTest {
     }
 
     private void saveCameraSettings(CameraSettingsStore store, String printerId) {
+        savePrinter(printerId);
         store.save(new CameraSettings(
                 printerId,
                 true,
@@ -145,12 +149,11 @@ class CameraDeltaSetDeletionServiceTest {
                 "640x480",
                 5000,
                 3,
-                tempDir.resolve("camera").toString(),
                 FIXED_INSTANT));
     }
 
     private Path saveSnapshot(CameraSnapshotEntryStore store, String printerId, long cameraJobId) throws Exception {
-        Path directory = tempDir.resolve("camera").resolve(printerId).resolve("snapshots").resolve(Long.toString(cameraJobId));
+        Path directory = cameraDirectory(printerId).resolve("snapshots").resolve(Long.toString(cameraJobId));
         Files.createDirectories(directory);
         Path path = directory.resolve("000001_snapshot.jpg");
         Files.write(path, new byte[] {1});
@@ -187,7 +190,10 @@ class CameraDeltaSetDeletionServiceTest {
             long cameraJobId,
             long deltaSetId,
             long toSnapshotId) throws Exception {
-        Path directory = tempDir.resolve("camera").resolve(printerId).resolve("deltas").resolve(Long.toString(cameraJobId)).resolve(Long.toString(deltaSetId));
+        Path directory = cameraDirectory(printerId)
+                .resolve("deltas")
+                .resolve(Long.toString(cameraJobId))
+                .resolve(Long.toString(deltaSetId));
         Files.createDirectories(directory);
         Path path = directory.resolve("000001_%06d_delta.jpg".formatted(toSnapshotId));
         Files.write(path, new byte[] {(byte) toSnapshotId});
@@ -251,6 +257,24 @@ class CameraDeltaSetDeletionServiceTest {
         Path dbFile = tempDir.resolve(fileName);
         System.setProperty("spaghettichef.databaseFile", dbFile.toString());
         new DatabaseInitializer().initialize();
+    }
+
+    private void savePrinter(String printerId) {
+        new PrinterConfigurationStore().save(PrinterRuntimeNodeFactory.create(
+                printerId,
+                printerId,
+                "SIM_PORT",
+                "sim",
+                printerStorageDirectory(printerId).toString(),
+                true));
+    }
+
+    private Path printerStorageDirectory(String printerId) {
+        return tempDir.resolve("camera-storage").resolve(printerId);
+    }
+
+    private Path cameraDirectory(String printerId) {
+        return printerStorageDirectory(printerId).resolve("camera");
     }
 
     private record Stores(

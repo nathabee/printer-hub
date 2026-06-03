@@ -52,7 +52,6 @@ class CameraSettingsStoreTest {
                 "1280x720",
                 6000,
                 4,
-                "/tmp/camera-storage",
                 Instant.parse("2026-05-18T10:00:00Z"));
 
         CameraSettings saved = store.save(settings);
