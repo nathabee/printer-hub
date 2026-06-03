@@ -385,8 +385,8 @@ function renderPrinterAdministrationSettingsCard(printers, printerConfigDisabled
         </label>
 
         <label>
-          Storage directory
-          <input id="printerStorageDirectoryInput" name="storageDirectory" type="text" placeholder="printers/printer-1" required>
+          Storage base directory
+          <input id="printerStorageDirectoryInput" name="storageDirectory" type="text" placeholder="printers" required>
         </label>
 
         <div class="form-actions">

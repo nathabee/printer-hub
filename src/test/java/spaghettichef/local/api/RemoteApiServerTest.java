@@ -1121,8 +1121,12 @@ class RemoteApiServerTest {
             assertTrue(captureResponse.body().contains("\"width\":320"));
             assertTrue(captureResponse.body().contains("\"height\":240"));
 
-            assertTrue(Files.exists(cameraStorageDirectory.resolve("camera").resolve("latest.jpg")));
-            assertFalse(Files.isDirectory(cameraStorageDirectory.resolve("camera").resolve("snapshots")));
+            Path printerCameraDirectory = cameraStorageDirectory
+                    .resolve("printer-1")
+                    .resolve("camera");
+
+            assertTrue(Files.exists(printerCameraDirectory.resolve("latest.jpg")));
+            assertFalse(Files.isDirectory(printerCameraDirectory.resolve("snapshots")));
 
             HttpResponse<String> activeJobResponse = context.get("/printers/printer-1/camera/jobs/active");
             assertEquals(200, activeJobResponse.statusCode());
@@ -1434,11 +1438,12 @@ class RemoteApiServerTest {
                     20,
                     "simulated",
                     "default",
-                    cameraStorageDirectory.resolve("camera").resolve("snapshots").resolve("2").toString(),
+                    cameraStorageDirectory.resolve("printer-2").resolve("camera").resolve("snapshots").resolve("2").toString(),
                     "test"));
             long printer2CameraJobId = printer2CameraJob.requireId();
 
             Path printer2SnapshotDirectory = cameraStorageDirectory
+                    .resolve("printer-2")
                     .resolve("camera")
                     .resolve("snapshots")
                     .resolve(Long.toString(printer2CameraJobId));
@@ -1482,6 +1487,7 @@ class RemoteApiServerTest {
             assertTrue(previewResponse.body().contains("camera_recalculate_preview_not_implemented"));
 
             Path snapshotsDirectory = cameraStorageDirectory
+                    .resolve("printer-1")
                     .resolve("camera")
                     .resolve("snapshots")
                     .resolve(printer1CameraJobId);
@@ -3288,7 +3294,7 @@ class RemoteApiServerTest {
     private String startCameraJobAndWaitForSnapshots(
             TestContext context,
             String printerId,
-            Path cameraStorageDirectory,
+            Path printerStorageRoot,
             long expectedSnapshotCount) throws Exception {
         HttpResponse<String> startResponse = context.request(
                 "POST",
@@ -3302,7 +3308,8 @@ class RemoteApiServerTest {
         String cameraJobId = extractJsonString(startResponse.body(), "jobId");
         assertNotNull(cameraJobId);
 
-        Path snapshotsDirectory = cameraStorageDirectory
+        Path snapshotsDirectory = printerStorageRoot
+                .resolve(printerId)
                 .resolve("camera")
                 .resolve("snapshots")
                 .resolve(cameraJobId);

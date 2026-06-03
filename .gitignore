@@ -34,7 +34,7 @@ message.txt
 
 
 # dataset pictures and snapshots pictures
-camera/**
+printers/**
 dataset/**/*.jpg
 dataset/**/*.zip
 
