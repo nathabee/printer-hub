@@ -184,6 +184,18 @@ wrong printerId returns controlled error
 mvn test passes
 ```
 
+## Status
+
+Done in the 0.8 camera admin API foundation work:
+
+```text
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+```
+
+The endpoint resolves jobs by `printerId + cameraJobId`, returns snapshot counts, retained counts, bytes, duration, snapshots per second, latest snapshot data, and controlled not-found errors for missing or wrong-printer jobs.
+
+Verified with `RemoteApiServerTest#cameraSnapshotAdminEndpointsExposeTimelineAndDeleteJobSnapshot` and full `mvn test`.
+
 ---
 
 # 0.8.2 — Camera Job Timeline Verification
@@ -231,6 +243,18 @@ deleted/missing files are visible
 large jobs do not break the endpoint
 mvn test passes
 ```
+
+## Status
+
+Done in the 0.8 camera admin API foundation work:
+
+```text
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+```
+
+The endpoint verifies the camera job with `printerId + cameraJobId`, returns only snapshot entries for that scoped identity, and the store orders entries by `captured_at ASC, id ASC`. Timeline rows include snapshot id, `cameraJobId`, `printerId`, `capturedAt`, `fileDeleted`, `sizeBytes`, and `message`.
+
+Verified with `RemoteApiServerTest#cameraSnapshotAdminEndpointsExposeTimelineAndDeleteJobSnapshot` and full `mvn test`.
 
 ---
 
