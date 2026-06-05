@@ -1,6 +1,6 @@
 # SpaghettiChef REST API
 
-This document is a practical endpoint reference for the current local SpaghettiChef API. (updated in version 0.7.0)
+This document is a practical endpoint reference for the current local SpaghettiChef API. (updated in version 0.8.0)
 
 The API and dashboard are served from the same host and port.
 
@@ -1735,15 +1735,29 @@ Response shape:
 
 Camera admin endpoints are used for snapshot jobs, retained snapshots, delta sets, delta frames, calculation runs, calculation results, traceability, comparison, and cleanup.
 
-They live under:
+They live under compatibility `/admin/camera` paths and preferred printer-scoped `/admin/printers/{printerId}/camera` paths.
 
 ```text
 /admin/camera
+/admin/printers/{printerId}/camera
 ```
 
 ---
 
 ## Camera Admin Snapshot Job Endpoints
+
+Preferred printer-scoped camera job endpoints:
+
+```text
+GET    /admin/printers/{printerId}/camera/jobs
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+DELETE /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+POST   /admin/printers/{printerId}/camera/jobs/{cameraJobId}/purge
+```
+
+Compatibility snapshot-job endpoints:
 
 ```text
 GET    /admin/camera/snapshot/jobs
@@ -1756,16 +1770,18 @@ GET    /admin/camera/snapshot/files/{snapshotEntryId}
 POST   /admin/camera/storage/{printerId}/sync
 ```
 
+For new integrations, prefer the printer-scoped paths. `cameraJobId` is scoped by `printerId`, so wrong `printerId + cameraJobId` combinations return a controlled not-found response.
+
 ---
 
-## GET /admin/camera/snapshot/jobs
+## GET /admin/printers/{printerId}/camera/jobs
 
 Lists camera snapshot jobs.
 
-Optional query:
+Compatibility endpoint:
 
 ```text
-printerId={printerId}
+GET /admin/camera/snapshot/jobs?printerId={printerId}
 ```
 
 Response shape:
@@ -1792,6 +1808,101 @@ Response shape:
       "totalBytes": 12345678,
       "firstCapturedAt": "2026-05-28T12:00:00Z",
       "lastCapturedAt": "2026-05-28T12:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+
+Returns one camera job.
+
+Response shape:
+
+```json
+{
+  "job": {
+    "id": 12,
+    "cameraJobId": 12,
+    "printerId": "p1",
+    "linkedPrintJobId": "job-1",
+    "analysisSessionId": null,
+    "state": "STOPPED",
+    "startedAt": "2026-05-28T12:00:00Z",
+    "stoppedAt": "2026-05-28T12:30:00Z",
+    "captureIntervalSeconds": 10,
+    "retainedSnapshots": 200,
+    "sourceType": "ffmpeg",
+    "sourceDescription": "/dev/video0",
+    "snapshotDirectory": "printers/p1/camera/snapshots/12",
+    "message": null,
+    "createdAt": "2026-05-28T12:00:00Z",
+    "updatedAt": "2026-05-28T12:30:00Z"
+  }
+}
+```
+
+---
+
+## GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+
+Returns lightweight camera job progress and throughput data for external polling.
+
+Response shape:
+
+```json
+{
+  "printerId": "p1",
+  "cameraJobId": 12,
+  "state": "STOPPED",
+  "startedAt": "2026-05-28T12:00:00Z",
+  "stoppedAt": "2026-05-28T12:30:00Z",
+  "firstCapturedAt": "2026-05-28T12:00:00Z",
+  "lastCapturedAt": "2026-05-28T12:30:00Z",
+  "captureIntervalSeconds": 10,
+  "snapshotCount": 200,
+  "retainedSnapshotCount": 180,
+  "totalBytes": 12345678,
+  "durationMs": 1800000,
+  "snapshotsPerSecond": 0.1111111111111111,
+  "latestSnapshotId": 200,
+  "latestCaptureAt": "2026-05-28T12:30:00Z",
+  "errorCount": null,
+  "lastErrorMessage": null
+}
+```
+
+---
+
+## GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+
+Returns timeline entries for one camera job.
+
+Compatibility endpoint:
+
+```text
+GET /admin/camera/snapshot/jobs/{cameraJobKey}/timeline?printerId={printerId}
+```
+
+Response shape:
+
+```json
+{
+  "jobId": "12",
+  "timeline": [
+    {
+      "id": 100,
+      "type": "snapshot",
+      "printerId": "p1",
+      "cameraJobId": 12,
+      "cameraJobKey": "12",
+      "snapshotPath": "printers/p1/camera/snapshots/12/000100.jpg",
+      "capturedAt": "2026-05-28T12:00:00Z",
+      "sizeBytes": 18234,
+      "message": null,
+      "fileDeleted": false
     }
   ]
 }
@@ -1841,6 +1952,55 @@ Response shape:
 
 ---
 
+## DELETE /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+
+Deletes a camera job and its related snapshot, delta, calculation, and event data according to request flags.
+
+Compatibility endpoint:
+
+```text
+DELETE /admin/camera/jobs/{cameraJobId}?printerId={printerId}
+```
+
+Request body:
+
+```json
+{
+  "deleteSnapshotFiles": true,
+  "deleteSnapshotRows": true,
+  "deleteDeltaFiles": true,
+  "deleteDeltaRows": true,
+  "deleteCalculationRuns": true,
+  "deleteCameraEvents": true,
+  "deleteCameraJob": true,
+  "requiredConfirmation": "DELETE_CAMERA_JOB"
+}
+```
+
+Response shape:
+
+```json
+{
+  "printerId": "p1",
+  "cameraJobId": 12,
+  "deletedSnapshotFiles": 200,
+  "deletedSnapshotBytes": 12345678,
+  "deletedSnapshotRows": 200,
+  "deletedDeltaFiles": 100,
+  "deletedDeltaBytes": 2345678,
+  "deletedDeltaRows": 100,
+  "deletedDeltaSetRows": 1,
+  "deletedCalculationRunRows": 2,
+  "deletedCalculationResultRows": 200,
+  "deletedCameraEventRows": 10,
+  "deletedCameraJobRows": 1,
+  "failedFiles": [],
+  "message": "deleted"
+}
+```
+
+---
+
 ## DELETE /admin/camera/snapshot/jobs/{cameraJobKey}
 
 Deletes snapshots for one camera job key.
@@ -1866,55 +2026,20 @@ Response shape:
 
 ---
 
-## GET /admin/camera/snapshot/jobs/{cameraJobKey}/timeline
-
-Returns timeline entries for one camera job key.
-
-Optional query:
-
-```text
-printerId={printerId}
-```
-
-Response shape:
-
-```json
-{
-  "jobId": "camera-job-12",
-  "timeline": [
-    {
-      "id": 100,
-      "type": "snapshot",
-      "printerId": "p1",
-      "cameraJobId": 12,
-      "cameraJobKey": "camera-job-12",
-      "snapshotPath": "printers/p1/camera/snapshots/12/000100.jpg",
-      "capturedAt": "2026-05-28T12:00:00Z",
-      "fileDeleted": false
-    }
-  ]
-}
-```
-
----
-
-## POST /admin/camera/snapshot/jobs/{cameraJobId}/purge
+## POST /admin/printers/{printerId}/camera/jobs/{cameraJobId}/purge
 
 Purges snapshots from a camera job according to retention rules.
 
-Optional query:
+Compatibility endpoint:
 
 ```text
-printerId={printerId}
+POST /admin/camera/snapshot/jobs/{cameraJobId}/purge?printerId={printerId}
 ```
-
-If `printerId` is not provided in the query, it must be provided in the body.
 
 Request body:
 
 ```json
 {
-  "printerId": "p1",
   "retentionSnapshotCount": 200,
   "purgeRetentionFrequency": 10,
   "message": "manual snapshot purge"
@@ -1981,53 +2106,6 @@ Request shape:
 ```
 
 For real writes, set `dryRun` to `false` and include `requiredConfirmation`.
-
----
-
-# Camera Admin Job Deletion
-
-```text
-DELETE /admin/camera/jobs/{cameraJobId}?printerId={printerId}
-```
-
-Deletes a camera job and its related snapshot, delta, calculation, and event data according to request flags.
-
-Request body:
-
-```json
-{
-  "deleteSnapshotFiles": true,
-  "deleteSnapshotRows": true,
-  "deleteDeltaFiles": true,
-  "deleteDeltaRows": true,
-  "deleteCalculationRuns": true,
-  "deleteCameraEvents": true,
-  "deleteCameraJob": true,
-  "requiredConfirmation": "DELETE_CAMERA_JOB"
-}
-```
-
-Response shape:
-
-```json
-{
-  "printerId": "p1",
-  "cameraJobId": 12,
-  "deletedSnapshotFiles": 200,
-  "deletedSnapshotBytes": 12345678,
-  "deletedSnapshotRows": 200,
-  "deletedDeltaFiles": 100,
-  "deletedDeltaBytes": 2345678,
-  "deletedDeltaRows": 100,
-  "deletedDeltaSetRows": 1,
-  "deletedCalculationRunRows": 2,
-  "deletedCalculationResultRows": 200,
-  "deletedCameraEventRows": 10,
-  "deletedCameraJobRows": 1,
-  "failedFiles": [],
-  "message": "deleted"
-}
-```
 
 ---
 
@@ -2754,6 +2832,13 @@ POST   /admin/camera/snapshot/jobs/{cameraJobId}/purge
 GET    /admin/camera/snapshot/files/{snapshotEntryId}
 POST   /admin/camera/storage/{printerId}/sync
 
+GET    /admin/printers/{printerId}/camera/jobs
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+DELETE /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+POST   /admin/printers/{printerId}/camera/jobs/{cameraJobId}/purge
+
 DELETE /admin/camera/jobs/{cameraJobId}?printerId={printerId}
 
 GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
@@ -2779,3 +2864,27 @@ GET    /admin/camera/calculation-results/{calculationResultId}/visual?printerId=
 
 POST   /admin/camera/snapshot/jobs/{cameraJobKey}/recalculate-preview
 ```
+
+---
+
+# Lexicon
+
+`printerId`: The local runtime identity for one printer. Camera job and delta-set admin paths should include this value when resolving camera data.
+
+`cameraJobId`: Numeric camera job id scoped by `printerId`. Treat `printerId + cameraJobId` as the identity; do not assume a camera job id is globally unique.
+
+`cameraJobKey`: Compatibility name used by older snapshot-job endpoints. For current camera jobs it usually maps to the numeric `cameraJobId`.
+
+`snapshotEntryId`: Numeric id for one retained snapshot metadata row. Snapshot file endpoints use this id directly.
+
+`deltaSetId`: Numeric delta-set id scoped by `printerId`. Treat `printerId + deltaSetId` as the identity.
+
+`deltaFrameId`: Numeric id for one generated delta frame row. The file endpoint still requires `printerId` as a query parameter for scope checking.
+
+`calculationRunId`: Numeric id for one engine calculation run over a delta set.
+
+`progress`: Lightweight camera-job throughput data derived from the job row and retained snapshot rows. It is meant for external tools to poll, not for an internal monitoring product.
+
+`timeline`: Ordered snapshot entries for a camera job, including deleted-file markers where known.
+
+`compatibility endpoint`: An older path kept for existing dashboard/API callers. New integrations should prefer printer-scoped admin paths when both forms exist.

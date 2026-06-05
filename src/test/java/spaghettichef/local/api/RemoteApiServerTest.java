@@ -1424,6 +1424,11 @@ class RemoteApiServerTest {
             assertTrue(jobsResponse.body().contains("\"jobId\":\"" + printer1CameraJobId + "\""));
             assertTrue(jobsResponse.body().contains("\"fileCount\":2"));
 
+            HttpResponse<String> scopedJobsResponse = context.get("/admin/printers/printer-1/camera/jobs");
+            assertEquals(200, scopedJobsResponse.statusCode());
+            assertTrue(scopedJobsResponse.body().contains("\"jobId\":\"" + printer1CameraJobId + "\""));
+            assertTrue(scopedJobsResponse.body().contains("\"printerId\":\"printer-1\""));
+
             assertEquals(200, context.request(
                     "POST",
                     "/printers/printer-1/camera/jobs/stop",
@@ -1472,6 +1477,31 @@ class RemoteApiServerTest {
             assertTrue(timelineResponse.body().contains("\"printerId\":\"printer-1\""));
             assertFalse(timelineResponse.body().contains("\"printerId\":\"printer-2\""));
 
+            HttpResponse<String> scopedJobResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId);
+            assertEquals(200, scopedJobResponse.statusCode());
+            assertTrue(scopedJobResponse.body().contains("\"cameraJobId\":" + printer1CameraJobId));
+            assertTrue(scopedJobResponse.body().contains("\"printerId\":\"printer-1\""));
+
+            HttpResponse<String> scopedTimelineResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId + "/timeline");
+            assertEquals(200, scopedTimelineResponse.statusCode());
+            assertTrue(scopedTimelineResponse.body().contains("\"timeline\":["));
+            assertTrue(scopedTimelineResponse.body().contains("\"printerId\":\"printer-1\""));
+            assertFalse(scopedTimelineResponse.body().contains("\"printerId\":\"printer-2\""));
+
+            HttpResponse<String> progressResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId + "/progress");
+            assertEquals(200, progressResponse.statusCode());
+            assertTrue(progressResponse.body().contains("\"cameraJobId\":" + printer1CameraJobId));
+            assertTrue(progressResponse.body().contains("\"snapshotCount\":2"));
+            assertTrue(progressResponse.body().contains("\"retainedSnapshotCount\":2"));
+            assertTrue(progressResponse.body().contains("\"durationMs\":"));
+            assertTrue(progressResponse.body().contains("\"snapshotsPerSecond\":"));
+
+            assertEquals(404, context.get(
+                    "/admin/printers/printer-2/camera/jobs/" + printer1CameraJobId + "/progress").statusCode());
+
             Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "id");
             assertNotNull(snapshotEntryId);
 
@@ -1497,10 +1527,12 @@ class RemoteApiServerTest {
 
             HttpResponse<String> deleteResponse = context.request(
                     "DELETE",
-                    "/admin/camera/snapshot/jobs/" + printer1CameraJobId + "?printerId=printer-1",
-                    null);
+                    "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId,
+                    """
+                            {"requiredConfirmation":"DELETE_CAMERA_JOB"}
+                            """);
             assertEquals(200, deleteResponse.statusCode());
-            assertTrue(deleteResponse.body().contains("\"deletedMetadataRows\":2"));
+            assertTrue(deleteResponse.body().contains("\"deletedSnapshotRows\":2"));
 
             HttpResponse<String> jobsAfterDeleteResponse = context
                     .get("/admin/camera/snapshot/jobs?printerId=printer-1");
