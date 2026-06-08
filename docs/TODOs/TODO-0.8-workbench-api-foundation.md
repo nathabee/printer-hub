@@ -388,6 +388,14 @@ missing availability data is null or absent, not faked
 mvn test passes
 ```
 
+## Status
+
+Done in the 0.8 camera admin API foundation work.
+
+`GET /admin/camera/calculation-engine-settings` and `PUT /admin/camera/calculation-engine-settings/{engineName}` expose the stable persisted engine settings fields required by BenchChef: `engineName`, `adapterType`, `engineLabel`, `enabled`, default method/threshold/parameter/CLI settings, executable path, timeout, sort order, and timestamps.
+
+The response also includes cheap computed `available` and `availabilityMessage` fields. Java engines report availability without extra work. External CLI engines are checked only for configured executable path existence, regular-file status, and executable permission; SpaghettiChef does not start or benchmark the engine to compute availability.
+
 ---
 
 # 0.8.5 — Camera Storage Summary For BenchChef

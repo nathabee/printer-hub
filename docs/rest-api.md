@@ -2425,12 +2425,16 @@ Response shape:
       "executablePath": null,
       "timeoutMs": 10000,
       "sortOrder": 10,
+      "available": true,
+      "availabilityMessage": "Engine is available",
       "createdAt": "2026-05-29T10:00:00Z",
       "updatedAt": "2026-05-29T10:00:00Z"
     }
   ]
 }
 ```
+
+`available` and `availabilityMessage` are cheap compatibility hints for external observers. SpaghettiChef does not start or benchmark an engine just to calculate these fields. External CLI engines are checked only for configured executable path existence and executable permission.
 
 ---
 
@@ -2471,6 +2475,8 @@ Response shape:
     "executablePath": "/opt/spaghettichef/img-analyzer",
     "timeoutMs": 10000,
     "sortOrder": 20,
+    "available": true,
+    "availabilityMessage": "External CLI executable is available",
     "createdAt": "2026-05-29T10:00:00Z",
     "updatedAt": "2026-05-29T10:10:00Z"
   }

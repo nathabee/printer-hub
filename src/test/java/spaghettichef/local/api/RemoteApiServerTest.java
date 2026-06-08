@@ -322,10 +322,15 @@ class RemoteApiServerTest {
             assertTrue(response.body().contains("\"engineName\":\"JAVA_BASIC_DELTA\""));
             assertTrue(response.body().contains("\"engineLabel\":\"Java basic delta\""));
             assertTrue(response.body().contains("\"defaultConfidenceThreshold\":0.85"));
+            assertTrue(response.body().contains("\"available\":true"));
+            assertTrue(response.body().contains("\"availabilityMessage\":\"Engine is available\""));
             assertTrue(response.body().contains("\"engineName\":\"RUST_IMG_ANALYZER\""));
             assertTrue(response.body().contains("\"adapterType\":\"EXTERNAL_CLI\""));
             assertTrue(response.body().contains("\"defaultCliMethod\":\"delta-basic\""));
             assertTrue(response.body().contains("\"executablePath\":null"));
+            assertTrue(response.body().contains("\"available\":false"));
+            assertTrue(response.body().contains(
+                    "\"availabilityMessage\":\"External CLI executable path is not configured\""));
         } finally {
             context.close();
         }
@@ -334,31 +339,37 @@ class RemoteApiServerTest {
     @Test
     void putCameraCalculationEngineSettingsPersistsAdminChanges() throws Exception {
         TestContext context = createContext("camera-engine-settings-put.db");
+        Path executable = tempDir.resolve("img-analyzer");
+        Files.writeString(executable, "#!/bin/sh\n");
+        assertTrue(executable.toFile().setExecutable(true));
 
         try {
             HttpResponse<String> response = context.request(
                     "PUT",
                     "/admin/camera/calculation-engine-settings/RUST_IMG_ANALYZER",
                     """
-                            {"engineLabel":"Rust tuned","enabled":false,"defaultMethodName":"spaghetti-rust","defaultConfidenceThreshold":0.7,"defaultParameterJson":"{\\"source\\":\\"admin\\"}","defaultCliMethod":"delta-tuned","executablePath":"/opt/spaghetti/img-analyzer","timeoutMs":12345,"sortOrder":5}
-                            """);
+                            {"engineLabel":"Rust tuned","enabled":true,"defaultMethodName":"spaghetti-rust","defaultConfidenceThreshold":0.7,"defaultParameterJson":"{\\"source\\":\\"admin\\"}","defaultCliMethod":"delta-tuned","executablePath":"%s","timeoutMs":12345,"sortOrder":5}
+                            """.formatted(executable.toString().replace("\\", "\\\\")));
 
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"engineName\":\"RUST_IMG_ANALYZER\""));
             assertTrue(response.body().contains("\"engineLabel\":\"Rust tuned\""));
-            assertTrue(response.body().contains("\"enabled\":false"));
+            assertTrue(response.body().contains("\"enabled\":true"));
             assertTrue(response.body().contains("\"defaultMethodName\":\"spaghetti-rust\""));
             assertTrue(response.body().contains("\"defaultConfidenceThreshold\":0.70"));
             assertTrue(response.body().contains("\"defaultParameterJson\":\"{\\\"source\\\":\\\"admin\\\"}\""));
             assertTrue(response.body().contains("\"defaultCliMethod\":\"delta-tuned\""));
-            assertTrue(response.body().contains("\"executablePath\":\"/opt/spaghetti/img-analyzer\""));
+            assertTrue(response.body().contains("\"executablePath\":\"" + executable + "\""));
             assertTrue(response.body().contains("\"timeoutMs\":12345"));
             assertTrue(response.body().contains("\"sortOrder\":5"));
+            assertTrue(response.body().contains("\"available\":true"));
+            assertTrue(response.body().contains(
+                    "\"availabilityMessage\":\"External CLI executable is available\""));
 
             HttpResponse<String> getResponse = context.get("/admin/camera/calculation-engine-settings");
             assertEquals(200, getResponse.statusCode());
             assertTrue(getResponse.body().contains("\"engineLabel\":\"Rust tuned\""));
-            assertTrue(getResponse.body().contains("\"executablePath\":\"/opt/spaghetti/img-analyzer\""));
+            assertTrue(getResponse.body().contains("\"executablePath\":\"" + executable + "\""));
         } finally {
             context.close();
         }

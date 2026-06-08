@@ -15,3 +15,4 @@ SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further detail
 [SpaghettiChef] Health:   http://localhost:18080/health
 [SpaghettiChef] Printers: http://localhost:18080/printers
 [SpaghettiChef] Settings: http://localhost:18080/settings/monitoring
+2026-06-08T11:57:17.532056097Z [SpaghettiChef] INFO API server stopped

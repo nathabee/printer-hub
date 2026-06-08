@@ -2731,9 +2731,50 @@ public final class RemoteApiServer {
                 + "\"executablePath\":" + nullableString(settings.executablePath()) + ","
                 + "\"timeoutMs\":" + settings.timeoutMs() + ","
                 + "\"sortOrder\":" + settings.sortOrder() + ","
+                + "\"available\":" + engineSettingsAvailable(settings) + ","
+                + "\"availabilityMessage\":" + nullableString(engineSettingsAvailabilityMessage(settings)) + ","
                 + "\"createdAt\":\"" + escapeJson(settings.createdAt().toString()) + "\","
                 + "\"updatedAt\":\"" + escapeJson(settings.updatedAt().toString()) + "\""
                 + "}";
+    }
+
+    private boolean engineSettingsAvailable(CameraCalculationEngineSettings settings) {
+        if (!settings.enabled()) {
+            return false;
+        }
+        if (!"EXTERNAL_CLI".equals(settings.adapterType())) {
+            return true;
+        }
+        String executablePath = settings.executablePath();
+        if (executablePath == null || executablePath.isBlank()) {
+            return false;
+        }
+        Path path = Path.of(executablePath);
+        return Files.isRegularFile(path) && Files.isExecutable(path);
+    }
+
+    private String engineSettingsAvailabilityMessage(CameraCalculationEngineSettings settings) {
+        if (!settings.enabled()) {
+            return "Engine is disabled";
+        }
+        if (!"EXTERNAL_CLI".equals(settings.adapterType())) {
+            return "Engine is available";
+        }
+        String executablePath = settings.executablePath();
+        if (executablePath == null || executablePath.isBlank()) {
+            return "External CLI executable path is not configured";
+        }
+        Path path = Path.of(executablePath);
+        if (!Files.exists(path)) {
+            return "External CLI executable path does not exist";
+        }
+        if (!Files.isRegularFile(path)) {
+            return "External CLI executable path is not a file";
+        }
+        if (!Files.isExecutable(path)) {
+            return "External CLI executable path is not executable";
+        }
+        return "External CLI executable is available";
     }
 
     private String roleProfilesJson(Map<LocalRole, RoleProfile> profiles) {

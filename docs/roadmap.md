@@ -3908,7 +3908,7 @@ batch and live delta calculations measure processing time
 
 ### 0.8.4 — Engine Settings And Availability Verification
 
-status: planned
+status: done
 
 ```text
 configured engine list
@@ -3916,6 +3916,7 @@ enabled/disabled engine visibility
 engine adapter and default method metadata
 external CLI availability status
 clear unavailable-engine reason reporting
+cheap availability checks only; no benchmark or engine startup
 ```
 
 ---
