@@ -18,7 +18,8 @@ public record CameraCalculationRun(
         String algorithmVariant,
         String engineVersion,
         Long executionDurationMs,
-        String engineStatus
+        String engineStatus,
+        Instant finishedAt
 ) {
     public CameraCalculationRun(
             Long id,
@@ -44,7 +45,41 @@ public record CameraCalculationRun(
                 "DELTA_SCORE_THRESHOLD",
                 null,
                 null,
-                "SUCCESS");
+                "SUCCESS",
+                null);
+    }
+
+    public CameraCalculationRun(
+            Long id,
+            String printerId,
+            long cameraJobId,
+            long deltaSetId,
+            String methodName,
+            String parameterJson,
+            Instant createdAt,
+            int resultCount,
+            String message,
+            String engineName,
+            String algorithmVariant,
+            String engineVersion,
+            Long executionDurationMs,
+            String engineStatus) {
+        this(
+                id,
+                printerId,
+                cameraJobId,
+                deltaSetId,
+                methodName,
+                parameterJson,
+                createdAt,
+                resultCount,
+                message,
+                engineName,
+                algorithmVariant,
+                engineVersion,
+                executionDurationMs,
+                engineStatus,
+                null);
     }
 
     public CameraCalculationRun {
@@ -66,6 +101,9 @@ public record CameraCalculationRun(
             throw new IllegalArgumentException("executionDurationMs must not be negative");
         }
         engineStatus = requireText(engineStatus, "engineStatus");
+        if (finishedAt != null && finishedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("finishedAt must not be before createdAt");
+        }
     }
 
     public Optional<Long> idOptional() {
@@ -95,7 +133,8 @@ public record CameraCalculationRun(
                 algorithmVariant,
                 engineVersion,
                 executionDurationMs,
-                engineStatus);
+                engineStatus,
+                finishedAt);
     }
 
     public Optional<String> messageOptional() {

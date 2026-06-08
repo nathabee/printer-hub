@@ -3247,6 +3247,7 @@ public final class RemoteApiServer {
     private String cameraCalculationRunJson(CameraCalculationRun run) {
         return "{"
                 + "\"id\":" + nullableLong(run.id()) + ","
+                + "\"calculationRunId\":" + nullableLong(run.id()) + ","
                 + "\"printerId\":\"" + escapeJson(run.printerId()) + "\","
                 + "\"cameraJobId\":" + run.cameraJobId() + ","
                 + "\"deltaSetId\":" + run.deltaSetId() + ","
@@ -3258,6 +3259,7 @@ public final class RemoteApiServer {
                 + "\"engineStatus\":\"" + escapeJson(run.engineStatus()) + "\","
                 + "\"parameterJson\":\"" + escapeJson(run.parameterJson()) + "\","
                 + "\"createdAt\":\"" + escapeJson(run.createdAt().toString()) + "\","
+                + "\"finishedAt\":" + nullableString(run.finishedAt() == null ? null : run.finishedAt().toString()) + ","
                 + "\"resultCount\":" + run.resultCount() + ","
                 + "\"message\":" + nullableString(run.message())
                 + "}";
@@ -3329,6 +3331,7 @@ public final class RemoteApiServer {
                     .append("\"suspected\":").append(result.suspected()).append(",")
                     .append("\"reasonCodes\":").append(nullableString(result.reasonCodes())).append(",")
                     .append("\"message\":").append(nullableString(result.message())).append(",")
+                    .append("\"processingTimeMs\":").append(nullableLong(result.processingTimeMs())).append(",")
                     .append("\"createdAt\":\"").append(escapeJson(result.createdAt().toString())).append("\"")
                     .append("}");
 
@@ -3369,6 +3372,7 @@ public final class RemoteApiServer {
                 + "\"suspected\":" + result.suspected() + ","
                 + "\"reasonCodes\":" + nullableString(result.reasonCodes()) + ","
                 + "\"message\":" + nullableString(result.message()) + ","
+                + "\"processingTimeMs\":" + nullableLong(result.processingTimeMs()) + ","
                 + "\"createdAt\":\"" + escapeJson(result.createdAt().toString()) + "\""
                 + "}";
     }

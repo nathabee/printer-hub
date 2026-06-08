@@ -175,6 +175,9 @@ class CameraDeltaSetServiceTest {
         assertEquals("DELTA_SCORE_THRESHOLD", firstRun.algorithmVariant());
         assertEquals("SUCCESS", firstRun.engineStatus());
         assertTrue(firstRun.executionDurationMs() != null);
+        assertTrue(firstRun.finishedAt() != null);
+        assertTrue(firstResults.get(0).processingTimeMs() != null);
+        assertTrue(firstResults.get(1).processingTimeMs() != null);
     }
 
     @Test

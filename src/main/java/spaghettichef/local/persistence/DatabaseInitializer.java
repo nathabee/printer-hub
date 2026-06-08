@@ -140,6 +140,8 @@ public final class DatabaseInitializer {
             ensureColumn(connection, "camera_calculation_runs", "execution_duration_ms", "INTEGER");
             ensureColumn(connection, "camera_calculation_runs", "engine_status",
                     "TEXT NOT NULL DEFAULT 'SUCCESS'");
+            ensureColumn(connection, "camera_calculation_runs", "finished_at", "TEXT");
+            ensureColumn(connection, "camera_calculation_results", "processing_time_ms", "INTEGER");
             ensureColumn(connection, "camera_calculation_engine_settings", "adapter_type",
                     "TEXT NOT NULL DEFAULT 'JAVA_BASIC_DELTA'");
 
@@ -405,7 +407,8 @@ public final class DatabaseInitializer {
                     algorithm_variant TEXT,
                     engine_version TEXT,
                     execution_duration_ms INTEGER,
-                    engine_status TEXT NOT NULL DEFAULT 'SUCCESS'
+                    engine_status TEXT NOT NULL DEFAULT 'SUCCESS',
+                    finished_at TEXT
                 );
                 """;
 
@@ -422,7 +425,8 @@ public final class DatabaseInitializer {
                     suspected INTEGER NOT NULL,
                     reason_codes TEXT,
                     message TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    processing_time_ms INTEGER
                 );
                 """;
 

@@ -12,6 +12,8 @@ http://localhost:18080
 
 Most endpoints return JSON. Image endpoints return image bytes.
 
+SpaghettiChef does not expose a Prometheus `/metrics` endpoint in the 0.8.x local API. External tools such as BenchChef should poll the REST/JSON endpoints below and expose their own metrics if needed.
+
 ---
 
 ## Conventions
@@ -75,6 +77,16 @@ When local security is enabled, requests may include:
 ```http
 X-SpaghettiChef-Role: ADMIN
 ```
+
+### Metrics Boundary
+
+```text
+GET /metrics
+```
+
+is not implemented by SpaghettiChef 0.8.x. A `404 Not Found` response for this path is expected.
+
+Prometheus should scrape the BenchChef backend metrics endpoint, not SpaghettiChef Local. BenchChef is responsible for deriving latency, error rate, throughput, frame rate, average processing time, and dashboard statistics from SpaghettiChef REST/JSON observations.
 
 ---
 
@@ -2324,6 +2336,7 @@ Response shape:
   "calculationRuns": [
     {
       "id": 20,
+      "calculationRunId": 20,
       "printerId": "p1",
       "cameraJobId": 12,
       "deltaSetId": 1,
@@ -2335,6 +2348,7 @@ Response shape:
       "engineStatus": "COMPLETED",
       "parameterJson": "{}",
       "createdAt": "2026-05-28T12:00:00Z",
+      "finishedAt": "2026-05-28T12:00:00.500Z",
       "resultCount": 199,
       "message": "baseline run"
     }
@@ -2369,6 +2383,7 @@ Response shape:
 {
   "calculationRun": {
     "id": 20,
+    "calculationRunId": 20,
     "printerId": "p1",
     "cameraJobId": 12,
     "deltaSetId": 1,
@@ -2380,6 +2395,7 @@ Response shape:
     "engineStatus": "COMPLETED",
     "parameterJson": "{}",
     "createdAt": "2026-05-28T12:00:00Z",
+    "finishedAt": "2026-05-28T12:00:00.500Z",
     "resultCount": 199,
     "message": "baseline run"
   }
@@ -2471,6 +2487,7 @@ Response shape:
 {
   "calculationRun": {
     "id": 20,
+    "calculationRunId": 20,
     "printerId": "p1",
     "cameraJobId": 12,
     "deltaSetId": 1,
@@ -2482,6 +2499,7 @@ Response shape:
     "engineStatus": "COMPLETED",
     "parameterJson": "{}",
     "createdAt": "2026-05-28T12:00:00Z",
+    "finishedAt": "2026-05-28T12:00:00.500Z",
     "resultCount": 199,
     "message": "baseline run"
   }
@@ -2508,6 +2526,7 @@ Response shape:
       "suspected": true,
       "reasonCodes": "[HIGH_DELTA_SCORE]",
       "message": "possible spaghetti",
+      "processingTimeMs": 3,
       "createdAt": "2026-05-28T12:00:00Z"
     }
   ]
@@ -2638,10 +2657,12 @@ Response shape:
     "suspected": true,
     "reasonCodes": "[HIGH_DELTA_SCORE]",
     "message": "possible spaghetti",
+    "processingTimeMs": 3,
     "createdAt": "2026-05-28T12:00:00Z"
   },
   "calculationRun": {
     "id": 20,
+    "calculationRunId": 20,
     "printerId": "p1",
     "cameraJobId": 12,
     "deltaSetId": 1,
@@ -2653,6 +2674,7 @@ Response shape:
     "engineStatus": "COMPLETED",
     "parameterJson": "{}",
     "createdAt": "2026-05-28T12:00:00Z",
+    "finishedAt": "2026-05-28T12:00:00.500Z",
     "resultCount": 199,
     "message": "baseline run"
   },
@@ -2886,5 +2908,9 @@ POST   /admin/camera/snapshot/jobs/{cameraJobKey}/recalculate-preview
 `progress`: Lightweight camera-job throughput data derived from the job row and retained snapshot rows. It is meant for external tools to poll, not for an internal monitoring product.
 
 `timeline`: Ordered snapshot entries for a camera job, including deleted-file markers where known.
+
+`BenchChef`: External observer/benchmark tool. It polls SpaghettiChef REST/JSON endpoints and owns statistics, Prometheus `/metrics`, Grafana dashboards, and benchmark result aggregation.
+
+`/metrics`: Not part of the SpaghettiChef 0.8.x REST API. A 404 on SpaghettiChef Local is expected; scrape BenchChef instead.
 
 `compatibility endpoint`: An older path kept for existing dashboard/API callers. New integrations should prefer printer-scoped admin paths when both forms exist.

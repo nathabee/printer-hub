@@ -42,3 +42,7 @@ dataset/**/*.zip
 
 # Rust build output
 **/target/
+
+
+# shared and duplicated doc for codex
+API-BENCHCHEF-READONLY.md

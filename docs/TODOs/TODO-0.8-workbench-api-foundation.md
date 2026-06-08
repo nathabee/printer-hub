@@ -318,15 +318,29 @@ missing timing is null, not fake zero
 mvn test passes
 ```
 
+## Status
+
+Done in the 0.8 camera admin API foundation work.
+
+Calculation runs now expose `calculationRunId`, `executionDurationMs`, `resultCount`, and nullable `finishedAt` in addition to the existing printer, job, delta set, engine, method, status, parameter, message, and creation fields.
+
+Calculation results now include nullable `processingTimeMs`. Batch calculation runs and the live delta pipeline measure per-result processing time cheaply around the existing engine/detection call. Existing rows without timing remain `null`.
+
+Verified with `CameraDeltaSetServiceTest`, `CameraDeltaStoresTest`, and `RemoteApiServerTest#cameraDeltaSetAdminEndpointsGenerateAndListFrames`.
+
 ---
 
-# 0.8.4 — Engine Settings And Availability Verification
+# 0.8.4 — Engine Settings Compatibility For BenchChef
 
 ## Purpose
 
-Expose what engines SpaghettiChef can run.
+Make the calculation engine settings endpoint stable enough for BenchChef to list available engines and understand what SpaghettiChef can execute.
 
-## Existing Endpoint
+This remains a SpaghettiChef operational API.
+
+It is not a benchmark runner and not a monitoring subsystem.
+
+## Existing Endpoints
 
 ```text
 GET /admin/camera/calculation-engine-settings
@@ -335,7 +349,7 @@ PUT /admin/camera/calculation-engine-settings/{engineName}
 
 ## Work To Do
 
-Verify response includes:
+Verify and document that the response includes:
 
 ```text
 engineName
@@ -353,12 +367,14 @@ createdAt
 updatedAt
 ```
 
-Optional lightweight computed fields:
+Optional lightweight computed fields may be added only if cheap:
 
 ```text
 available
 availabilityMessage
 ```
+
+Do not execute heavy engine checks just to compute availability.
 
 ## Acceptance Criteria
 
@@ -366,18 +382,23 @@ availabilityMessage
 BenchChef can list engines
 disabled engines are visible
 external CLI configuration is visible
+engineName remains the stable identity
 missing executable can be reported if cheaply checkable
-engineName remains stable identity
+missing availability data is null or absent, not faked
 mvn test passes
 ```
 
 ---
 
-# 0.8.5 — Camera Storage Summary
+# 0.8.5 — Camera Storage Summary For BenchChef
 
 ## Purpose
 
-Give BenchChef a simple overview without requiring direct filesystem access.
+Give BenchChef a simple read-only overview of camera storage without requiring BenchChef to read SQLite directly or access SpaghettiChef internal filesystem paths.
+
+BenchChef needs summary data.
+
+BenchChef must not become dependent on SpaghettiChef storage internals.
 
 ## New Endpoint
 
@@ -385,11 +406,13 @@ Give BenchChef a simple overview without requiring direct filesystem access.
 GET /admin/printers/{printerId}/camera/storage/summary
 ```
 
-Optional global endpoint:
+## Optional Endpoint
 
 ```text
 GET /admin/camera/storage/summary
 ```
+
+The global endpoint is optional. The printer-scoped endpoint is the important one.
 
 ## Response Should Include
 
@@ -398,137 +421,278 @@ printerId
 storageRoot
 cameraJobCount
 snapshotCount
+retainedSnapshotCount
 deltaSetCount
 deltaFrameCount
 calculationRunCount
+calculationResultCount
 totalSnapshotBytes
 totalDeltaBytes
-missingFileCount, if available
+missingFileCount
 latestSnapshotAvailable
 previousSnapshotAvailable
 deltaPreviewAvailable
 message
 ```
 
-## Acceptance Criteria
+## Rules
 
 ```text
 summary is read-only
 summary does not create a dataset abstraction
-summary does not require BenchChef to read filesystem paths
+summary does not expose raw filesystem dependency to BenchChef
+summary uses printerId as scope
 empty storage returns zero counts
-missing files are counted if known
-mvn test passes
-```
-
----
-
-# 0.8.6 — Optional Label Metadata
-
-## Purpose
-
-Support future engine accuracy and ML preparation without making labels part of the operational runtime core.
-
-Labels are optional metadata.
-
-SpaghettiChef can run without labels.
-
-## Optional Endpoints
-
-```text
-GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/label
-PUT /admin/printers/{printerId}/camera/jobs/{cameraJobId}/label
-GET /admin/printers/{printerId}/camera/jobs/label-summary
-```
-
-## Supported Labels
-
-```text
-normal
-spaghetti
-unclear
-```
-
-## Rule
-
-Labels are used for:
-
-```text
-training data
-accuracy checking
-false positive / false negative analysis
-future ML preparation
-```
-
-Labels are not required for:
-
-```text
-camera capture
-delta generation
-engine execution
-printer operation
-dashboard operation
+missing files are counted when known
+expensive filesystem scans are avoided unless already supported cheaply
 ```
 
 ## Acceptance Criteria
 
 ```text
-camera job can exist without label
-label is associated with printerId + cameraJobId
-invalid label is rejected
-label summary is available if implemented
+BenchChef can display storage size and object counts
+BenchChef can detect empty camera storage
+BenchChef can detect missing-file situations when known
+BenchChef does not need direct filesystem access
+BenchChef does not need SQLite access
+wrong printerId returns controlled error
 mvn test passes
 ```
 
 ---
 
-# 0.8.7 — Dataset Package Import Metadata
+# 0.8.6 — BenchChef Probe Contract Verification
 
 ## Purpose
 
-Support portable dataset packages only as import/export packaging.
+Make sure the SpaghettiChef Local REST API matches what BenchChef Local currently probes.
 
-Do not introduce `datasetId` as the normal runtime identity.
+This subversion is not about adding monitoring inside SpaghettiChef.
 
-## Correct Concept
+It is about confirming that BenchChef can safely call SpaghettiChef through stable black-box HTTP endpoints.
 
-Runtime identity:
-
-```text
-printerId
-cameraJobId
-deltaSetId
-calculationRunId
-```
-
-Dataset package:
+## BenchChef Uses These SpaghettiChef Endpoints
 
 ```text
-portable archive/folder used to import or export camera jobs
+GET /health
+GET /version
+GET /monitoring
+GET /dashboard/index.html
+
+GET /printers/{printerId}/camera/jobs/active
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
 ```
+
+## Required Behavior
+
+```text
+2xx response means successful probe
+non-2xx response means failed probe
+timeouts are handled by BenchChef
+invalid JSON on JSON endpoints is considered a BenchChef probe failure
+dashboard index may return HTML
+camera active job returns latestSnapshotId and latestCaptureAt when available
+```
+
+## Role Header Compatibility
+
+SpaghettiChef Local uses:
+
+```text
+X-SpaghettiChef-Role
+```
+
+BenchChef must send this header when a role header is configured.
+
+Do not introduce a second role header name for the same purpose.
+
+## Acceptance Criteria
+
+```text
+BenchChef health probe works
+BenchChef version probe works
+BenchChef monitoring probe works
+BenchChef dashboard index probe works
+BenchChef camera active job probe works
+BenchChef camera job progress probe works
+BenchChef camera job timeline probe works
+role header naming is aligned with SpaghettiChef
+mvn test passes
+```
+
+---
+
+# 0.8.7 — No Native Metrics Endpoint Decision
+
+## Purpose
+
+Clarify that SpaghettiChef Local does not expose a native Prometheus endpoint in 0.8.x.
+
+Current BenchChef integration must not require SpaghettiChef to expose `/metrics`.
+
+BenchChef can already measure SpaghettiChef externally by calling REST APIs and exposing BenchChef metrics from the BenchChef backend.
+
+## Decision
+
+SpaghettiChef does not expose Prometheus metrics in 0.8.x.
+
+SpaghettiChef exposes stable REST/JSON data needed by BenchChef.
+
+BenchChef is responsible for converting those observations into Prometheus metrics, statistics, and dashboards.
+
+## Required Boundary
+
+```text
+SpaghettiChef provides operational facts.
+BenchChef turns those facts into metrics/statistics.
+```
+
+SpaghettiChef owns:
+
+```text
+health
+version
+monitoring
+printer status
+camera job progress
+camera job timeline
+delta sets
+calculation runs
+storage summary
+```
+
+BenchChef owns:
+
+```text
+latency
+error rate
+snapshots per minute
+slowdown
+frames per second
+average processing time
+Prometheus /metrics format
+Grafana dashboards
+```
+
+## Do Not Implement Inside SpaghettiChef
+
+```text
+Prometheus /metrics endpoint
+Prometheus text exposition format
+Grafana dashboard generation
+performance statistics aggregation
+benchmark result storage
+```
+
+## Prometheus Configuration Rule
+
+```text
+Prometheus should scrape BenchChef backend /metrics.
+Prometheus should not scrape SpaghettiChef Local /metrics.
+SpaghettiChef returning 404 for /metrics is expected in 0.8.x.
+```
+
+If Prometheus reports this target as down:
+
+```text
+http://host.docker.internal:18080/metrics
+```
+
+then the scrape job is configured against the wrong service. Remove the SpaghettiChef scrape target or point Prometheus at the BenchChef backend metrics endpoint.
+
+## Acceptance Criteria
+
+```text
+SpaghettiChef may return 404 for /metrics
+BenchChef documentation says SpaghettiChef /metrics is not part of the 0.8.x contract
+Prometheus does not include a required SpaghettiChef scrape job
+BenchChef backend /metrics remains the metrics endpoint for current dashboards
+BenchChef derives metrics from SpaghettiChef REST/JSON probes
+mvn test passes
+```
+
+---
+
+# 0.8.8 — REST API Documentation Alignment
+
+## Purpose
+
+Make the SpaghettiChef REST API document match the actual implemented local API and the BenchChef probe contract.
+
+The REST API document must describe what exists, not what is only planned.
 
 ## Work To Do
 
-Keep or improve:
+Update the REST API document so that it clearly marks endpoints as:
 
 ```text
-POST /admin/camera/storage/{printerId}/sync
+implemented
+optional
+planned
+compatibility
+cancelled
 ```
 
-Optional later:
+## Must Be Documented As Implemented If Present
 
 ```text
-POST /admin/camera/workbench/dataset-packages/import
-GET  /admin/camera/workbench/dataset-packages/imports
+GET /health
+GET /version
+GET /monitoring
+GET /dashboard/index.html
+
+GET /printers/{printerId}/camera/jobs/active
+
+GET /admin/printers/{printerId}/camera/jobs
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
+POST /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
+
+GET /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}
+GET /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/frames
+GET /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
+POST /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
+
+GET /admin/camera/calculation-engine-settings
+PUT /admin/camera/calculation-engine-settings/{engineName}
+GET /admin/camera/calculation-runs/{calculationRunId}
+GET /admin/camera/calculation-runs/{calculationRunId}/results
+GET /admin/camera/calculation-runs/{calculationRunId}/trace
+GET /admin/camera/calculation-runs/{calculationRunId}/compare
+```
+
+## Must Be Documented As Not Implemented In 0.8.x
+
+```text
+GET /metrics
+```
+
+## Must Be Documented As Planned Until Implemented
+
+```text
+GET /admin/printers/{printerId}/camera/storage/summary
+GET /admin/camera/storage/summary
+```
+
+## Must Remain Cancelled
+
+```text
+label metadata endpoints
+dataset package import metadata endpoints
 ```
 
 ## Acceptance Criteria
 
 ```text
-imported files become normal camera jobs/snapshots/deltas
-imported labels become optional camera job labels
-runtime APIs do not require datasetId
-BenchChef does not access filesystem directly
+REST API documentation matches implemented endpoints
+BenchChef API expectation document matches SpaghettiChef REST API documentation
+SpaghettiChef /metrics non-goal is clear
+role header name is consistent
+cancelled label and dataset sections do not appear as active work
 mvn test passes
 ```
 
@@ -539,9 +703,9 @@ mvn test passes
 Do not implement inside SpaghettiChef 0.8.x:
 
 ```text
-Prometheus-first internal metric system
 Grafana dashboard generation
 BenchChef Angular UI
+BenchChef Django API
 benchmark runner
 external OS/process monitoring
 large report generator
@@ -549,25 +713,37 @@ full parameter sweep UI
 ML training
 model registry UI
 performance supervision dashboard
+Prometheus /metrics endpoint
+Prometheus text exposition format
+performance statistics aggregation
+benchmark result storage
 portfolio UI
+central BenchChef synchronization
+central BenchChef database
+central BenchChef dashboard
 ```
 
 These belong to BenchChef.
+
+SpaghettiChef 0.8.x may return 404 for `/metrics`. That is expected. BenchChef and Prometheus must not treat SpaghettiChef `/metrics` as a required target.
 
 ---
 
 # BenchChef Boundary
 
-BenchChef will measure externally by calling SpaghettiChef APIs:
+BenchChef measures SpaghettiChef externally.
+
+BenchChef Local may call:
 
 ```text
 GET /health
 GET /version
 GET /monitoring
-GET /dashboard/{resourcePath}
+GET /dashboard/index.html
 
 GET /printers/{printerId}/camera/jobs/active
 GET /admin/printers/{printerId}/camera/jobs
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}
 GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
 GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
 
@@ -577,20 +753,27 @@ POST /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
 GET /admin/printers/{printerId}/camera/delta-sets/{deltaSetId}/calculation-runs
 GET /admin/camera/calculation-runs/{calculationRunId}
 GET /admin/camera/calculation-runs/{calculationRunId}/results
+GET /admin/camera/calculation-runs/{calculationRunId}/trace
+GET /admin/camera/calculation-runs/{calculationRunId}/compare
+GET /admin/camera/calculation-engine-settings
 ```
 
-BenchChef calculates:
+BenchChef calculates externally:
 
 ```text
 HTTP latency
 timeout count
 error rate
+dashboard asset response time
+backend responsiveness under load
+camera active-job polling rhythm
 snapshots per minute
 snapshot slowdown
 engine frames per second
 average ms per frame
-dashboard asset response time
-backend responsiveness under load
+calculation run duration
+calculation result processing time
+storage object counts when summary endpoint is available
 ```
 
 External exporters handle:
@@ -603,6 +786,15 @@ process metrics
 container metrics
 ```
 
+Prometheus integration for the current architecture:
+
+```text
+Prometheus scrapes BenchChef backend /metrics
+BenchChef backend exposes metrics derived from stored probe samples
+SpaghettiChef /metrics is not part of the 0.8.x contract
+Prometheus must not scrape SpaghettiChef /metrics for the current local BenchChef dashboards
+```
+
 ---
 
 # Overall Acceptance Criteria
@@ -611,16 +803,18 @@ container metrics
 SpaghettiChef remains operational and lightweight
 printer-scoped camera job identity is correct
 printer-scoped delta set identity is correct
-BenchChef can observe camera jobs externally
+BenchChef can observe SpaghettiChef through stable REST probes
 BenchChef can measure performance without reading SQLite
 BenchChef can measure performance without reading internal filesystem paths
 BenchChef can benchmark engine runs through stable APIs
-labels are optional metadata only
-dataset packages remain transport/import/export format only
-no heavy monitoring system is added inside SpaghettiChef
+engine settings are visible to BenchChef
+camera storage summary is available or clearly documented as planned
+native SpaghettiChef /metrics is clearly documented as not part of 0.8.x
+role header naming is aligned
+labels remain cancelled
+dataset package import metadata remains cancelled
+no BenchChef UI/backend responsibilities are added to SpaghettiChef
 existing dashboard behavior remains working
 existing safety and security rules remain respected
 mvn test passes
 ```
-
- 

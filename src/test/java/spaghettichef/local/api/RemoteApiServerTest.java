@@ -1314,6 +1314,9 @@ class RemoteApiServerTest {
             assertEquals(201, firstRunResponse.statusCode());
             assertEquals(201, secondRunResponse.statusCode());
             assertTrue(firstRunResponse.body().contains("\"resultCount\":2"));
+            assertTrue(firstRunResponse.body().contains("\"calculationRunId\":"));
+            assertTrue(firstRunResponse.body().contains("\"executionDurationMs\":"));
+            assertTrue(firstRunResponse.body().contains("\"finishedAt\":"));
             assertTrue(secondRunResponse.body().contains("\"resultCount\":2"));
 
             Integer firstRunId = extractJsonInteger(firstRunResponse.body(), "id");
@@ -1335,6 +1338,7 @@ class RemoteApiServerTest {
             assertTrue(resultsResponse.body().contains("\"calculationRunId\":" + firstRunId));
             assertTrue(resultsResponse.body().contains("\"deltaFrameId\":1"));
             assertTrue(resultsResponse.body().contains("\"deltaFrameId\":2"));
+            assertTrue(resultsResponse.body().contains("\"processingTimeMs\":"));
 
             HttpResponse<String> traceResponse = context.get(
                     "/admin/camera/calculation-runs/" + firstRunId + "/trace?printerId=printer-1");

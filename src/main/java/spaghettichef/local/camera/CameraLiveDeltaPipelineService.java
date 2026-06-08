@@ -129,7 +129,9 @@ public final class CameraLiveDeltaPipelineService {
         deltaSetStore.updateCounts(settings.printerId(), deltaSet.requireId(), snapshots.size(), frames.size());
 
         CameraCalculationRun run = liveCalculationRun(settings, cameraJobId, deltaSet.requireId());
+        long processingStartedAtNanos = System.nanoTime();
         SpaghettiDetectionResult detection = spaghettiDetectionService.detect(analysis);
+        long processingTimeMs = elapsedMillis(processingStartedAtNanos);
         CameraCalculationResult result = calculationResultStore.save(new CameraCalculationResult(
                 null,
                 run.requireId(),
@@ -138,7 +140,8 @@ public final class CameraLiveDeltaPipelineService {
                 detection.suspected(),
                 detection.reasons().toString(),
                 detection.message().orElse(null),
-                detection.detectedAt()));
+                detection.detectedAt(),
+                processingTimeMs));
 
         calculationRunStore.updateResultCount(
                 run.requireId(),
@@ -181,6 +184,10 @@ public final class CameraLiveDeltaPipelineService {
     private boolean deltaFrameAlreadyExists(String printerId, long deltaSetId, long toSnapshotId) {
         return deltaFrameStore.findByPrinterIdAndDeltaSetId(printerId, deltaSetId).stream()
                 .anyMatch(frame -> frame.toSnapshotId() == toSnapshotId);
+    }
+
+    private static long elapsedMillis(long startedAtNanos) {
+        return Math.max(0L, java.time.Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis());
     }
 
     private static long requireSnapshotId(CameraSnapshotEntry entry) {
