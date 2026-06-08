@@ -1263,6 +1263,106 @@ class RemoteApiServerTest {
     }
 
     @Test
+    void benchChefProbeContractEndpointsReturnExpectedShapes() throws Exception {
+        Path cameraStorageDirectory = tempDir.resolve("benchchef-probe-camera-storage");
+        TestContext context = createContext("benchchef-probe-contract.db");
+
+        try {
+            HttpResponse<String> createPrinterResponse = context.request(
+                    "POST",
+                    "/printers",
+                    "{"
+                            + "\"id\":\"printer-1\","
+                            + "\"displayName\":\"Printer One\","
+                            + "\"portName\":\"COM1\","
+                            + "\"mode\":\"simulated\","
+                            + "\"storageDirectory\":\""
+                            + cameraStorageDirectory.resolve("printer-1").toString().replace("\\", "\\\\")
+                            + "\","
+                            + "\"enabled\":true"
+                            + "}");
+            assertEquals(201, createPrinterResponse.statusCode());
+
+            HttpResponse<String> settingsResponse = context.request(
+                    "PUT",
+                    "/printers/printer-1/camera/settings",
+                    """
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","captureIntervalSeconds":1,"retentionSnapshotCount":20}
+                            """);
+            assertEquals(200, settingsResponse.statusCode());
+
+            String cameraJobId = startCameraJobAndWaitForSnapshots(
+                    context,
+                    "printer-1",
+                    cameraStorageDirectory,
+                    1);
+
+            HttpResponse<String> healthResponse = context.get("/health");
+            assertEquals(200, healthResponse.statusCode());
+            assertEquals("{\"status\":\"ok\"}", healthResponse.body());
+
+            HttpResponse<String> versionResponse = context.get("/version");
+            assertEquals(200, versionResponse.statusCode());
+            assertTrue(versionResponse.body().startsWith("{"));
+            assertTrue(versionResponse.body().contains("\"version\":"));
+
+            HttpResponse<String> monitoringResponse = context.get("/monitoring");
+            assertEquals(200, monitoringResponse.statusCode());
+            assertTrue(monitoringResponse.body().startsWith("{"));
+            assertTrue(monitoringResponse.body().contains("\"generatedAt\":"));
+            assertTrue(monitoringResponse.body().contains("\"summary\":"));
+
+            HttpResponse<String> dashboardResponse = context.get("/dashboard/index.html");
+            assertEquals(200, dashboardResponse.statusCode());
+            assertTrue(dashboardResponse.headers().firstValue("content-type").orElse("").contains("text/html"));
+            assertTrue(dashboardResponse.body().contains("<!doctype html>"));
+
+            HttpResponse<String> activeJobResponse = context.get("/printers/printer-1/camera/jobs/active");
+            assertEquals(200, activeJobResponse.statusCode());
+            assertTrue(activeJobResponse.body().startsWith("{"));
+            assertTrue(activeJobResponse.body().contains("\"active\":true"));
+            assertTrue(activeJobResponse.body().contains("\"jobId\":\"" + cameraJobId + "\""));
+            assertTrue(activeJobResponse.body().contains("\"latestSnapshotId\":"));
+            assertTrue(activeJobResponse.body().contains("\"latestCaptureAt\":"));
+
+            HttpResponse<String> progressResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + cameraJobId + "/progress");
+            assertEquals(200, progressResponse.statusCode());
+            assertTrue(progressResponse.body().startsWith("{"));
+            assertTrue(progressResponse.body().contains("\"jobId\":" + cameraJobId));
+            assertTrue(progressResponse.body().contains("\"printerId\":\"printer-1\""));
+            assertTrue(progressResponse.body().contains("\"snapshotCount\":"));
+            assertTrue(progressResponse.body().contains("\"durationMs\":"));
+            assertTrue(progressResponse.body().contains("\"errorType\":null"));
+
+            HttpResponse<String> timelineResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + cameraJobId + "/timeline");
+            assertEquals(200, timelineResponse.statusCode());
+            assertTrue(timelineResponse.body().startsWith("{"));
+            assertTrue(timelineResponse.body().contains("\"timeline\":["));
+            assertTrue(timelineResponse.body().contains("\"timestamp\":"));
+            assertTrue(timelineResponse.body().contains("\"eventType\":\"SNAPSHOT_CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"state\":\"CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"snapshotId\":"));
+            assertTrue(timelineResponse.body().contains("\"deltaSetId\":null"));
+
+            HttpResponse<String> optionsResponse = context.request("OPTIONS", "/health", null);
+            assertEquals(204, optionsResponse.statusCode());
+            String allowedHeaders = optionsResponse.headers()
+                    .firstValue("access-control-allow-headers")
+                    .orElse("");
+            assertTrue(allowedHeaders.contains("X-SpaghettiChef-Role"));
+            assertFalse(allowedHeaders.contains("X-User-Role"));
+        } finally {
+            context.request(
+                    "POST",
+                    "/printers/printer-1/camera/jobs/stop",
+                    null);
+            context.close();
+        }
+    }
+
+    @Test
     void cameraDeltaSetAdminEndpointsGenerateAndListFrames() throws Exception {
         Path cameraStorageDirectory = tempDir.resolve("camera-delta-storage");
 

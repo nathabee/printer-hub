@@ -536,21 +536,35 @@ role header naming is aligned with SpaghettiChef
 mvn test passes
 ```
 
+## Status
+
+Done in the 0.8 camera admin API foundation work.
+
+`RemoteApiServerTest#benchChefProbeContractEndpointsReturnExpectedShapes` verifies the current BenchChef probe contract with black-box HTTP requests for:
+
+```text
+GET /health
+GET /version
+GET /monitoring
+GET /dashboard/index.html
+GET /printers/{printerId}/camera/jobs/active
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+```
+
+The verification also checks that the advertised role header is `X-SpaghettiChef-Role` and not `X-User-Role`.
+
 ---
 
 # 0.8.7 — No Native Metrics Endpoint Decision
 
 ## Purpose
 
-Clarify that SpaghettiChef Local does not expose a native Prometheus endpoint in 0.8.x.
-
-Current BenchChef integration must not require SpaghettiChef to expose `/metrics`.
+SpaghettiChef Local does not expose a native Prometheus endpoint in 0.8.x.
 
 BenchChef can already measure SpaghettiChef externally by calling REST APIs and exposing BenchChef metrics from the BenchChef backend.
 
 ## Decision
-
-SpaghettiChef does not expose Prometheus metrics in 0.8.x.
 
 SpaghettiChef exposes stable REST/JSON data needed by BenchChef.
 

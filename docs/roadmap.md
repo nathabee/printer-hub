@@ -3939,13 +3939,14 @@ read-only printer-scoped REST/JSON summary for BenchChef
 
 ### 0.8.6 — BenchChef Probe Contract Verification
 
-status: planned
+status: done
 
 ```text
 BenchChef probes SpaghettiChef through REST/JSON endpoints
 health, version, monitoring, dashboard, active camera job, progress, and timeline probes
 X-SpaghettiChef-Role header naming is aligned
 timeouts and non-2xx responses are handled by BenchChef
+black-box RemoteApiServer contract test covers the probe set
 ```
 
 ---
@@ -3981,11 +3982,6 @@ Cancelled for SpaghettiChef 0.8.x:
 label metadata endpoints
 dataset package import metadata endpoints
 ```
-
-
----
-
-## 0.9.x skipped will be done after/parrallele to 1.0.x
 
 
 ---
@@ -4160,3 +4156,7 @@ Planned :
 - Install WireGuard on Local Farm
 - Routing examples
 - Security recommendations
+
+
+## 2.0.x Spaghetti ML Engine
+
