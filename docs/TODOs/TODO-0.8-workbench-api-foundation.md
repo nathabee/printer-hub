@@ -641,6 +641,12 @@ BenchChef derives metrics from SpaghettiChef REST/JSON probes
 mvn test passes
 ```
 
+## Status
+
+Done in the 0.8 camera admin API foundation work.
+
+SpaghettiChef 0.8.x documents `/metrics` as not implemented, does not register a native Prometheus metrics endpoint, and leaves Prometheus/Grafana/statistics ownership to BenchChef. This matches the BenchChef related documents in `docs/RELATED`.
+
 ---
 
 # 0.8.8 — REST API Documentation Alignment
@@ -700,10 +706,15 @@ GET /admin/camera/calculation-runs/{calculationRunId}/compare
 GET /metrics
 ```
 
-## Must Be Documented As Planned Until Implemented
+## Camera Storage Summary Documentation
 
 ```text
 GET /admin/printers/{printerId}/camera/storage/summary
+```
+
+## Optional / Not Implemented In 0.8.x
+
+```text
 GET /admin/camera/storage/summary
 ```
 
@@ -724,6 +735,14 @@ role header name is consistent
 cancelled label and dataset sections do not appear as active work
 mvn test passes
 ```
+
+## Status
+
+Done in the 0.8 camera admin API foundation work.
+
+`docs/rest-api.md` documents the current implemented 0.8.x local API, including the BenchChef probe contract, printer-scoped camera job endpoints, progress, timeline, delta sets, calculation runs, engine settings, storage summary, the condensed endpoint table, the role header name, and the `/metrics` non-goal.
+
+The printer-scoped storage summary endpoint is implemented and documented. The global storage summary endpoint is not part of the implemented 0.8.x API.
 
 ---
 

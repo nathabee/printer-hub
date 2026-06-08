@@ -3953,7 +3953,7 @@ black-box RemoteApiServer contract test covers the probe set
 
 ### 0.8.7 — No Native Metrics Endpoint Decision
 
-status: planned
+status: done
 
 ```text
 SpaghettiChef does not expose Prometheus /metrics in 0.8.x
@@ -3966,7 +3966,7 @@ BenchChef derives latency, error rate, throughput, FPS, and timing statistics ex
 
 ### 0.8.8 — REST API Documentation Alignment
 
-status: planned
+status: done
 
 ```text
 implemented endpoints are documented
@@ -3974,6 +3974,7 @@ planned endpoints are marked as planned
 compatibility endpoints are marked as compatibility
 SpaghettiChef /metrics is documented as not implemented in 0.8.x
 BenchChef probe expectations match the SpaghettiChef REST API document
+printer-scoped camera storage summary is documented as implemented
 ```
 
 Cancelled for SpaghettiChef 0.8.x:
@@ -4159,4 +4160,3 @@ Planned :
 
 
 ## 2.0.x Spaghetti ML Engine
-
