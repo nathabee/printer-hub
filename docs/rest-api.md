@@ -1866,25 +1866,57 @@ Response shape:
 
 ```json
 {
+  "jobId": 12,
   "printerId": "p1",
-  "cameraJobId": 12,
+  "cameraId": null,
   "state": "STOPPED",
   "startedAt": "2026-05-28T12:00:00Z",
-  "stoppedAt": "2026-05-28T12:30:00Z",
+  "finishedAt": "2026-05-28T12:30:00Z",
   "firstCapturedAt": "2026-05-28T12:00:00Z",
   "lastCapturedAt": "2026-05-28T12:30:00Z",
   "captureIntervalSeconds": 10,
   "snapshotCount": 200,
+  "deltaCount": 2,
   "retainedSnapshotCount": 180,
   "totalBytes": 12345678,
   "durationMs": 1800000,
   "snapshotsPerSecond": 0.1111111111111111,
   "latestSnapshotId": 200,
   "latestCaptureAt": "2026-05-28T12:30:00Z",
-  "errorCount": null,
-  "lastErrorMessage": null
+  "errorType": null
 }
 ```
+
+---
+
+## GET /admin/printers/{printerId}/camera/storage/summary
+
+Returns a read-only camera storage summary for one printer. This endpoint is intended for external observers such as BenchChef and does not scan arbitrary filesystem paths or create dataset abstractions.
+
+Response shape:
+
+```json
+{
+  "printerId": "p1",
+  "storageRoot": "/var/lib/spaghettichef/printers/p1/camera",
+  "cameraJobCount": 1,
+  "snapshotCount": 200,
+  "retainedSnapshotCount": 180,
+  "deltaSetCount": 2,
+  "deltaFrameCount": 199,
+  "calculationRunCount": 3,
+  "calculationResultCount": 597,
+  "totalSnapshotBytes": 12345678,
+  "totalDeltaBytes": 2345678,
+  "missingFileCount": 0,
+  "latestSnapshotAvailable": true,
+  "previousSnapshotAvailable": true,
+  "deltaPreviewAvailable": false,
+  "message": "Camera storage summary available"
+}
+```
+
+`missingFileCount` is derived from persisted snapshot and delta-frame rows whose files are known to be missing. `latestSnapshotAvailable`, `previousSnapshotAvailable`, and `deltaPreviewAvailable` describe the volatile preview files under the printer camera directory.
 
 ---
 
@@ -1905,16 +1937,12 @@ Response shape:
   "jobId": "12",
   "timeline": [
     {
-      "id": 100,
-      "type": "snapshot",
-      "printerId": "p1",
-      "cameraJobId": 12,
-      "cameraJobKey": "12",
-      "snapshotPath": "printers/p1/camera/snapshots/12/000100.jpg",
-      "capturedAt": "2026-05-28T12:00:00Z",
-      "sizeBytes": 18234,
+      "timestamp": "2026-05-28T12:00:00Z",
+      "eventType": "SNAPSHOT_CAPTURED",
+      "state": "CAPTURED",
       "message": null,
-      "fileDeleted": false
+      "snapshotId": 100,
+      "deltaSetId": null
     }
   ]
 }
@@ -2866,6 +2894,7 @@ DELETE /admin/printers/{printerId}/camera/jobs/{cameraJobId}
 GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
 GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
 POST   /admin/printers/{printerId}/camera/jobs/{cameraJobId}/purge
+GET    /admin/printers/{printerId}/camera/storage/summary
 
 DELETE /admin/camera/jobs/{cameraJobId}?printerId={printerId}
 

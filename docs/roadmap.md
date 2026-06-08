@@ -3923,15 +3923,16 @@ cheap availability checks only; no benchmark or engine startup
 
 ### 0.8.5 — Camera Storage Summary
 
-status: planned
+status: done
 
 ```text
 camera storage root summary
 per-printer storage usage
 snapshot, delta, and calculation counts
 missing file counts
-last sync metadata
-cleanup-readiness metadata
+preview availability metadata
+zero-count empty storage response
+read-only printer-scoped REST/JSON summary for BenchChef
 ```
 
 ---

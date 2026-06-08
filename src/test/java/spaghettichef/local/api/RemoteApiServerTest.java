@@ -1209,13 +1209,13 @@ class RemoteApiServerTest {
 
             assertEquals(200, timelineResponse.statusCode());
             assertTrue(timelineResponse.body().contains("\"timeline\":["));
-            assertTrue(timelineResponse.body().contains("\"type\":\"snapshot\""));
-            assertTrue(timelineResponse.body().contains("snapshots/" + cameraJobId + "/"));
-            assertTrue(timelineResponse.body().contains("\"snapshotPath\":"));
-            assertTrue(timelineResponse.body().contains("\"printerId\":\"printer-1\""));
-            assertTrue(timelineResponse.body().contains("\"cameraJobId\":" + cameraJobId));
+            assertTrue(timelineResponse.body().contains("\"eventType\":\"SNAPSHOT_CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"state\":\"CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"timestamp\":"));
+            assertTrue(timelineResponse.body().contains("\"snapshotId\":"));
+            assertTrue(timelineResponse.body().contains("\"deltaSetId\":null"));
 
-            Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "id");
+            Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "snapshotId");
             assertNotNull(snapshotEntryId);
 
             HttpResponse<String> fileResponse = context.get("/admin/camera/snapshot/files/" + snapshotEntryId);
@@ -1228,6 +1228,35 @@ class RemoteApiServerTest {
                     "POST",
                     "/printers/printer-1/camera/jobs/stop",
                     null).statusCode());
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void cameraStorageSummaryReturnsZeroCountsForEmptyPrinter() throws Exception {
+        TestContext context = createContext("camera-storage-summary-empty.db");
+
+        try {
+            HttpResponse<String> response = context.get(
+                    "/admin/printers/printer-empty/camera/storage/summary");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"printerId\":\"printer-empty\""));
+            assertTrue(response.body().contains("\"cameraJobCount\":0"));
+            assertTrue(response.body().contains("\"snapshotCount\":0"));
+            assertTrue(response.body().contains("\"retainedSnapshotCount\":0"));
+            assertTrue(response.body().contains("\"deltaSetCount\":0"));
+            assertTrue(response.body().contains("\"deltaFrameCount\":0"));
+            assertTrue(response.body().contains("\"calculationRunCount\":0"));
+            assertTrue(response.body().contains("\"calculationResultCount\":0"));
+            assertTrue(response.body().contains("\"totalSnapshotBytes\":0"));
+            assertTrue(response.body().contains("\"totalDeltaBytes\":0"));
+            assertTrue(response.body().contains("\"missingFileCount\":0"));
+            assertTrue(response.body().contains("\"latestSnapshotAvailable\":false"));
+            assertTrue(response.body().contains("\"previousSnapshotAvailable\":false"));
+            assertTrue(response.body().contains("\"deltaPreviewAvailable\":false"));
+            assertTrue(response.body().contains("\"message\":\"No camera storage rows found for printer\""));
         } finally {
             context.close();
         }
@@ -1369,6 +1398,32 @@ class RemoteApiServerTest {
             assertFalse(traceResponse.body().contains("previous.jpg"));
             assertFalse(traceResponse.body().contains("/delta.jpg"));
 
+            Path firstSnapshotPath = cameraStorageDirectory
+                    .resolve("printer-1")
+                    .resolve("camera")
+                    .resolve("snapshots")
+                    .resolve(cameraJobId)
+                    .resolve("000001_snapshot.jpg");
+            assertTrue(Files.deleteIfExists(firstSnapshotPath));
+
+            HttpResponse<String> summaryResponse = context.get(
+                    "/admin/printers/printer-1/camera/storage/summary");
+            assertEquals(200, summaryResponse.statusCode());
+            assertTrue(summaryResponse.body().contains("\"printerId\":\"printer-1\""));
+            assertTrue(summaryResponse.body().contains("\"cameraJobCount\":1"));
+            assertTrue(summaryResponse.body().contains("\"snapshotCount\":3"));
+            assertTrue(summaryResponse.body().contains("\"retainedSnapshotCount\":3"));
+            assertTrue(summaryResponse.body().contains("\"deltaSetCount\":1"));
+            assertTrue(summaryResponse.body().contains("\"deltaFrameCount\":2"));
+            assertTrue(summaryResponse.body().contains("\"calculationRunCount\":2"));
+            assertTrue(summaryResponse.body().contains("\"calculationResultCount\":4"));
+            assertTrue(summaryResponse.body().contains("\"missingFileCount\":1"));
+            assertTrue(summaryResponse.body().contains("\"latestSnapshotAvailable\":true"));
+            assertTrue(summaryResponse.body().contains("\"previousSnapshotAvailable\":true"));
+            assertTrue(summaryResponse.body().contains("\"deltaPreviewAvailable\":false"));
+            assertTrue(summaryResponse.body().contains(
+                    "\"message\":\"Camera storage summary includes missing files\""));
+
             assertEquals(200, context.request(
                     "POST",
                     "/printers/printer-1/camera/jobs/stop",
@@ -1488,9 +1543,8 @@ class RemoteApiServerTest {
                     "/admin/camera/snapshot/jobs/" + printer1CameraJobId + "/timeline?printerId=printer-1");
             assertEquals(200, timelineResponse.statusCode());
             assertTrue(timelineResponse.body().contains("\"timeline\":["));
-            assertTrue(timelineResponse.body().contains("\"snapshotPath\":"));
-            assertTrue(timelineResponse.body().contains("\"printerId\":\"printer-1\""));
-            assertFalse(timelineResponse.body().contains("\"printerId\":\"printer-2\""));
+            assertTrue(timelineResponse.body().contains("\"eventType\":\"SNAPSHOT_CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"snapshotId\":"));
 
             HttpResponse<String> scopedJobResponse = context.get(
                     "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId);
@@ -1502,22 +1556,26 @@ class RemoteApiServerTest {
                     "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId + "/timeline");
             assertEquals(200, scopedTimelineResponse.statusCode());
             assertTrue(scopedTimelineResponse.body().contains("\"timeline\":["));
-            assertTrue(scopedTimelineResponse.body().contains("\"printerId\":\"printer-1\""));
-            assertFalse(scopedTimelineResponse.body().contains("\"printerId\":\"printer-2\""));
+            assertTrue(scopedTimelineResponse.body().contains("\"eventType\":\"SNAPSHOT_CAPTURED\""));
+            assertTrue(scopedTimelineResponse.body().contains("\"snapshotId\":"));
 
             HttpResponse<String> progressResponse = context.get(
                     "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId + "/progress");
             assertEquals(200, progressResponse.statusCode());
-            assertTrue(progressResponse.body().contains("\"cameraJobId\":" + printer1CameraJobId));
+            assertTrue(progressResponse.body().contains("\"jobId\":" + printer1CameraJobId));
+            assertTrue(progressResponse.body().contains("\"cameraId\":null"));
+            assertTrue(progressResponse.body().contains("\"finishedAt\":"));
             assertTrue(progressResponse.body().contains("\"snapshotCount\":2"));
+            assertTrue(progressResponse.body().contains("\"deltaCount\":0"));
             assertTrue(progressResponse.body().contains("\"retainedSnapshotCount\":2"));
             assertTrue(progressResponse.body().contains("\"durationMs\":"));
             assertTrue(progressResponse.body().contains("\"snapshotsPerSecond\":"));
+            assertTrue(progressResponse.body().contains("\"errorType\":null"));
 
             assertEquals(404, context.get(
                     "/admin/printers/printer-2/camera/jobs/" + printer1CameraJobId + "/progress").statusCode());
 
-            Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "id");
+            Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "snapshotId");
             assertNotNull(snapshotEntryId);
 
             HttpResponse<String> fileResponse = context.get("/admin/camera/snapshot/files/" + snapshotEntryId);

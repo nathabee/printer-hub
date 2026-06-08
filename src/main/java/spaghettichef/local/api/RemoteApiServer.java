@@ -74,6 +74,8 @@ import spaghettichef.local.camera.CameraDeltaSetService;
 import spaghettichef.local.camera.CameraStorageSyncReport;
 import spaghettichef.local.camera.CameraStorageSyncRequest;
 import spaghettichef.local.camera.CameraStorageSyncService;
+import spaghettichef.local.camera.CameraStorageSummary;
+import spaghettichef.local.camera.CameraStorageSummaryService;
 import spaghettichef.local.camera.CameraAnalysisTraceRow;
 import spaghettichef.local.camera.CameraAnalysisTraceService;
 import spaghettichef.local.camera.CameraCalculationComparisonFrame;
@@ -173,6 +175,7 @@ public final class RemoteApiServer {
     private final CameraCalculationRunStore cameraCalculationRunStore;
     private final CameraCalculationResultStore cameraCalculationResultStore;
     private final CameraStorageSyncService cameraStorageSyncService;
+    private final CameraStorageSummaryService cameraStorageSummaryService;
     private final CameraAnalysisTraceService cameraAnalysisTraceService;
     private final CameraCalculationComparisonService cameraCalculationComparisonService;
     private final CameraCalculationEngineSettingsService cameraCalculationEngineSettingsService;
@@ -338,6 +341,13 @@ public final class RemoteApiServer {
                 this.cameraDeltaSetStore,
                 this.cameraDeltaFrameStore,
                 java.time.Clock.systemUTC());
+        this.cameraStorageSummaryService = new CameraStorageSummaryService(
+                cameraJobStore,
+                cameraSnapshotEntryStore,
+                this.cameraDeltaSetStore,
+                this.cameraDeltaFrameStore,
+                this.cameraCalculationRunStore,
+                this.cameraCalculationResultStore);
         this.cameraJobDeletionService = new CameraJobDeletionService(
                 cameraSettingsService,
                 cameraJobStore,
@@ -1026,6 +1036,16 @@ public final class RemoteApiServer {
 
             sendJson(exchange, 200, cameraSnapshotJobSummariesJson(
                     cameraSnapshotManagementService.listJobs(printerId)));
+            return;
+        }
+
+        if (parts.length == 4 && "storage".equals(parts[2]) && "summary".equals(parts[3])) {
+            if (!"GET".equalsIgnoreCase(method)) {
+                sendJson(exchange, 405, errorJson(OperationMessages.METHOD_NOT_ALLOWED));
+                return;
+            }
+
+            sendJson(exchange, 200, cameraStorageSummaryJson(cameraStorageSummaryService.summarize(printerId)));
             return;
         }
 
@@ -3121,17 +3141,20 @@ public final class RemoteApiServer {
         Instant durationEnd = job.stoppedAt().orElse(lastCapturedAt == null ? Instant.now() : lastCapturedAt);
         long durationMs = Math.max(0L, Duration.between(job.startedAt(), durationEnd).toMillis());
         Double snapshotsPerSecond = durationMs <= 0L ? null : snapshotCount / (durationMs / 1000.0d);
+        int deltaCount = cameraDeltaSetStore.findByPrinterIdAndCameraJobId(job.printerId(), job.requireId()).size();
 
         return "{"
+                + "\"jobId\":" + job.requireId() + ","
                 + "\"printerId\":\"" + escapeJson(job.printerId()) + "\","
-                + "\"cameraJobId\":" + job.requireId() + ","
+                + "\"cameraId\":null,"
                 + "\"state\":\"" + escapeJson(job.state().name()) + "\","
                 + "\"startedAt\":\"" + escapeJson(job.startedAt().toString()) + "\","
-                + "\"stoppedAt\":" + nullableString(job.stoppedAt().map(Instant::toString).orElse(null)) + ","
+                + "\"finishedAt\":" + nullableString(job.stoppedAt().map(Instant::toString).orElse(null)) + ","
                 + "\"firstCapturedAt\":" + nullableString(instantString(firstCapturedAt)) + ","
                 + "\"lastCapturedAt\":" + nullableString(instantString(lastCapturedAt)) + ","
                 + "\"captureIntervalSeconds\":" + job.captureIntervalSeconds() + ","
                 + "\"snapshotCount\":" + snapshotCount + ","
+                + "\"deltaCount\":" + deltaCount + ","
                 + "\"retainedSnapshotCount\":" + retainedSnapshotCount + ","
                 + "\"totalBytes\":" + totalBytes + ","
                 + "\"durationMs\":" + durationMs + ","
@@ -3140,8 +3163,7 @@ public final class RemoteApiServer {
                 + nullableLong(latestSnapshot == null ? null : latestSnapshot.id()) + ","
                 + "\"latestCaptureAt\":"
                 + nullableString(latestSnapshot == null ? null : latestSnapshot.capturedAt().toString()) + ","
-                + "\"errorCount\":null,"
-                + "\"lastErrorMessage\":null"
+                + "\"errorType\":null"
                 + "}";
     }
 
@@ -3150,7 +3172,33 @@ public final class RemoteApiServer {
     }
 
     private String cameraSnapshotTimelineJson(String jobId, List<CameraSnapshotEntry> entries) {
-        return "{\"jobId\":\"" + escapeJson(jobId) + "\",\"timeline\":" + cameraSnapshotEntryArrayJson(entries) + "}";
+        return "{\"jobId\":\"" + escapeJson(jobId) + "\",\"timeline\":" + cameraSnapshotTimelineEntryArrayJson(entries) + "}";
+    }
+
+    private String cameraSnapshotTimelineEntryArrayJson(List<CameraSnapshotEntry> entries) {
+        StringBuilder json = new StringBuilder();
+        json.append("[");
+
+        boolean first = true;
+        for (CameraSnapshotEntry entry : entries) {
+            if (!first) {
+                json.append(",");
+            }
+
+            json.append("{")
+                    .append("\"timestamp\":\"").append(escapeJson(entry.capturedAt().toString())).append("\",")
+                    .append("\"eventType\":\"SNAPSHOT_CAPTURED\",")
+                    .append("\"state\":\"CAPTURED\",")
+                    .append("\"message\":").append(nullableString(entry.message())).append(",")
+                    .append("\"snapshotId\":").append(nullableLong(entry.id())).append(",")
+                    .append("\"deltaSetId\":null")
+                    .append("}");
+
+            first = false;
+        }
+
+        json.append("]");
+        return json.toString();
     }
 
     private String cameraSnapshotEntryArrayJson(List<CameraSnapshotEntry> entries) {
@@ -3587,6 +3635,27 @@ public final class RemoteApiServer {
                 + "\"createdDeltaFrameRows\":" + report.createdDeltaFrameRows() + ","
                 + "\"deletedDeltaFrameRows\":" + report.deletedDeltaFrameRows() + ","
                 + "\"warnings\":" + stringsJson(report.warnings())
+                + "}";
+    }
+
+    private String cameraStorageSummaryJson(CameraStorageSummary summary) {
+        return "{"
+                + "\"printerId\":\"" + escapeJson(summary.printerId()) + "\","
+                + "\"storageRoot\":\"" + escapeJson(summary.storageRoot()) + "\","
+                + "\"cameraJobCount\":" + summary.cameraJobCount() + ","
+                + "\"snapshotCount\":" + summary.snapshotCount() + ","
+                + "\"retainedSnapshotCount\":" + summary.retainedSnapshotCount() + ","
+                + "\"deltaSetCount\":" + summary.deltaSetCount() + ","
+                + "\"deltaFrameCount\":" + summary.deltaFrameCount() + ","
+                + "\"calculationRunCount\":" + summary.calculationRunCount() + ","
+                + "\"calculationResultCount\":" + summary.calculationResultCount() + ","
+                + "\"totalSnapshotBytes\":" + summary.totalSnapshotBytes() + ","
+                + "\"totalDeltaBytes\":" + summary.totalDeltaBytes() + ","
+                + "\"missingFileCount\":" + summary.missingFileCount() + ","
+                + "\"latestSnapshotAvailable\":" + summary.latestSnapshotAvailable() + ","
+                + "\"previousSnapshotAvailable\":" + summary.previousSnapshotAvailable() + ","
+                + "\"deltaPreviewAvailable\":" + summary.deltaPreviewAvailable() + ","
+                + "\"message\":\"" + escapeJson(summary.message()) + "\""
                 + "}";
     }
 

@@ -140,23 +140,24 @@ GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
 ## Response Should Include
 
 ```text
+jobId
 printerId
-cameraJobId
+cameraId
 state
 startedAt
-stoppedAt
+finishedAt
 firstCapturedAt
 lastCapturedAt
 captureIntervalSeconds
 snapshotCount
+deltaCount
 retainedSnapshotCount
 totalBytes
 durationMs
 snapshotsPerSecond
 latestSnapshotId
 latestCaptureAt
-errorCount, if available
-lastErrorMessage, if available
+errorType, if available
 ```
 
 ## Why
@@ -213,13 +214,12 @@ GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
 ## Response Must Include
 
 ```text
-snapshot id
-cameraJobId
-printerId
-capturedAt
-fileDeleted
-sizeBytes, if available
+timestamp
+eventType
+state
 message, if available
+snapshotId
+deltaSetId
 ```
 
 ## BenchChef Usage
@@ -237,9 +237,8 @@ irregular capture rhythm
 ## Acceptance Criteria
 
 ```text
-timeline is ordered by capturedAt
+timeline is ordered by timestamp
 timeline belongs only to requested printerId + cameraJobId
-deleted/missing files are visible
 large jobs do not break the endpoint
 mvn test passes
 ```
@@ -252,7 +251,7 @@ Done in the 0.8 camera admin API foundation work:
 GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
 ```
 
-The endpoint verifies the camera job with `printerId + cameraJobId`, returns only snapshot entries for that scoped identity, and the store orders entries by `captured_at ASC, id ASC`. Timeline rows include snapshot id, `cameraJobId`, `printerId`, `capturedAt`, `fileDeleted`, `sizeBytes`, and `message`.
+The endpoint verifies the camera job with `printerId + cameraJobId`, returns only events for that scoped identity, and the store orders entries by `captured_at ASC, id ASC`. Timeline rows use the BenchChef event fields `timestamp`, `eventType`, `state`, `message`, `snapshotId`, and `deltaSetId`.
 
 Verified with `RemoteApiServerTest#cameraSnapshotAdminEndpointsExposeTimelineAndDeleteJobSnapshot` and full `mvn test`.
 
@@ -466,6 +465,14 @@ BenchChef does not need SQLite access
 wrong printerId returns controlled error
 mvn test passes
 ```
+
+## Status
+
+Done in the 0.8 camera admin API foundation work.
+
+`GET /admin/printers/{printerId}/camera/storage/summary` returns a read-only printer-scoped summary with camera job, snapshot, delta set, delta frame, calculation run/result, byte, missing-file, and volatile preview availability fields.
+
+The summary is derived from persisted camera rows and cheap file checks for known paths only. It does not expose a dataset abstraction, does not require BenchChef to read SQLite, and does not require BenchChef to inspect internal storage paths directly.
 
 ---
 

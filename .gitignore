@@ -45,4 +45,6 @@ dataset/**/*.zip
 
 
 # shared and duplicated doc for codex
-API-BENCHCHEF-READONLY.md
+# Related docs that are not owned by this project
+docs/RELATED/*
+!docs/RELATED/README.md
