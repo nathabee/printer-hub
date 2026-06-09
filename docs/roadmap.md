@@ -4139,24 +4139,4 @@ Planned :
 
 
 
-## 1.2.x
-
-1.2.0 Farm Networking Foundation
-- Document WireGuard topology
-- Define farm VPN addressing
-- Define Central VPN endpoint
-- Connectivity validation
-
-1.2.1 Secure Farm Registration
-- Farm registration through VPN
-- Restrict Central API to VPN addresses
-- Connectivity diagnostics
-
-1.2.2 Multi-Farm Deployment Guide
-- Install WireGuard on VPS
-- Install WireGuard on Local Farm
-- Routing examples
-- Security recommendations
-
-
 ## 2.0.x Spaghetti ML Engine

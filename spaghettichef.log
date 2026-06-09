@@ -5,14 +5,14 @@
 [[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
 [[1;34mINFO[m] 
 [[1;34mINFO[m] [1m--- [0;32mexec-maven-plugin:3.1.0:java[m [1m(default-cli)[m @ [36mspaghetti-chef[0;1m ---[m
-2026-06-08T11:42:46.141658432Z [SpaghettiChef] INFO Default camera storage base: /home/nathabee/coding/github/spaghetti-chef/develop/printers
+2026-06-08T17:53:39.955441369Z [SpaghettiChef] INFO Default camera storage base: /home/nathabee/coding/github/spaghetti-chef/develop/printers
 SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
-2026-06-08T11:42:46.503551507Z [SpaghettiChef] INFO Database initialized: spaghettichef-local.db
-2026-06-08T11:42:46.588713185Z [SpaghettiChef] INFO API server started on port 18080
+2026-06-08T17:53:40.468198714Z [SpaghettiChef] INFO Database initialized: spaghettichef-local.db
+2026-06-08T17:53:40.552928319Z [SpaghettiChef] INFO API server started on port 18080
 [SpaghettiChef] Local runtime started
 [SpaghettiChef] Health:   http://localhost:18080/health
 [SpaghettiChef] Printers: http://localhost:18080/printers
 [SpaghettiChef] Settings: http://localhost:18080/settings/monitoring
-2026-06-08T11:57:17.532056097Z [SpaghettiChef] INFO API server stopped
+2026-06-08T18:00:55.578369892Z [SpaghettiChef] INFO API server stopped

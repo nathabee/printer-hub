@@ -1,5 +1,30 @@
 # 1.1.x — Users, Roles, Security, and Controlled Central Actions
 
+
+
+
+FIRST : see how you can make these in this TODO
+
+1) Farm Networking Foundation
+- Document WireGuard topology
+- Define farm VPN addressing
+- Define Central VPN endpoint
+- Connectivity validation
+
+2) Secure Farm Registration
+- Farm registration through VPN
+- Restrict Central API to VPN addresses
+- Connectivity diagnostics
+
+3) Multi-Farm Deployment Guide
+- Install WireGuard on VPS
+- Install WireGuard on Local Farm
+- Routing examples
+- Security recommendations
+
+
+
+
 ## Goal
 
 Introduce central users, roles, permissions, protected admin views, audit logging, and the first carefully controlled central actions.
