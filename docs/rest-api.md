@@ -1,6 +1,6 @@
 # SpaghettiChef REST API
 
-This document is a practical endpoint reference for the current local SpaghettiChef API. (updated in version 0.7.0)
+This document is a practical endpoint reference for the current local SpaghettiChef API. (updated in version 0.8.0)
 
 The API and dashboard are served from the same host and port.
 
@@ -11,6 +11,8 @@ http://localhost:18080
 ```
 
 Most endpoints return JSON. Image endpoints return image bytes.
+
+SpaghettiChef does not expose a Prometheus `/metrics` endpoint in the 0.8.x local API. External tools such as BenchChef should poll the REST/JSON endpoints below and expose their own metrics if needed.
 
 ---
 
@@ -75,6 +77,16 @@ When local security is enabled, requests may include:
 ```http
 X-SpaghettiChef-Role: ADMIN
 ```
+
+### Metrics Boundary
+
+```text
+GET /metrics
+```
+
+is not implemented by SpaghettiChef 0.8.x. A `404 Not Found` response for this path is expected.
+
+Prometheus should scrape the BenchChef backend metrics endpoint, not SpaghettiChef Local. BenchChef is responsible for deriving latency, error rate, throughput, frame rate, average processing time, and dashboard statistics from SpaghettiChef REST/JSON observations.
 
 ---
 
@@ -206,6 +218,7 @@ Request body:
   "displayName": "Printer 1",
   "portName": "/dev/ttyUSB0",
   "mode": "serial",
+  "storageDirectory": "printers/p1",
   "enabled": true
 }
 ```
@@ -229,6 +242,7 @@ Response:
   "name": "Printer 1",
   "portName": "/dev/ttyUSB0",
   "mode": "serial",
+  "storageDirectory": "printers/p1",
   "enabled": true,
   "state": "UNKNOWN"
 }
@@ -253,6 +267,7 @@ Request body:
   "displayName": "Printer 1",
   "portName": "/dev/ttyUSB0",
   "mode": "serial",
+  "storageDirectory": "printers/p1",
   "enabled": true
 }
 ```
@@ -1323,7 +1338,6 @@ Response shape:
   "ffmpegVideoSize": "640x480",
   "ffmpegTimeoutMs": 5000,
   "ffmpegJpegQuality": 3,
-  "storageDirectory": "camera",
   "diagnosticLoggingEnabled": false,
   "purgeAutomatically": false,
   "purgeRetentionFrequency": 10,
@@ -1349,7 +1363,6 @@ Example Linux ffmpeg body:
   "enabled": true,
   "sourceType": "ffmpeg",
   "sourceValue": "/dev/video0",
-  "storageDirectory": "camera",
   "captureIntervalSeconds": 10,
   "retentionSnapshotCount": 20,
   "analysisEnabled": true,
@@ -1380,7 +1393,6 @@ Example Windows ffmpeg body:
   "enabled": true,
   "sourceType": "ffmpeg",
   "sourceValue": "video=PC-LM1E Camera",
-  "storageDirectory": "camera",
   "captureIntervalSeconds": 10,
   "retentionSnapshotCount": 20,
   "analysisEnabled": true,
@@ -1499,7 +1511,7 @@ Response shape:
   "retainedSnapshots": 0,
   "sourceType": "ffmpeg",
   "sourceDescription": "/dev/video0",
-  "snapshotDirectory": "camera/p1",
+  "snapshotDirectory": "printers/p1/camera/snapshots/12",
   "message": null,
   "latestSnapshotAvailable": true,
   "latestSnapshotId": "100",
@@ -1686,9 +1698,9 @@ Response shape:
       "printerId": "p1",
       "capturedAt": "2026-05-28T12:01:00Z",
       "analyzedAt": "2026-05-28T12:01:00Z",
-      "latestSnapshotPath": "camera/p1/latest.jpg",
-      "previousSnapshotPath": "camera/p1/previous.jpg",
-      "deltaSnapshotPath": "camera/p1/delta.jpg",
+      "latestSnapshotPath": "printers/p1/camera/latest.jpg",
+      "previousSnapshotPath": "printers/p1/camera/previous.jpg",
+      "deltaSnapshotPath": "printers/p1/camera/delta.jpg",
       "deltaScore": 0.12,
       "changedPixelRatio": 0.08,
       "averagePixelDelta": 0.21,
@@ -1716,9 +1728,9 @@ Response shape:
   "printerId": "p1",
   "capturedAt": "2026-05-28T12:01:00Z",
   "analyzedAt": "2026-05-28T12:01:00Z",
-  "latestSnapshotPath": "camera/p1/latest.jpg",
-  "previousSnapshotPath": "camera/p1/previous.jpg",
-  "deltaSnapshotPath": "camera/p1/delta.jpg",
+  "latestSnapshotPath": "printers/p1/camera/latest.jpg",
+  "previousSnapshotPath": "printers/p1/camera/previous.jpg",
+  "deltaSnapshotPath": "printers/p1/camera/delta.jpg",
   "deltaScore": 0.12,
   "changedPixelRatio": 0.08,
   "averagePixelDelta": 0.21,
@@ -1735,15 +1747,29 @@ Response shape:
 
 Camera admin endpoints are used for snapshot jobs, retained snapshots, delta sets, delta frames, calculation runs, calculation results, traceability, comparison, and cleanup.
 
-They live under:
+They live under compatibility `/admin/camera` paths and preferred printer-scoped `/admin/printers/{printerId}/camera` paths.
 
 ```text
 /admin/camera
+/admin/printers/{printerId}/camera
 ```
 
 ---
 
 ## Camera Admin Snapshot Job Endpoints
+
+Preferred printer-scoped camera job endpoints:
+
+```text
+GET    /admin/printers/{printerId}/camera/jobs
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+DELETE /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+POST   /admin/printers/{printerId}/camera/jobs/{cameraJobId}/purge
+```
+
+Compatibility snapshot-job endpoints:
 
 ```text
 GET    /admin/camera/snapshot/jobs
@@ -1756,16 +1782,18 @@ GET    /admin/camera/snapshot/files/{snapshotEntryId}
 POST   /admin/camera/storage/{printerId}/sync
 ```
 
+For new integrations, prefer the printer-scoped paths. `cameraJobId` is scoped by `printerId`, so wrong `printerId + cameraJobId` combinations return a controlled not-found response.
+
 ---
 
-## GET /admin/camera/snapshot/jobs
+## GET /admin/printers/{printerId}/camera/jobs
 
 Lists camera snapshot jobs.
 
-Optional query:
+Compatibility endpoint:
 
 ```text
-printerId={printerId}
+GET /admin/camera/snapshot/jobs?printerId={printerId}
 ```
 
 Response shape:
@@ -1787,11 +1815,134 @@ Response shape:
       "retainedSnapshots": 200,
       "sourceType": "ffmpeg",
       "sourceDescription": "/dev/video0",
-      "snapshotDirectory": "camera/p1/snapshots/12",
+      "snapshotDirectory": "printers/p1/camera/snapshots/12",
       "fileCount": 200,
       "totalBytes": 12345678,
       "firstCapturedAt": "2026-05-28T12:00:00Z",
       "lastCapturedAt": "2026-05-28T12:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+
+Returns one camera job.
+
+Response shape:
+
+```json
+{
+  "job": {
+    "id": 12,
+    "cameraJobId": 12,
+    "printerId": "p1",
+    "linkedPrintJobId": "job-1",
+    "analysisSessionId": null,
+    "state": "STOPPED",
+    "startedAt": "2026-05-28T12:00:00Z",
+    "stoppedAt": "2026-05-28T12:30:00Z",
+    "captureIntervalSeconds": 10,
+    "retainedSnapshots": 200,
+    "sourceType": "ffmpeg",
+    "sourceDescription": "/dev/video0",
+    "snapshotDirectory": "printers/p1/camera/snapshots/12",
+    "message": null,
+    "createdAt": "2026-05-28T12:00:00Z",
+    "updatedAt": "2026-05-28T12:30:00Z"
+  }
+}
+```
+
+---
+
+## GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+
+Returns lightweight camera job progress and throughput data for external polling.
+
+Response shape:
+
+```json
+{
+  "jobId": 12,
+  "printerId": "p1",
+  "cameraId": null,
+  "state": "STOPPED",
+  "startedAt": "2026-05-28T12:00:00Z",
+  "finishedAt": "2026-05-28T12:30:00Z",
+  "firstCapturedAt": "2026-05-28T12:00:00Z",
+  "lastCapturedAt": "2026-05-28T12:30:00Z",
+  "captureIntervalSeconds": 10,
+  "snapshotCount": 200,
+  "deltaCount": 2,
+  "retainedSnapshotCount": 180,
+  "totalBytes": 12345678,
+  "durationMs": 1800000,
+  "snapshotsPerSecond": 0.1111111111111111,
+  "latestSnapshotId": 200,
+  "latestCaptureAt": "2026-05-28T12:30:00Z",
+  "errorType": null
+}
+```
+
+---
+
+## GET /admin/printers/{printerId}/camera/storage/summary
+
+Returns a read-only camera storage summary for one printer. This endpoint is intended for external observers such as BenchChef and does not scan arbitrary filesystem paths or create dataset abstractions.
+
+Response shape:
+
+```json
+{
+  "printerId": "p1",
+  "storageRoot": "/var/lib/spaghettichef/printers/p1/camera",
+  "cameraJobCount": 1,
+  "snapshotCount": 200,
+  "retainedSnapshotCount": 180,
+  "deltaSetCount": 2,
+  "deltaFrameCount": 199,
+  "calculationRunCount": 3,
+  "calculationResultCount": 597,
+  "totalSnapshotBytes": 12345678,
+  "totalDeltaBytes": 2345678,
+  "missingFileCount": 0,
+  "latestSnapshotAvailable": true,
+  "previousSnapshotAvailable": true,
+  "deltaPreviewAvailable": false,
+  "message": "Camera storage summary available"
+}
+```
+
+`missingFileCount` is derived from persisted snapshot and delta-frame rows whose files are known to be missing. `latestSnapshotAvailable`, `previousSnapshotAvailable`, and `deltaPreviewAvailable` describe the volatile preview files under the printer camera directory.
+
+---
+
+## GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+
+Returns timeline entries for one camera job.
+
+Compatibility endpoint:
+
+```text
+GET /admin/camera/snapshot/jobs/{cameraJobKey}/timeline?printerId={printerId}
+```
+
+Response shape:
+
+```json
+{
+  "jobId": "12",
+  "timeline": [
+    {
+      "timestamp": "2026-05-28T12:00:00Z",
+      "eventType": "SNAPSHOT_CAPTURED",
+      "state": "CAPTURED",
+      "message": null,
+      "snapshotId": 100,
+      "deltaSetId": null
     }
   ]
 }
@@ -1824,7 +1975,7 @@ Response shape:
       "linkedPrintJobId": "job-1",
       "jobId": "job-1",
       "jobKey": "camera-job-12",
-      "snapshotPath": "camera/p1/snapshots/12/000100.jpg",
+      "snapshotPath": "printers/p1/camera/snapshots/12/000100.jpg",
       "contentType": "image/jpeg",
       "sizeBytes": 18234,
       "capturedAt": "2026-05-28T12:00:00Z",
@@ -1836,6 +1987,55 @@ Response shape:
       "deletionReason": null
     }
   ]
+}
+```
+
+---
+
+## DELETE /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+
+Deletes a camera job and its related snapshot, delta, calculation, and event data according to request flags.
+
+Compatibility endpoint:
+
+```text
+DELETE /admin/camera/jobs/{cameraJobId}?printerId={printerId}
+```
+
+Request body:
+
+```json
+{
+  "deleteSnapshotFiles": true,
+  "deleteSnapshotRows": true,
+  "deleteDeltaFiles": true,
+  "deleteDeltaRows": true,
+  "deleteCalculationRuns": true,
+  "deleteCameraEvents": true,
+  "deleteCameraJob": true,
+  "requiredConfirmation": "DELETE_CAMERA_JOB"
+}
+```
+
+Response shape:
+
+```json
+{
+  "printerId": "p1",
+  "cameraJobId": 12,
+  "deletedSnapshotFiles": 200,
+  "deletedSnapshotBytes": 12345678,
+  "deletedSnapshotRows": 200,
+  "deletedDeltaFiles": 100,
+  "deletedDeltaBytes": 2345678,
+  "deletedDeltaRows": 100,
+  "deletedDeltaSetRows": 1,
+  "deletedCalculationRunRows": 2,
+  "deletedCalculationResultRows": 200,
+  "deletedCameraEventRows": 10,
+  "deletedCameraJobRows": 1,
+  "failedFiles": [],
+  "message": "deleted"
 }
 ```
 
@@ -1866,55 +2066,20 @@ Response shape:
 
 ---
 
-## GET /admin/camera/snapshot/jobs/{cameraJobKey}/timeline
-
-Returns timeline entries for one camera job key.
-
-Optional query:
-
-```text
-printerId={printerId}
-```
-
-Response shape:
-
-```json
-{
-  "jobId": "camera-job-12",
-  "timeline": [
-    {
-      "id": 100,
-      "type": "snapshot",
-      "printerId": "p1",
-      "cameraJobId": 12,
-      "cameraJobKey": "camera-job-12",
-      "snapshotPath": "camera/p1/snapshots/12/000100.jpg",
-      "capturedAt": "2026-05-28T12:00:00Z",
-      "fileDeleted": false
-    }
-  ]
-}
-```
-
----
-
-## POST /admin/camera/snapshot/jobs/{cameraJobId}/purge
+## POST /admin/printers/{printerId}/camera/jobs/{cameraJobId}/purge
 
 Purges snapshots from a camera job according to retention rules.
 
-Optional query:
+Compatibility endpoint:
 
 ```text
-printerId={printerId}
+POST /admin/camera/snapshot/jobs/{cameraJobId}/purge?printerId={printerId}
 ```
-
-If `printerId` is not provided in the query, it must be provided in the body.
 
 Request body:
 
 ```json
 {
-  "printerId": "p1",
   "retentionSnapshotCount": 200,
   "purgeRetentionFrequency": 10,
   "message": "manual snapshot purge"
@@ -1981,53 +2146,6 @@ Request shape:
 ```
 
 For real writes, set `dryRun` to `false` and include `requiredConfirmation`.
-
----
-
-# Camera Admin Job Deletion
-
-```text
-DELETE /admin/camera/jobs/{cameraJobId}?printerId={printerId}
-```
-
-Deletes a camera job and its related snapshot, delta, calculation, and event data according to request flags.
-
-Request body:
-
-```json
-{
-  "deleteSnapshotFiles": true,
-  "deleteSnapshotRows": true,
-  "deleteDeltaFiles": true,
-  "deleteDeltaRows": true,
-  "deleteCalculationRuns": true,
-  "deleteCameraEvents": true,
-  "deleteCameraJob": true,
-  "requiredConfirmation": "DELETE_CAMERA_JOB"
-}
-```
-
-Response shape:
-
-```json
-{
-  "printerId": "p1",
-  "cameraJobId": 12,
-  "deletedSnapshotFiles": 200,
-  "deletedSnapshotBytes": 12345678,
-  "deletedSnapshotRows": 200,
-  "deletedDeltaFiles": 100,
-  "deletedDeltaBytes": 2345678,
-  "deletedDeltaRows": 100,
-  "deletedDeltaSetRows": 1,
-  "deletedCalculationRunRows": 2,
-  "deletedCalculationResultRows": 200,
-  "deletedCameraEventRows": 10,
-  "deletedCameraJobRows": 1,
-  "failedFiles": [],
-  "message": "deleted"
-}
-```
 
 ---
 
@@ -2189,7 +2307,7 @@ Response shape:
       "toSnapshotId": 101,
       "fromCapturedAt": "2026-05-28T12:00:00Z",
       "toCapturedAt": "2026-05-28T12:00:10Z",
-      "deltaPath": "camera/p1/deltas/1/000100_000101_delta.jpg",
+      "deltaPath": "printers/p1/camera/deltas/1/000100_000101_delta.jpg",
       "deltaScore": 0.12,
       "changedPixelRatio": 0.08,
       "averagePixelDelta": 0.21,
@@ -2246,6 +2364,7 @@ Response shape:
   "calculationRuns": [
     {
       "id": 20,
+      "calculationRunId": 20,
       "printerId": "p1",
       "cameraJobId": 12,
       "deltaSetId": 1,
@@ -2257,6 +2376,7 @@ Response shape:
       "engineStatus": "COMPLETED",
       "parameterJson": "{}",
       "createdAt": "2026-05-28T12:00:00Z",
+      "finishedAt": "2026-05-28T12:00:00.500Z",
       "resultCount": 199,
       "message": "baseline run"
     }
@@ -2291,6 +2411,7 @@ Response shape:
 {
   "calculationRun": {
     "id": 20,
+    "calculationRunId": 20,
     "printerId": "p1",
     "cameraJobId": 12,
     "deltaSetId": 1,
@@ -2302,6 +2423,7 @@ Response shape:
     "engineStatus": "COMPLETED",
     "parameterJson": "{}",
     "createdAt": "2026-05-28T12:00:00Z",
+    "finishedAt": "2026-05-28T12:00:00.500Z",
     "resultCount": 199,
     "message": "baseline run"
   }
@@ -2331,12 +2453,16 @@ Response shape:
       "executablePath": null,
       "timeoutMs": 10000,
       "sortOrder": 10,
+      "available": true,
+      "availabilityMessage": "Engine is available",
       "createdAt": "2026-05-29T10:00:00Z",
       "updatedAt": "2026-05-29T10:00:00Z"
     }
   ]
 }
 ```
+
+`available` and `availabilityMessage` are cheap compatibility hints for external observers. SpaghettiChef does not start or benchmark an engine just to calculate these fields. External CLI engines are checked only for configured executable path existence and executable permission.
 
 ---
 
@@ -2377,6 +2503,8 @@ Response shape:
     "executablePath": "/opt/spaghettichef/img-analyzer",
     "timeoutMs": 10000,
     "sortOrder": 20,
+    "available": true,
+    "availabilityMessage": "External CLI executable is available",
     "createdAt": "2026-05-29T10:00:00Z",
     "updatedAt": "2026-05-29T10:10:00Z"
   }
@@ -2393,6 +2521,7 @@ Response shape:
 {
   "calculationRun": {
     "id": 20,
+    "calculationRunId": 20,
     "printerId": "p1",
     "cameraJobId": 12,
     "deltaSetId": 1,
@@ -2404,6 +2533,7 @@ Response shape:
     "engineStatus": "COMPLETED",
     "parameterJson": "{}",
     "createdAt": "2026-05-28T12:00:00Z",
+    "finishedAt": "2026-05-28T12:00:00.500Z",
     "resultCount": 199,
     "message": "baseline run"
   }
@@ -2430,6 +2560,7 @@ Response shape:
       "suspected": true,
       "reasonCodes": "[HIGH_DELTA_SCORE]",
       "message": "possible spaghetti",
+      "processingTimeMs": 3,
       "createdAt": "2026-05-28T12:00:00Z"
     }
   ]
@@ -2460,9 +2591,9 @@ Response shape:
       "deltaFrameId": 10,
       "calculationRunId": 20,
       "calculationResultId": 30,
-      "fromSnapshotPath": "camera/p1/snapshots/12/000100.jpg",
-      "toSnapshotPath": "camera/p1/snapshots/12/000101.jpg",
-      "deltaPath": "camera/p1/deltas/1/000100_000101_delta.jpg",
+      "fromSnapshotPath": "printers/p1/camera/snapshots/12/000100.jpg",
+      "toSnapshotPath": "printers/p1/camera/snapshots/12/000101.jpg",
+      "deltaPath": "printers/p1/camera/deltas/1/000100_000101_delta.jpg",
       "confidence": 0.74,
       "suspected": true,
       "reasonCodes": "[HIGH_DELTA_SCORE]",
@@ -2560,10 +2691,12 @@ Response shape:
     "suspected": true,
     "reasonCodes": "[HIGH_DELTA_SCORE]",
     "message": "possible spaghetti",
+    "processingTimeMs": 3,
     "createdAt": "2026-05-28T12:00:00Z"
   },
   "calculationRun": {
     "id": 20,
+    "calculationRunId": 20,
     "printerId": "p1",
     "cameraJobId": 12,
     "deltaSetId": 1,
@@ -2575,6 +2708,7 @@ Response shape:
     "engineStatus": "COMPLETED",
     "parameterJson": "{}",
     "createdAt": "2026-05-28T12:00:00Z",
+    "finishedAt": "2026-05-28T12:00:00.500Z",
     "resultCount": 199,
     "message": "baseline run"
   },
@@ -2587,7 +2721,7 @@ Response shape:
     "toSnapshotId": 101,
     "fromCapturedAt": "2026-05-28T12:00:00Z",
     "toCapturedAt": "2026-05-28T12:00:10Z",
-    "deltaPath": "camera/p1/deltas/1/000100_000101_delta.jpg",
+    "deltaPath": "printers/p1/camera/deltas/1/000100_000101_delta.jpg",
     "deltaScore": 0.12,
     "changedPixelRatio": 0.08,
     "averagePixelDelta": 0.21,
@@ -2599,7 +2733,7 @@ Response shape:
     "printerId": "p1",
     "cameraJobId": 12,
     "cameraJobKey": "camera-job-12",
-    "snapshotPath": "camera/p1/snapshots/12/000100.jpg",
+    "snapshotPath": "printers/p1/camera/snapshots/12/000100.jpg",
     "contentType": "image/jpeg",
     "sizeBytes": 18234,
     "capturedAt": "2026-05-28T12:00:00Z",
@@ -2616,7 +2750,7 @@ Response shape:
     "printerId": "p1",
     "cameraJobId": 12,
     "cameraJobKey": "camera-job-12",
-    "snapshotPath": "camera/p1/snapshots/12/000101.jpg",
+    "snapshotPath": "printers/p1/camera/snapshots/12/000101.jpg",
     "contentType": "image/jpeg",
     "sizeBytes": 18234,
     "capturedAt": "2026-05-28T12:00:10Z",
@@ -2754,6 +2888,14 @@ POST   /admin/camera/snapshot/jobs/{cameraJobId}/purge
 GET    /admin/camera/snapshot/files/{snapshotEntryId}
 POST   /admin/camera/storage/{printerId}/sync
 
+GET    /admin/printers/{printerId}/camera/jobs
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+DELETE /admin/printers/{printerId}/camera/jobs/{cameraJobId}
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+POST   /admin/printers/{printerId}/camera/jobs/{cameraJobId}/purge
+GET    /admin/printers/{printerId}/camera/storage/summary
+
 DELETE /admin/camera/jobs/{cameraJobId}?printerId={printerId}
 
 GET    /admin/printers/{printerId}/camera/jobs/{cameraJobId}/delta-sets
@@ -2779,3 +2921,31 @@ GET    /admin/camera/calculation-results/{calculationResultId}/visual?printerId=
 
 POST   /admin/camera/snapshot/jobs/{cameraJobKey}/recalculate-preview
 ```
+
+---
+
+# Lexicon
+
+`printerId`: The local runtime identity for one printer. Camera job and delta-set admin paths should include this value when resolving camera data.
+
+`cameraJobId`: Numeric camera job id scoped by `printerId`. Treat `printerId + cameraJobId` as the identity; do not assume a camera job id is globally unique.
+
+`cameraJobKey`: Compatibility name used by older snapshot-job endpoints. For current camera jobs it usually maps to the numeric `cameraJobId`.
+
+`snapshotEntryId`: Numeric id for one retained snapshot metadata row. Snapshot file endpoints use this id directly.
+
+`deltaSetId`: Numeric delta-set id scoped by `printerId`. Treat `printerId + deltaSetId` as the identity.
+
+`deltaFrameId`: Numeric id for one generated delta frame row. The file endpoint still requires `printerId` as a query parameter for scope checking.
+
+`calculationRunId`: Numeric id for one engine calculation run over a delta set.
+
+`progress`: Lightweight camera-job throughput data derived from the job row and retained snapshot rows. It is meant for external tools to poll, not for an internal monitoring product.
+
+`timeline`: Ordered snapshot entries for a camera job, including deleted-file markers where known.
+
+`BenchChef`: External observer/benchmark tool. It polls SpaghettiChef REST/JSON endpoints and owns statistics, Prometheus `/metrics`, Grafana dashboards, and benchmark result aggregation.
+
+`/metrics`: Not part of the SpaghettiChef 0.8.x REST API. A 404 on SpaghettiChef Local is expected; scrape BenchChef instead.
+
+`compatibility endpoint`: An older path kept for existing dashboard/API callers. New integrations should prefer printer-scoped admin paths when both forms exist.

@@ -187,7 +187,6 @@ class CameraMonitoringTaskTest {
                 settings.ffmpegVideoSize().orElse(null),
                 settings.ffmpegTimeoutMs(),
                 settings.ffmpegJpegQuality(),
-                tempDir.resolve("camera-storage").toString(),
                 settings.updatedAt());
     }
 

@@ -314,11 +314,10 @@ public final class CameraJobStore {
     }
 
     private static long nextId(Connection connection, String printerId) throws SQLException {
-        String sql = "SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM camera_jobs WHERE printer_id = ?;";
+        requireText(printerId, "printerId");
+        String sql = "SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM camera_jobs;";
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, requireText(printerId, "printerId"));
-
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
                     return resultSet.getLong("next_id");

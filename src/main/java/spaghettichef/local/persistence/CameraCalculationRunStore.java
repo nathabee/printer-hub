@@ -31,9 +31,10 @@ public final class CameraCalculationRunStore {
                     algorithm_variant,
                     engine_version,
                     execution_duration_ms,
-                    engine_status
+                    engine_status,
+                    finished_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """;
 
         try (
@@ -57,6 +58,7 @@ public final class CameraCalculationRunStore {
                 statement.setLong(12, run.executionDurationMs());
             }
             statement.setString(13, run.engineStatus());
+            statement.setString(14, run.finishedAt() == null ? null : run.finishedAt().toString());
             statement.executeUpdate();
 
             try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -281,14 +283,15 @@ public final class CameraCalculationRunStore {
             throw new IllegalArgumentException("executionDurationMs must not be negative");
         }
 
-        String sql = "UPDATE camera_calculation_runs SET execution_duration_ms = ? WHERE id = ?;";
+        String sql = "UPDATE camera_calculation_runs SET execution_duration_ms = ?, finished_at = ? WHERE id = ?;";
 
         try (
                 Connection connection = Database.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)
         ) {
             statement.setLong(1, executionDurationMs);
-            statement.setLong(2, requirePositive(id, "id"));
+            statement.setString(2, Instant.now().toString());
+            statement.setLong(3, requirePositive(id, "id"));
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to update camera calculation run execution duration", exception);
@@ -304,6 +307,16 @@ public final class CameraCalculationRunStore {
             String engineVersion,
             long executionDurationMs,
             String message) {
+        return updateEngineOutcome(id, engineStatus, engineVersion, executionDurationMs, message, Instant.now());
+    }
+
+    public CameraCalculationRun updateEngineOutcome(
+            long id,
+            String engineStatus,
+            String engineVersion,
+            long executionDurationMs,
+            String message,
+            Instant finishedAt) {
         if (engineStatus == null || engineStatus.isBlank()) {
             throw new IllegalArgumentException("engineStatus must not be blank");
         }
@@ -316,7 +329,8 @@ public final class CameraCalculationRunStore {
                 SET engine_status = ?,
                     engine_version = ?,
                     execution_duration_ms = ?,
-                    message = ?
+                    message = ?,
+                    finished_at = ?
                 WHERE id = ?;
                 """;
 
@@ -328,7 +342,8 @@ public final class CameraCalculationRunStore {
             statement.setString(2, engineVersion == null || engineVersion.isBlank() ? null : engineVersion.trim());
             statement.setLong(3, executionDurationMs);
             statement.setString(4, message == null || message.isBlank() ? null : message.trim());
-            statement.setLong(5, requirePositive(id, "id"));
+            statement.setString(5, finishedAt == null ? null : finishedAt.toString());
+            statement.setLong(6, requirePositive(id, "id"));
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to update camera calculation run engine outcome", exception);
@@ -354,7 +369,8 @@ public final class CameraCalculationRunStore {
                     algorithm_variant,
                     engine_version,
                     execution_duration_ms,
-                    engine_status
+                    engine_status,
+                    finished_at
                 """;
     }
 
@@ -373,7 +389,16 @@ public final class CameraCalculationRunStore {
                 resultSet.getString("algorithm_variant"),
                 resultSet.getString("engine_version"),
                 nullableLong(resultSet, "execution_duration_ms"),
-                resultSet.getString("engine_status"));
+                resultSet.getString("engine_status"),
+                nullableInstant(resultSet, "finished_at"));
+    }
+
+    private static Instant nullableInstant(ResultSet resultSet, String columnName) throws SQLException {
+        String value = resultSet.getString(columnName);
+        if (resultSet.wasNull() || value == null || value.isBlank()) {
+            return null;
+        }
+        return Instant.parse(value);
     }
 
     private static Long nullableLong(ResultSet resultSet, String columnName) throws SQLException {

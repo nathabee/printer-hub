@@ -163,7 +163,8 @@ public final class CameraCalculationRunService {
                     engine.algorithmVariant(),
                     engine.engineVersion(),
                     elapsedMillis(startedAtNanos),
-                    engine.status().name()));
+                    engine.status().name(),
+                    clock.instant()));
         }
 
         CameraCalculationRun run = calculationRunStore.save(new CameraCalculationRun(
@@ -186,7 +187,9 @@ public final class CameraCalculationRunService {
         String engineVersion = engine.engineVersion();
         try {
             for (CameraDeltaFrame frame : frames) {
+                long frameStartedAtNanos = System.nanoTime();
                 CalculationEngineResult result = engine.analyze(frame, threshold);
+                long processingTimeMs = elapsedMillis(frameStartedAtNanos);
                 if (result.engineVersion() != null) {
                     engineVersion = result.engineVersion();
                 }
@@ -198,7 +201,8 @@ public final class CameraCalculationRunService {
                         result.suspected(),
                         result.reasonCodesText(),
                         result.message(),
-                        createdAt));
+                        createdAt,
+                        processingTimeMs));
                 resultCount++;
             }
         } catch (RuntimeException exception) {
@@ -208,7 +212,8 @@ public final class CameraCalculationRunService {
                     statusFor(exception).name(),
                     engine.engineVersion(),
                     elapsedMillis(startedAtNanos),
-                    OperationMessages.safeDetail(exception.getMessage(), "External calculation failed"));
+                    OperationMessages.safeDetail(exception.getMessage(), "External calculation failed"),
+                    clock.instant());
         }
 
         calculationRunStore.updateResultCount(run.requireId(), resultCount);
@@ -217,7 +222,8 @@ public final class CameraCalculationRunService {
                 CalculationEngineStatus.SUCCESS.name(),
                 engineVersion,
                 elapsedMillis(startedAtNanos),
-                message);
+                message,
+                clock.instant());
     }
 
     private CameraCalculationEngineSettings resolveEngineSettings(String engineName) {

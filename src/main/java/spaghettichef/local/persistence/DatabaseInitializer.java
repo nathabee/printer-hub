@@ -116,9 +116,9 @@ public final class DatabaseInitializer {
                     "INTEGER NOT NULL DEFAULT " + RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS);
             ensureColumn(connection, "camera_settings", "ffmpeg_jpeg_quality",
                     "INTEGER NOT NULL DEFAULT " + RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY);
-            ensureColumn(connection, "camera_settings", "storage_directory",
-                    "TEXT NOT NULL DEFAULT '" + RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY + "'");
             ensureColumn(connection, "camera_settings", "diagnostic_logging_enabled", "INTEGER NOT NULL DEFAULT 0");
+            ensureColumn(connection, "configured_printers", "storage_directory",
+                    "TEXT NOT NULL DEFAULT '" + RuntimeDefaults.DEFAULT_PRINTER_STORAGE_DIRECTORY + "'");
             ensureColumn(connection, "camera_settings", "purge_automatically", "INTEGER NOT NULL DEFAULT 0");
             ensureColumn(connection, "camera_settings", "purge_retention_frequency", "INTEGER NOT NULL DEFAULT 5");
             ensureColumn(connection, "camera_settings", "capture_crop_enabled", "INTEGER NOT NULL DEFAULT 0");
@@ -140,6 +140,8 @@ public final class DatabaseInitializer {
             ensureColumn(connection, "camera_calculation_runs", "execution_duration_ms", "INTEGER");
             ensureColumn(connection, "camera_calculation_runs", "engine_status",
                     "TEXT NOT NULL DEFAULT 'SUCCESS'");
+            ensureColumn(connection, "camera_calculation_runs", "finished_at", "TEXT");
+            ensureColumn(connection, "camera_calculation_results", "processing_time_ms", "INTEGER");
             ensureColumn(connection, "camera_calculation_engine_settings", "adapter_type",
                     "TEXT NOT NULL DEFAULT 'JAVA_BASIC_DELTA'");
 
@@ -405,7 +407,8 @@ public final class DatabaseInitializer {
                     algorithm_variant TEXT,
                     engine_version TEXT,
                     execution_duration_ms INTEGER,
-                    engine_status TEXT NOT NULL DEFAULT 'SUCCESS'
+                    engine_status TEXT NOT NULL DEFAULT 'SUCCESS',
+                    finished_at TEXT
                 );
                 """;
 
@@ -422,7 +425,8 @@ public final class DatabaseInitializer {
                     suspected INTEGER NOT NULL,
                     reason_codes TEXT,
                     message TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    processing_time_ms INTEGER
                 );
                 """;
 
@@ -478,6 +482,7 @@ public final class DatabaseInitializer {
                     name TEXT NOT NULL,
                     port_name TEXT NOT NULL,
                     mode TEXT NOT NULL,
+                    storage_directory TEXT NOT NULL,
                     enabled INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -570,7 +575,6 @@ public final class DatabaseInitializer {
                     ffmpeg_video_size TEXT DEFAULT '640x480',
                     ffmpeg_timeout_ms INTEGER NOT NULL DEFAULT 5000,
                     ffmpeg_jpeg_quality INTEGER NOT NULL DEFAULT 3,
-                    storage_directory TEXT NOT NULL DEFAULT 'camera',
                     diagnostic_logging_enabled INTEGER NOT NULL DEFAULT 0,
                     purge_automatically INTEGER NOT NULL DEFAULT 0,
                     purge_retention_frequency INTEGER NOT NULL DEFAULT 5,

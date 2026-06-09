@@ -25,15 +25,17 @@ public final class PrinterConfigurationStore {
                     name,
                     port_name,
                     mode,
+                    storage_directory,
                     enabled,
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     port_name = excluded.port_name,
                     mode = excluded.mode,
+                    storage_directory = excluded.storage_directory,
                     enabled = excluded.enabled,
                     updated_at = excluded.updated_at;
                 """;
@@ -48,9 +50,10 @@ public final class PrinterConfigurationStore {
             statement.setString(2, node.displayName());
             statement.setString(3, node.portName());
             statement.setString(4, node.mode());
-            statement.setInt(5, node.enabled() ? 1 : 0);
-            statement.setString(6, now);
+            statement.setString(5, node.storageDirectory());
+            statement.setInt(6, node.enabled() ? 1 : 0);
             statement.setString(7, now);
+            statement.setString(8, now);
 
             statement.executeUpdate();
         } catch (SQLException exception) {
@@ -65,6 +68,7 @@ public final class PrinterConfigurationStore {
                     name,
                     port_name,
                     mode,
+                    storage_directory,
                     enabled
                 FROM configured_printers
                 ORDER BY id;
@@ -83,6 +87,7 @@ public final class PrinterConfigurationStore {
                         resultSet.getString("name"),
                         resultSet.getString("port_name"),
                         resultSet.getString("mode"),
+                        resultSet.getString("storage_directory"),
                         resultSet.getInt("enabled") == 1
                 ));
             }

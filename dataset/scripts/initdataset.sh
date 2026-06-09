@@ -122,6 +122,39 @@ print(json.dumps(data, separators=(",", ":")))
 PY
 }
 
+safe_path_segment() {
+  local value="$1"
+  python3 - "$value" <<'PY'
+import re
+import sys
+
+print(re.sub(r"[^A-Za-z0-9._-]", "_", sys.argv[1].strip()))
+PY
+}
+
+printer_storage_directory() {
+  local base_directory="$1"
+  local printer_id="$2"
+  local safe_printer_id
+  safe_printer_id="$(safe_path_segment "$printer_id")"
+
+  python3 - "$base_directory" "$safe_printer_id" <<'PY'
+import re
+import sys
+
+base = sys.argv[1].strip()
+printer_id = sys.argv[2]
+normalized = base.replace("\\", "/").rstrip("/")
+last_segment = normalized.rsplit("/", 1)[-1] if normalized else ""
+
+if last_segment == printer_id:
+    print(base)
+else:
+    separator = "\\" if "\\" in base and "/" not in base else "/"
+    print(re.sub(r"[/\\]+$", "", base) + separator + printer_id)
+PY
+}
+
 main() {
   need_cmd curl
   need_cmd python3
@@ -149,6 +182,12 @@ main() {
 
   echo "Creating printer ${PRINTER_ID} if missing ..."
   create_printer_body="$(cat "$PRINTER_FILE")"
+  expected_storage_directory="$(json_value "$PRINTER_FILE" "storageDirectory")"
+  if [[ -z "$expected_storage_directory" ]]; then
+    echo "ERROR: printer.json must define storageDirectory" >&2
+    exit 1
+  fi
+  expected_printer_storage_directory="$(printer_storage_directory "$expected_storage_directory" "$PRINTER_ID")"
 
   code="$(http_code POST "${API_BASE}/printers" "$create_printer_body")"
 
@@ -156,12 +195,24 @@ main() {
     echo "Printer created."
   elif [[ "$code" == "400" || "$code" == "409" || "$code" == "500" ]]; then
     echo "Printer may already exist; trying update ..."
-    update_printer_body="$(json_without_id "$PRINTER_FILE")"
-    code="$(http_code PUT "${API_BASE}/printers/${PRINTER_ID}" "$update_printer_body")"
-    require_success "$code" "printer update"
-    echo "Printer updated."
   else
     require_success "$code" "printer create"
+  fi
+
+  update_printer_body="$(json_without_id "$PRINTER_FILE")"
+  code="$(http_code PUT "${API_BASE}/printers/${PRINTER_ID}" "$update_printer_body")"
+  require_success "$code" "printer storage update"
+  echo "Printer storage enforced."
+
+  code="$(http_code GET "${API_BASE}/printers/${PRINTER_ID}")"
+  require_success "$code" "printer verification"
+  actual_storage_directory="$(json_value "$RESPONSE_FILE" "storageDirectory")"
+  if [[ "$actual_storage_directory" != "$expected_printer_storage_directory" ]]; then
+    echo "ERROR: printer storageDirectory is '${actual_storage_directory}', expected '${expected_printer_storage_directory}'" >&2
+    echo "Response:" >&2
+    cat "$RESPONSE_FILE" >&2 || true
+    echo >&2
+    exit 1
   fi
 
   echo "Configuring camera for ${PRINTER_ID} ..."

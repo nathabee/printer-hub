@@ -12,8 +12,30 @@ public record CameraCalculationResult(
         boolean suspected,
         String reasonCodes,
         String message,
-        Instant createdAt
+        Instant createdAt,
+        Long processingTimeMs
 ) {
+    public CameraCalculationResult(
+            Long id,
+            long calculationRunId,
+            long deltaFrameId,
+            double confidence,
+            boolean suspected,
+            String reasonCodes,
+            String message,
+            Instant createdAt) {
+        this(
+                id,
+                calculationRunId,
+                deltaFrameId,
+                confidence,
+                suspected,
+                reasonCodes,
+                message,
+                createdAt,
+                null);
+    }
+
     public CameraCalculationResult {
         if (id != null && id <= 0L) {
             throw new IllegalArgumentException("id must be greater than zero");
@@ -24,6 +46,9 @@ public record CameraCalculationResult(
         reasonCodes = normalizeNullableText(reasonCodes);
         message = normalizeNullableText(message);
         createdAt = Objects.requireNonNull(createdAt, "createdAt");
+        if (processingTimeMs != null && processingTimeMs < 0L) {
+            throw new IllegalArgumentException("processingTimeMs must not be negative");
+        }
     }
 
     public Optional<Long> idOptional() {
@@ -47,7 +72,8 @@ public record CameraCalculationResult(
                 suspected,
                 reasonCodes,
                 message,
-                createdAt);
+                createdAt,
+                processingTimeMs);
     }
 
     public Optional<String> reasonCodesOptional() {

@@ -9,6 +9,7 @@ import spaghettichef.local.camera.CameraCaptureService;
 import spaghettichef.local.camera.CameraAnalysisSessionService;
 import spaghettichef.local.camera.CameraSourceType;
 import spaghettichef.local.camera.CameraStatus;
+import spaghettichef.local.camera.CameraStoragePaths;
 
 import spaghettichef.local.camera.CameraJobService;
 import spaghettichef.local.camera.CameraMonitoringScheduler;
@@ -186,8 +187,12 @@ public final class CameraApiHandler {
             Path snapshotPath = Path.of(metadata.get().filePath());
 
             if (!Files.isRegularFile(snapshotPath)) {
-                sendError(exchange, 404, "camera_snapshot_file_not_found", "Camera snapshot file was not found");
-                return;
+                Path latestPath = CameraStoragePaths.cameraDirectory(printerId).resolve("latest.jpg");
+                if (!Files.isRegularFile(latestPath)) {
+                    sendError(exchange, 404, "camera_snapshot_file_not_found", "Camera snapshot file was not found");
+                    return;
+                }
+                snapshotPath = latestPath;
             }
 
             byte[] bytes = Files.readAllBytes(snapshotPath);
@@ -572,9 +577,6 @@ public final class CameraApiHandler {
         int ffmpegJpegQuality = readIntegerField(body, "ffmpegJpegQuality")
                 .orElse(current.ffmpegJpegQuality());
 
-        String storageDirectory = readStringField(body, "storageDirectory")
-                .orElse(current.storageDirectory());
-
         boolean diagnosticLoggingEnabled = readBooleanField(body, "diagnosticLoggingEnabled")
                 .orElse(current.diagnosticLoggingEnabled());
 
@@ -616,7 +618,6 @@ public final class CameraApiHandler {
                 ffmpegVideoSize,
                 ffmpegTimeoutMs,
                 ffmpegJpegQuality,
-                storageDirectory,
                 diagnosticLoggingEnabled,
                 purgeAutomatically,
                 purgeRetentionFrequency,
@@ -659,7 +660,6 @@ public final class CameraApiHandler {
                 + jsonField("ffmpegVideoSize", settings.ffmpegVideoSize().orElse(null)) + ","
                 + jsonField("ffmpegTimeoutMs", settings.ffmpegTimeoutMs()) + ","
                 + jsonField("ffmpegJpegQuality", settings.ffmpegJpegQuality()) + ","
-                + jsonField("storageDirectory", settings.storageDirectory()) + ","
                 + jsonField("diagnosticLoggingEnabled", settings.diagnosticLoggingEnabled()) + ","
                 + jsonField("purgeAutomatically", settings.purgeAutomatically()) + ","
                 + jsonField("purgeRetentionFrequency", settings.purgeRetentionFrequency()) + ","

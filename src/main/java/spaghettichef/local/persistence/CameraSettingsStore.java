@@ -33,7 +33,6 @@ public final class CameraSettingsStore {
                     ffmpeg_video_size,
                     ffmpeg_timeout_ms,
                     ffmpeg_jpeg_quality,
-                    storage_directory,
                     diagnostic_logging_enabled,
                     purge_automatically,
                     purge_retention_frequency,
@@ -94,7 +93,6 @@ public final class CameraSettingsStore {
                     ffmpeg_video_size,
                     ffmpeg_timeout_ms,
                     ffmpeg_jpeg_quality,
-                    storage_directory,
                     diagnostic_logging_enabled,
                     purge_automatically,
                     purge_retention_frequency,
@@ -105,7 +103,7 @@ public final class CameraSettingsStore {
                     capture_crop_y2_percent,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(printer_id) DO UPDATE SET
                     enabled = excluded.enabled,
                     source_type = excluded.source_type,
@@ -122,7 +120,6 @@ public final class CameraSettingsStore {
                     ffmpeg_video_size = excluded.ffmpeg_video_size,
                     ffmpeg_timeout_ms = excluded.ffmpeg_timeout_ms,
                     ffmpeg_jpeg_quality = excluded.ffmpeg_jpeg_quality,
-                    storage_directory = excluded.storage_directory,
                     diagnostic_logging_enabled = excluded.diagnostic_logging_enabled,
                     purge_automatically = excluded.purge_automatically,
                     purge_retention_frequency = excluded.purge_retention_frequency,
@@ -154,16 +151,15 @@ public final class CameraSettingsStore {
             statement.setString(14, settings.ffmpegVideoSize().orElse(null));
             statement.setInt(15, settings.ffmpegTimeoutMs());
             statement.setInt(16, settings.ffmpegJpegQuality());
-            statement.setString(17, settings.storageDirectory());
-            statement.setInt(18, settings.diagnosticLoggingEnabled() ? 1 : 0);
-            statement.setInt(19, settings.purgeAutomatically() ? 1 : 0);
-            statement.setInt(20, settings.purgeRetentionFrequency());
-            statement.setInt(21, settings.captureCropEnabled() ? 1 : 0);
-            statement.setInt(22, settings.captureCropX1Percent());
-            statement.setInt(23, settings.captureCropY1Percent());
-            statement.setInt(24, settings.captureCropX2Percent());
-            statement.setInt(25, settings.captureCropY2Percent());
-            statement.setString(26, settings.updatedAt().toString());
+            statement.setInt(17, settings.diagnosticLoggingEnabled() ? 1 : 0);
+            statement.setInt(18, settings.purgeAutomatically() ? 1 : 0);
+            statement.setInt(19, settings.purgeRetentionFrequency());
+            statement.setInt(20, settings.captureCropEnabled() ? 1 : 0);
+            statement.setInt(21, settings.captureCropX1Percent());
+            statement.setInt(22, settings.captureCropY1Percent());
+            statement.setInt(23, settings.captureCropX2Percent());
+            statement.setInt(24, settings.captureCropY2Percent());
+            statement.setString(25, settings.updatedAt().toString());
 
             statement.executeUpdate();
             return settings;
@@ -190,10 +186,6 @@ public final class CameraSettingsStore {
                 resultSet.getString("ffmpeg_video_size"),
                 readIntOrDefault(resultSet, "ffmpeg_timeout_ms", RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS),
                 readIntOrDefault(resultSet, "ffmpeg_jpeg_quality", RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY),
-                readStringOrDefault(
-                        resultSet,
-                        "storage_directory",
-                        RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY),
                 resultSet.getInt("diagnostic_logging_enabled") == 1,
                 resultSet.getInt("purge_automatically") == 1,
                 readIntOrDefault(

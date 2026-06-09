@@ -25,9 +25,10 @@ public final class CameraCalculationResultStore {
                     suspected,
                     reason_codes,
                     message,
-                    created_at
+                    created_at,
+                    processing_time_ms
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
                 """;
 
         try (
@@ -41,6 +42,11 @@ public final class CameraCalculationResultStore {
             statement.setString(5, result.reasonCodes());
             statement.setString(6, result.message());
             statement.setString(7, result.createdAt().toString());
+            if (result.processingTimeMs() == null) {
+                statement.setNull(8, java.sql.Types.INTEGER);
+            } else {
+                statement.setLong(8, result.processingTimeMs());
+            }
             statement.executeUpdate();
 
             try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -125,7 +131,8 @@ public final class CameraCalculationResultStore {
                     suspected,
                     reason_codes,
                     message,
-                    created_at
+                    created_at,
+                    processing_time_ms
                 """;
     }
 
@@ -138,7 +145,13 @@ public final class CameraCalculationResultStore {
                 resultSet.getInt("suspected") != 0,
                 resultSet.getString("reason_codes"),
                 resultSet.getString("message"),
-                Instant.parse(resultSet.getString("created_at")));
+                Instant.parse(resultSet.getString("created_at")),
+                nullableLong(resultSet, "processing_time_ms"));
+    }
+
+    private static Long nullableLong(ResultSet resultSet, String columnName) throws SQLException {
+        long value = resultSet.getLong(columnName);
+        return resultSet.wasNull() ? null : value;
     }
 
     private static long requirePositive(long value, String fieldName) {

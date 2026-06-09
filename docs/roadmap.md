@@ -3813,117 +3813,176 @@ Engine settings now define stable engine names, adapter type, dashboard label, d
 
 ---
 
-## 0.8.x — Dataset And Engine Workbench API Foundation
+## 0.8.x — Camera Job And Engine Observability Foundation
 
-status: planned
+status: in progress
 
 Purpose:
 
- 
+Expose printer-scoped camera job, timeline, progress, delta set, calculation run, and engine timing data through stable admin APIs before the external BenchChef/workbench UI depends on them.
+
+SpaghettiChef 0.8.x exposes operational REST/JSON facts only. BenchChef owns statistics, Prometheus `/metrics`, Grafana dashboards, and benchmark result aggregation.
 
 Detailed implementation notes live in [TODO-0.8-workbench-api-foundation.md](TODOs/TODO-0.8-workbench-api-foundation.md).
-
- 
-
-Prepare deterministic engine evaluation and future ML readiness inside SpaghettiChef.
 
 ### Scope
 
 ```text
-dataset inspection APIs
-dataset validation
-dataset metadata
-label distribution
-camera job dataset navigation
-snapshot browsing
-delta browsing
-engine registry
+printer-scoped camera job APIs
+camera job progress and throughput data
+camera job timeline verification
+snapshot and delta-set browsing
 calculation run registry
 calculation result inspection
-baseline comparison support
-parameter exploration support
-ML preparation metadata
+engine run timing cleanup
+engine settings and availability verification
+camera storage summary
+BenchChef probe contract verification
+no native SpaghettiChef metrics endpoint
+REST API documentation alignment
+cancelled label and dataset import metadata
 ```
 
 ---
 
-### 0.8.0 — Dataset Workbench Foundation
+### 0.8.0 — Printer-Scoped Camera Admin API Cleanup
+
+status: done
 
 ```text
-dataset list
-dataset detail
-dataset metadata
-dataset validation
-missing file visibility
-label statistics
+printer-scoped camera job list/detail/delete
+printer-scoped camera job timeline and purge
+printer-scoped delta-set list/detail/frames/calculation-runs
+wrong printerId + cameraJobId is rejected
+wrong printerId + deltaSetId is rejected
+compatibility endpoints remain documented where still supported
 ```
 
 ---
 
-### 0.8.1 — Dataset Navigation
+### 0.8.1 — Camera Job Progress And Throughput Data
+
+status: done
 
 ```text
-camera job browser
-snapshot browser
-delta browser
-dataset structure inspection
-preview support
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/progress
+running and stopped job progress
+snapshot count and retained snapshot count
+total bytes
+durationMs
+snapshotsPerSecond
+latest snapshot metadata
 ```
 
 ---
 
-### 0.8.2 — Engine And Calculation Review
+### 0.8.2 — Camera Job Timeline Verification
+
+status: done
 
 ```text
-engine registry
-enabled engines
-calculation run list
-calculation result detail
-score display
-decision display
-debug result visibility
+GET /admin/printers/{printerId}/camera/jobs/{cameraJobId}/timeline
+printer-scoped timeline lookup
+source snapshot rows
+capture timestamps
+file existence and size metadata
+wrong printerId + cameraJobId is rejected
 ```
 
 ---
 
-### 0.8.3 — Baseline Evaluation Support
+### 0.8.3 — Engine Run Timing Cleanup
+
+status: done
 
 ```text
-true positive tracking
-false positive tracking
-false negative tracking
-baseline summaries
-processing time summaries
-comparison-ready outputs
+calculationRunId exposed consistently
+executionDurationMs exposed consistently
+finishedAt exposed when available
+per-result processingTimeMs exposed when available
+existing rows without timing remain null
+batch and live delta calculations measure processing time
 ```
 
 ---
 
-### 0.8.4 — Parameter Exploration Support
+### 0.8.4 — Engine Settings And Availability Verification
+
+status: done
 
 ```text
-parameter variant support
-threshold experimentation support
-comparison support
-parameter metadata
+configured engine list
+enabled/disabled engine visibility
+engine adapter and default method metadata
+external CLI availability status
+clear unavailable-engine reason reporting
+cheap availability checks only; no benchmark or engine startup
 ```
 
 ---
 
-### 0.8.5 — ML Preparation Support
+### 0.8.5 — Camera Storage Summary
+
+status: done
 
 ```text
-dataset export metadata
-split metadata
-label metadata
-model metadata preparation
-inference contract preparation
+camera storage root summary
+per-printer storage usage
+snapshot, delta, and calculation counts
+missing file counts
+preview availability metadata
+zero-count empty storage response
+read-only printer-scoped REST/JSON summary for BenchChef
 ```
-
 
 ---
 
-## 0.9.x skipped will be done after/parrallele to 1.0.x
+### 0.8.6 — BenchChef Probe Contract Verification
+
+status: done
+
+```text
+BenchChef probes SpaghettiChef through REST/JSON endpoints
+health, version, monitoring, dashboard, active camera job, progress, and timeline probes
+X-SpaghettiChef-Role header naming is aligned
+timeouts and non-2xx responses are handled by BenchChef
+black-box RemoteApiServer contract test covers the probe set
+```
+
+---
+
+### 0.8.7 — No Native Metrics Endpoint Decision
+
+status: done
+
+```text
+SpaghettiChef does not expose Prometheus /metrics in 0.8.x
+SpaghettiChef returning 404 for /metrics is expected
+Prometheus scrapes BenchChef backend /metrics instead
+BenchChef derives latency, error rate, throughput, FPS, and timing statistics externally
+```
+
+---
+
+### 0.8.8 — REST API Documentation Alignment
+
+status: done
+
+```text
+implemented endpoints are documented
+planned endpoints are marked as planned
+compatibility endpoints are marked as compatibility
+SpaghettiChef /metrics is documented as not implemented in 0.8.x
+BenchChef probe expectations match the SpaghettiChef REST API document
+printer-scoped camera storage summary is documented as implemented
+```
+
+Cancelled for SpaghettiChef 0.8.x:
+
+```text
+label metadata endpoints
+dataset package import metadata endpoints
+```
 
 
 ---
@@ -4069,3 +4128,15 @@ Not in 1.0.x:
 * live camera streaming
 * direct VPS-to-local-farm calls
 * direct VPS-to-printer or VPS-to-camera calls
+
+
+## 1.1.x
+
+
+Planned :
+
+* see TODO-1.1.x
+
+
+
+## 2.0.x Spaghetti ML Engine

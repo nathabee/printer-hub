@@ -175,6 +175,9 @@ class CameraDeltaSetServiceTest {
         assertEquals("DELTA_SCORE_THRESHOLD", firstRun.algorithmVariant());
         assertEquals("SUCCESS", firstRun.engineStatus());
         assertTrue(firstRun.executionDurationMs() != null);
+        assertTrue(firstRun.finishedAt() != null);
+        assertTrue(firstResults.get(0).processingTimeMs() != null);
+        assertTrue(firstResults.get(1).processingTimeMs() != null);
     }
 
     @Test
@@ -453,7 +456,6 @@ class CameraDeltaSetServiceTest {
                 settings.ffmpegVideoSize().orElse(null),
                 settings.ffmpegTimeoutMs(),
                 settings.ffmpegJpegQuality(),
-                tempDir.resolve("camera-storage").toString(),
                 settings.updatedAt()));
     }
 

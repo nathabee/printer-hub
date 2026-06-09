@@ -26,7 +26,7 @@ class CameraStoragePathsTest {
         System.setProperty(RuntimeDefaults.DATABASE_FILE_PROPERTY, databaseFile.toString());
 
         assertEquals(
-                databaseFile.getParent().resolve("camera").toAbsolutePath().normalize(),
+                databaseFile.getParent().resolve("printers").toAbsolutePath().normalize(),
                 CameraStoragePaths.defaultBaseDirectory().toAbsolutePath().normalize());
     }
 
@@ -50,13 +50,13 @@ class CameraStoragePathsTest {
     }
 
     @Test
-    void legacyDataCameraDefaultResolvesFromDatabaseDirectory() {
+    void legacyDataPrintersDefaultResolvesFromDatabaseDirectory() {
         Path databaseFile = tempDir.resolve("data").resolve("spaghettichef.db");
         System.setProperty(RuntimeDefaults.DATABASE_FILE_PROPERTY, databaseFile.toString());
 
         assertEquals(
-                databaseFile.getParent().resolve("camera").toAbsolutePath().normalize(),
-                CameraStoragePaths.resolveBaseDirectory("data/camera").toAbsolutePath().normalize());
+                databaseFile.getParent().resolve("printers").toAbsolutePath().normalize(),
+                CameraStoragePaths.resolveBaseDirectory("data/printers").toAbsolutePath().normalize());
     }
 
     @Test
@@ -72,7 +72,7 @@ class CameraStoragePathsTest {
 
         assertEquals(
                 storageDirectory
-                        .resolve("printer_1")
+                        .resolve("camera")
                         .resolve("snapshots")
                         .resolve("42")
                         .resolve("000065_snapshot.jpg")
@@ -127,7 +127,7 @@ class CameraStoragePathsTest {
 
         assertEquals(
                 storageDirectory
-                        .resolve("printer_1")
+                        .resolve("camera")
                         .resolve("deltas")
                         .resolve("42")
                         .resolve("9")

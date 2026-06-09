@@ -34,10 +34,17 @@ message.txt
 
 
 # dataset pictures and snapshots pictures
-camera/**
+printers/**
+printerdata*/**
 dataset/**/*.jpg
 dataset/**/*.zip
 
 
 # Rust build output
 **/target/
+
+
+# shared and duplicated doc for codex
+# Related docs that are not owned by this project
+docs/RELATED/*
+!docs/RELATED/README.md

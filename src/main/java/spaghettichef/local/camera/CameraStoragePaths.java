@@ -3,6 +3,7 @@ package spaghettichef.local.camera;
 import java.nio.file.Path;
 import spaghettichef.shared.config.RuntimeDefaults;
 import spaghettichef.local.persistence.DatabaseConfig;
+import spaghettichef.local.persistence.PrinterConfigurationStore;
 
 public final class CameraStoragePaths {
 
@@ -10,12 +11,12 @@ public final class CameraStoragePaths {
     }
 
     public static Path defaultBaseDirectory() {
-        return DatabaseConfig.dataDirectory().resolve(RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY).normalize();
+        return DatabaseConfig.dataDirectory().resolve(RuntimeDefaults.DEFAULT_PRINTER_STORAGE_DIRECTORY).normalize();
     }
 
     public static Path resolveBaseDirectory(String configuredStorageDirectory) {
         String selectedDirectory = configuredStorageDirectory == null || configuredStorageDirectory.isBlank()
-                ? RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY
+                ? RuntimeDefaults.DEFAULT_PRINTER_STORAGE_DIRECTORY
                 : configuredStorageDirectory.trim();
 
         Path selectedPath = Path.of(selectedDirectory);
@@ -32,15 +33,32 @@ public final class CameraStoragePaths {
 
     public static Path printerDirectory(String configuredStorageDirectory, String printerId) {
         return resolveBaseDirectory(configuredStorageDirectory)
-                .resolve(safePathSegment(printerId, "printerId"))
                 .normalize();
     }
 
+    public static Path printerDirectory(String printerId) {
+        return printerDirectory(printerStorageDirectory(printerId), printerId);
+    }
+
+    public static Path cameraDirectory(String configuredPrinterStorageDirectory, String printerId) {
+        return printerDirectory(configuredPrinterStorageDirectory, printerId)
+                .resolve(RuntimeDefaults.CAMERA_STORAGE_SUBDIRECTORY)
+                .normalize();
+    }
+
+    public static Path cameraDirectory(String printerId) {
+        return cameraDirectory(printerStorageDirectory(printerId), printerId);
+    }
+
     public static Path snapshotsDirectory(String configuredStorageDirectory, String printerId, long cameraJobId) {
-        return printerDirectory(configuredStorageDirectory, printerId)
+        return cameraDirectory(configuredStorageDirectory, printerId)
                 .resolve("snapshots")
                 .resolve(cameraJobSegment(cameraJobId))
                 .normalize();
+    }
+
+    public static Path snapshotsDirectory(String printerId, long cameraJobId) {
+        return snapshotsDirectory(printerStorageDirectory(printerId), printerId, cameraJobId);
     }
 
     public static Path snapshotPathForEntryId(
@@ -61,16 +79,33 @@ public final class CameraStoragePaths {
                 .normalize();
     }
 
+    public static Path snapshotPathForEntryId(
+            String printerId,
+            long cameraJobId,
+            long snapshotEntryId,
+            String extension) {
+        return snapshotPathForEntryId(
+                printerStorageDirectory(printerId),
+                printerId,
+                cameraJobId,
+                snapshotEntryId,
+                extension);
+    }
+
     public static Path deltasDirectory(
             String configuredStorageDirectory,
             String printerId,
             long cameraJobId,
             long deltaSetId) {
-        return printerDirectory(configuredStorageDirectory, printerId)
+        return cameraDirectory(configuredStorageDirectory, printerId)
                 .resolve("deltas")
                 .resolve(cameraJobSegment(cameraJobId))
                 .resolve(deltaSetSegment(deltaSetId))
                 .normalize();
+    }
+
+    public static Path deltasDirectory(String printerId, long cameraJobId, long deltaSetId) {
+        return deltasDirectory(printerStorageDirectory(printerId), printerId, cameraJobId, deltaSetId);
     }
 
     public static Path deltaFramePath(
@@ -90,9 +125,35 @@ public final class CameraStoragePaths {
                 .normalize();
     }
 
+    public static Path deltaFramePath(
+            String printerId,
+            long cameraJobId,
+            long deltaSetId,
+            int fromSequence,
+            int toSequence) {
+        return deltaFramePath(
+                printerStorageDirectory(printerId),
+                printerId,
+                cameraJobId,
+                deltaSetId,
+                fromSequence,
+                toSequence);
+    }
+
     private static boolean isLegacyWorkingDirectoryDefault(String value) {
         String normalized = value.replace('\\', '/');
-        return "data/camera".equals(normalized);
+        return "data/printers".equals(normalized);
+    }
+
+    private static String printerStorageDirectory(String printerId) {
+        String normalizedPrinterId = safePathSegment(printerId, "printerId");
+        return new PrinterConfigurationStore()
+                .findAll()
+                .stream()
+                .filter(node -> node.id().equals(normalizedPrinterId))
+                .findFirst()
+                .map(node -> node.storageDirectory())
+                .orElse(RuntimeDefaults.DEFAULT_PRINTER_STORAGE_DIRECTORY + "/" + normalizedPrinterId);
     }
 
     private static String cameraJobSegment(long cameraJobId) {

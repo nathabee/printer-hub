@@ -52,7 +52,6 @@ class CameraSettingsStoreTest {
                 "1280x720",
                 6000,
                 4,
-                "/tmp/camera-storage",
                 Instant.parse("2026-05-18T10:00:00Z"));
 
         CameraSettings saved = store.save(settings);
@@ -81,7 +80,6 @@ class CameraSettingsStoreTest {
                                     ffmpeg_video_size,
                                     ffmpeg_timeout_ms,
                                     ffmpeg_jpeg_quality,
-                                    storage_directory,
                                     purge_automatically,
                                     purge_retention_frequency,
                                     updated_at
@@ -108,7 +106,6 @@ class CameraSettingsStoreTest {
                 assertEquals("1280x720", resultSet.getString("ffmpeg_video_size"));
                 assertEquals(6000, resultSet.getInt("ffmpeg_timeout_ms"));
                 assertEquals(4, resultSet.getInt("ffmpeg_jpeg_quality"));
-                assertEquals("/tmp/camera-storage", resultSet.getString("storage_directory"));
                 assertEquals(0, resultSet.getInt("purge_automatically"));
                 assertEquals(5, resultSet.getInt("purge_retention_frequency"));
                 assertEquals("2026-05-18T10:00:00Z", resultSet.getString("updated_at"));
@@ -143,7 +140,6 @@ class CameraSettingsStoreTest {
                 "640x360",
                 7000,
                 2,
-                "/tmp/camera-storage",
                 false,
                 true,
                 6,
@@ -166,7 +162,6 @@ class CameraSettingsStoreTest {
         assertEquals("640x360", loaded.ffmpegVideoSize().orElseThrow());
         assertEquals(7000, loaded.ffmpegTimeoutMs());
         assertEquals(2, loaded.ffmpegJpegQuality());
-        assertEquals("/tmp/camera-storage", loaded.storageDirectory());
         assertTrue(loaded.purgeAutomatically());
         assertEquals(6, loaded.purgeRetentionFrequency());
         assertEquals(Instant.parse("2026-05-18T10:05:00Z"), loaded.updatedAt());

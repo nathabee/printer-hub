@@ -36,6 +36,8 @@ import spaghettichef.local.persistence.CameraSettingsStore;
 import spaghettichef.local.persistence.CameraSnapshotMetadata;
 import spaghettichef.local.persistence.CameraSnapshotMetadataStore;
 import spaghettichef.local.persistence.DatabaseInitializer;
+import spaghettichef.local.persistence.PrinterConfigurationStore;
+import spaghettichef.local.runtime.PrinterRuntimeNodeFactory;
 import spaghettichef.shared.OperationMessages;
 
 
@@ -89,7 +91,7 @@ class CameraCaptureServiceTest {
         assertEquals("image/jpeg", result.frame().get().contentType());
 
         Path printerStorage = tempDir.resolve("camera-storage").resolve("printer-1");
-        Path latest = printerStorage.resolve("latest.jpg");
+        Path latest = printerStorage.resolve("camera").resolve("latest.jpg");
 
         assertTrue(Files.exists(latest));
 
@@ -133,7 +135,6 @@ class CameraCaptureServiceTest {
                 simulated.ffmpegVideoSize().orElse(null),
                 simulated.ffmpegTimeoutMs(),
                 simulated.ffmpegJpegQuality(),
-                simulated.storageDirectory(),
                 simulated.diagnosticLoggingEnabled(),
                 simulated.purgeAutomatically(),
                 simulated.purgeRetentionFrequency(),
@@ -232,8 +233,8 @@ class CameraCaptureServiceTest {
         assertEquals(1L, frames.get(0).fromSnapshotId());
         assertEquals(2L, frames.get(0).toSnapshotId());
         assertTrue(frames.get(0).deltaPath().contains("/deltas/1/" + deltaSets.get(0).requireId() + "/"));
-        assertTrue(Files.isRegularFile(tempDir.resolve("camera-storage/printer-1/snapshots/1/000001_snapshot.jpg")));
-        assertTrue(Files.isRegularFile(tempDir.resolve("camera-storage/printer-1/snapshots/1/000002_snapshot.jpg")));
+        assertTrue(Files.isRegularFile(tempDir.resolve("camera-storage/printer-1/camera/snapshots/1/000001_snapshot.jpg")));
+        assertTrue(Files.isRegularFile(tempDir.resolve("camera-storage/printer-1/camera/snapshots/1/000002_snapshot.jpg")));
         assertTrue(frames.get(0).deltaPath().endsWith("/000001_000002_delta.jpg"));
         assertFalse(frames.get(0).deltaPath().endsWith("/delta.jpg"));
         assertTrue(Files.isRegularFile(Path.of(frames.get(0).deltaPath())));
@@ -271,6 +272,7 @@ class CameraCaptureServiceTest {
 
         Path latest = tempDir.resolve("camera-storage")
                 .resolve("printer-1")
+                .resolve("camera")
                 .resolve("latest.png");
 
         assertTrue(Files.exists(latest));
@@ -456,25 +458,14 @@ class CameraCaptureServiceTest {
     }
 
     private CameraSettings withTestStorage(CameraSettings settings) {
-        return new CameraSettings(
+        new PrinterConfigurationStore().save(PrinterRuntimeNodeFactory.create(
                 settings.printerId(),
-                settings.enabled(),
-                settings.sourceType(),
-                settings.sourceValue().orElse(null),
-                settings.captureIntervalSeconds(),
-                settings.retentionSnapshotCount(),
-                settings.analysisEnabled(),
-                settings.safetyEnabled(),
-                settings.pauseOnConfirmedSpaghetti(),
-                settings.confidenceThreshold(),
-                settings.confirmationsRequired(),
-                settings.ffmpegCommand(),
-                settings.ffmpegInputFormat().orElse(null),
-                settings.ffmpegVideoSize().orElse(null),
-                settings.ffmpegTimeoutMs(),
-                settings.ffmpegJpegQuality(),
-                tempDir.resolve("camera-storage").toString(),
-                settings.updatedAt());
+                settings.printerId(),
+                "SIM_PORT",
+                "sim",
+                tempDir.resolve("camera-storage").resolve(settings.printerId()).toString(),
+                true));
+        return settings;
     }
 
     private CameraSettings withAnalysisEnabled(CameraSettings settings) {
@@ -495,7 +486,6 @@ class CameraCaptureServiceTest {
                 settings.ffmpegVideoSize().orElse(null),
                 settings.ffmpegTimeoutMs(),
                 settings.ffmpegJpegQuality(),
-                settings.storageDirectory(),
                 settings.diagnosticLoggingEnabled(),
                 settings.updatedAt());
     }

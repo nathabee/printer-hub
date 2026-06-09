@@ -53,12 +53,12 @@ $startTime = (Get-Date).AddMinutes(5).ToString('HH:mm')
 Write-Host "Using runtime config from: $runEnvPath"
 Write-Host "Generated task wrapper: $taskCmd"
 
-$taskExists = $false
-try {
-    schtasks /Query /TN $taskName | Out-Null
+cmd.exe /c "schtasks /Query /TN SpaghettiChef >NUL 2>NUL"
+
+if ($LASTEXITCODE -eq 0) {
     $taskExists = $true
 }
-catch {
+else {
     $taskExists = $false
 }
 

@@ -322,10 +322,15 @@ class RemoteApiServerTest {
             assertTrue(response.body().contains("\"engineName\":\"JAVA_BASIC_DELTA\""));
             assertTrue(response.body().contains("\"engineLabel\":\"Java basic delta\""));
             assertTrue(response.body().contains("\"defaultConfidenceThreshold\":0.85"));
+            assertTrue(response.body().contains("\"available\":true"));
+            assertTrue(response.body().contains("\"availabilityMessage\":\"Engine is available\""));
             assertTrue(response.body().contains("\"engineName\":\"RUST_IMG_ANALYZER\""));
             assertTrue(response.body().contains("\"adapterType\":\"EXTERNAL_CLI\""));
             assertTrue(response.body().contains("\"defaultCliMethod\":\"delta-basic\""));
             assertTrue(response.body().contains("\"executablePath\":null"));
+            assertTrue(response.body().contains("\"available\":false"));
+            assertTrue(response.body().contains(
+                    "\"availabilityMessage\":\"External CLI executable path is not configured\""));
         } finally {
             context.close();
         }
@@ -334,31 +339,37 @@ class RemoteApiServerTest {
     @Test
     void putCameraCalculationEngineSettingsPersistsAdminChanges() throws Exception {
         TestContext context = createContext("camera-engine-settings-put.db");
+        Path executable = tempDir.resolve("img-analyzer");
+        Files.writeString(executable, "#!/bin/sh\n");
+        assertTrue(executable.toFile().setExecutable(true));
 
         try {
             HttpResponse<String> response = context.request(
                     "PUT",
                     "/admin/camera/calculation-engine-settings/RUST_IMG_ANALYZER",
                     """
-                            {"engineLabel":"Rust tuned","enabled":false,"defaultMethodName":"spaghetti-rust","defaultConfidenceThreshold":0.7,"defaultParameterJson":"{\\"source\\":\\"admin\\"}","defaultCliMethod":"delta-tuned","executablePath":"/opt/spaghetti/img-analyzer","timeoutMs":12345,"sortOrder":5}
-                            """);
+                            {"engineLabel":"Rust tuned","enabled":true,"defaultMethodName":"spaghetti-rust","defaultConfidenceThreshold":0.7,"defaultParameterJson":"{\\"source\\":\\"admin\\"}","defaultCliMethod":"delta-tuned","executablePath":"%s","timeoutMs":12345,"sortOrder":5}
+                            """.formatted(executable.toString().replace("\\", "\\\\")));
 
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"engineName\":\"RUST_IMG_ANALYZER\""));
             assertTrue(response.body().contains("\"engineLabel\":\"Rust tuned\""));
-            assertTrue(response.body().contains("\"enabled\":false"));
+            assertTrue(response.body().contains("\"enabled\":true"));
             assertTrue(response.body().contains("\"defaultMethodName\":\"spaghetti-rust\""));
             assertTrue(response.body().contains("\"defaultConfidenceThreshold\":0.70"));
             assertTrue(response.body().contains("\"defaultParameterJson\":\"{\\\"source\\\":\\\"admin\\\"}\""));
             assertTrue(response.body().contains("\"defaultCliMethod\":\"delta-tuned\""));
-            assertTrue(response.body().contains("\"executablePath\":\"/opt/spaghetti/img-analyzer\""));
+            assertTrue(response.body().contains("\"executablePath\":\"" + executable + "\""));
             assertTrue(response.body().contains("\"timeoutMs\":12345"));
             assertTrue(response.body().contains("\"sortOrder\":5"));
+            assertTrue(response.body().contains("\"available\":true"));
+            assertTrue(response.body().contains(
+                    "\"availabilityMessage\":\"External CLI executable is available\""));
 
             HttpResponse<String> getResponse = context.get("/admin/camera/calculation-engine-settings");
             assertEquals(200, getResponse.statusCode());
             assertTrue(getResponse.body().contains("\"engineLabel\":\"Rust tuned\""));
-            assertTrue(getResponse.body().contains("\"executablePath\":\"/opt/spaghetti/img-analyzer\""));
+            assertTrue(getResponse.body().contains("\"executablePath\":\"" + executable + "\""));
         } finally {
             context.close();
         }
@@ -1081,9 +1092,21 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.configurationStore.save(
                     PrinterRuntimeNodeFactory.create("printer-2", "Printer 2", "SIM_PORT_2", "sim", true));
             context.printerRegistry.register(
@@ -1093,8 +1116,8 @@ class RemoteApiServerTest {
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s"}
-                            """.formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default"}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             HttpResponse<String> captureResponse = context.request(
@@ -1109,8 +1132,12 @@ class RemoteApiServerTest {
             assertTrue(captureResponse.body().contains("\"width\":320"));
             assertTrue(captureResponse.body().contains("\"height\":240"));
 
-            assertTrue(Files.exists(cameraStorageDirectory.resolve("printer-1").resolve("latest.jpg")));
-            assertFalse(Files.isDirectory(cameraStorageDirectory.resolve("printer-1").resolve("snapshots")));
+            Path printerCameraDirectory = cameraStorageDirectory
+                    .resolve("printer-1")
+                    .resolve("camera");
+
+            assertTrue(Files.exists(printerCameraDirectory.resolve("latest.jpg")));
+            assertFalse(Files.isDirectory(printerCameraDirectory.resolve("snapshots")));
 
             HttpResponse<String> activeJobResponse = context.get("/printers/printer-1/camera/jobs/active");
             assertEquals(200, activeJobResponse.statusCode());
@@ -1136,17 +1163,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s","captureIntervalSeconds":1,"retentionSnapshotCount":20}
-                            """
-                            .formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","captureIntervalSeconds":1,"retentionSnapshotCount":20}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             String cameraJobId = startCameraJobAndWaitForSnapshots(
@@ -1171,13 +1209,13 @@ class RemoteApiServerTest {
 
             assertEquals(200, timelineResponse.statusCode());
             assertTrue(timelineResponse.body().contains("\"timeline\":["));
-            assertTrue(timelineResponse.body().contains("\"type\":\"snapshot\""));
-            assertTrue(timelineResponse.body().contains("snapshots/" + cameraJobId + "/"));
-            assertTrue(timelineResponse.body().contains("\"snapshotPath\":"));
-            assertTrue(timelineResponse.body().contains("\"printerId\":\"printer-1\""));
-            assertTrue(timelineResponse.body().contains("\"cameraJobId\":" + cameraJobId));
+            assertTrue(timelineResponse.body().contains("\"eventType\":\"SNAPSHOT_CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"state\":\"CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"timestamp\":"));
+            assertTrue(timelineResponse.body().contains("\"snapshotId\":"));
+            assertTrue(timelineResponse.body().contains("\"deltaSetId\":null"));
 
-            Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "id");
+            Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "snapshotId");
             assertNotNull(snapshotEntryId);
 
             HttpResponse<String> fileResponse = context.get("/admin/camera/snapshot/files/" + snapshotEntryId);
@@ -1196,6 +1234,135 @@ class RemoteApiServerTest {
     }
 
     @Test
+    void cameraStorageSummaryReturnsZeroCountsForEmptyPrinter() throws Exception {
+        TestContext context = createContext("camera-storage-summary-empty.db");
+
+        try {
+            HttpResponse<String> response = context.get(
+                    "/admin/printers/printer-empty/camera/storage/summary");
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"printerId\":\"printer-empty\""));
+            assertTrue(response.body().contains("\"cameraJobCount\":0"));
+            assertTrue(response.body().contains("\"snapshotCount\":0"));
+            assertTrue(response.body().contains("\"retainedSnapshotCount\":0"));
+            assertTrue(response.body().contains("\"deltaSetCount\":0"));
+            assertTrue(response.body().contains("\"deltaFrameCount\":0"));
+            assertTrue(response.body().contains("\"calculationRunCount\":0"));
+            assertTrue(response.body().contains("\"calculationResultCount\":0"));
+            assertTrue(response.body().contains("\"totalSnapshotBytes\":0"));
+            assertTrue(response.body().contains("\"totalDeltaBytes\":0"));
+            assertTrue(response.body().contains("\"missingFileCount\":0"));
+            assertTrue(response.body().contains("\"latestSnapshotAvailable\":false"));
+            assertTrue(response.body().contains("\"previousSnapshotAvailable\":false"));
+            assertTrue(response.body().contains("\"deltaPreviewAvailable\":false"));
+            assertTrue(response.body().contains("\"message\":\"No camera storage rows found for printer\""));
+        } finally {
+            context.close();
+        }
+    }
+
+    @Test
+    void benchChefProbeContractEndpointsReturnExpectedShapes() throws Exception {
+        Path cameraStorageDirectory = tempDir.resolve("benchchef-probe-camera-storage");
+        TestContext context = createContext("benchchef-probe-contract.db");
+
+        try {
+            HttpResponse<String> createPrinterResponse = context.request(
+                    "POST",
+                    "/printers",
+                    "{"
+                            + "\"id\":\"printer-1\","
+                            + "\"displayName\":\"Printer One\","
+                            + "\"portName\":\"COM1\","
+                            + "\"mode\":\"simulated\","
+                            + "\"storageDirectory\":\""
+                            + cameraStorageDirectory.resolve("printer-1").toString().replace("\\", "\\\\")
+                            + "\","
+                            + "\"enabled\":true"
+                            + "}");
+            assertEquals(201, createPrinterResponse.statusCode());
+
+            HttpResponse<String> settingsResponse = context.request(
+                    "PUT",
+                    "/printers/printer-1/camera/settings",
+                    """
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","captureIntervalSeconds":1,"retentionSnapshotCount":20}
+                            """);
+            assertEquals(200, settingsResponse.statusCode());
+
+            String cameraJobId = startCameraJobAndWaitForSnapshots(
+                    context,
+                    "printer-1",
+                    cameraStorageDirectory,
+                    1);
+
+            HttpResponse<String> healthResponse = context.get("/health");
+            assertEquals(200, healthResponse.statusCode());
+            assertEquals("{\"status\":\"ok\"}", healthResponse.body());
+
+            HttpResponse<String> versionResponse = context.get("/version");
+            assertEquals(200, versionResponse.statusCode());
+            assertTrue(versionResponse.body().startsWith("{"));
+            assertTrue(versionResponse.body().contains("\"version\":"));
+
+            HttpResponse<String> monitoringResponse = context.get("/monitoring");
+            assertEquals(200, monitoringResponse.statusCode());
+            assertTrue(monitoringResponse.body().startsWith("{"));
+            assertTrue(monitoringResponse.body().contains("\"generatedAt\":"));
+            assertTrue(monitoringResponse.body().contains("\"summary\":"));
+
+            HttpResponse<String> dashboardResponse = context.get("/dashboard/index.html");
+            assertEquals(200, dashboardResponse.statusCode());
+            assertTrue(dashboardResponse.headers().firstValue("content-type").orElse("").contains("text/html"));
+            assertTrue(dashboardResponse.body().contains("<!doctype html>"));
+
+            HttpResponse<String> activeJobResponse = context.get("/printers/printer-1/camera/jobs/active");
+            assertEquals(200, activeJobResponse.statusCode());
+            assertTrue(activeJobResponse.body().startsWith("{"));
+            assertTrue(activeJobResponse.body().contains("\"active\":true"));
+            assertTrue(activeJobResponse.body().contains("\"jobId\":\"" + cameraJobId + "\""));
+            assertTrue(activeJobResponse.body().contains("\"latestSnapshotId\":"));
+            assertTrue(activeJobResponse.body().contains("\"latestCaptureAt\":"));
+
+            HttpResponse<String> progressResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + cameraJobId + "/progress");
+            assertEquals(200, progressResponse.statusCode());
+            assertTrue(progressResponse.body().startsWith("{"));
+            assertTrue(progressResponse.body().contains("\"jobId\":" + cameraJobId));
+            assertTrue(progressResponse.body().contains("\"printerId\":\"printer-1\""));
+            assertTrue(progressResponse.body().contains("\"snapshotCount\":"));
+            assertTrue(progressResponse.body().contains("\"durationMs\":"));
+            assertTrue(progressResponse.body().contains("\"errorType\":null"));
+
+            HttpResponse<String> timelineResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + cameraJobId + "/timeline");
+            assertEquals(200, timelineResponse.statusCode());
+            assertTrue(timelineResponse.body().startsWith("{"));
+            assertTrue(timelineResponse.body().contains("\"timeline\":["));
+            assertTrue(timelineResponse.body().contains("\"timestamp\":"));
+            assertTrue(timelineResponse.body().contains("\"eventType\":\"SNAPSHOT_CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"state\":\"CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"snapshotId\":"));
+            assertTrue(timelineResponse.body().contains("\"deltaSetId\":null"));
+
+            HttpResponse<String> optionsResponse = context.request("OPTIONS", "/health", null);
+            assertEquals(204, optionsResponse.statusCode());
+            String allowedHeaders = optionsResponse.headers()
+                    .firstValue("access-control-allow-headers")
+                    .orElse("");
+            assertTrue(allowedHeaders.contains("X-SpaghettiChef-Role"));
+            assertFalse(allowedHeaders.contains("X-User-Role"));
+        } finally {
+            context.request(
+                    "POST",
+                    "/printers/printer-1/camera/jobs/stop",
+                    null);
+            context.close();
+        }
+    }
+
+    @Test
     void cameraDeltaSetAdminEndpointsGenerateAndListFrames() throws Exception {
         Path cameraStorageDirectory = tempDir.resolve("camera-delta-storage");
 
@@ -1203,17 +1370,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s","captureIntervalSeconds":1,"retentionSnapshotCount":20}
-                            """
-                            .formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","captureIntervalSeconds":1,"retentionSnapshotCount":20}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             String cameraJobId = startCameraJobAndWaitForSnapshots(
@@ -1276,6 +1454,9 @@ class RemoteApiServerTest {
             assertEquals(201, firstRunResponse.statusCode());
             assertEquals(201, secondRunResponse.statusCode());
             assertTrue(firstRunResponse.body().contains("\"resultCount\":2"));
+            assertTrue(firstRunResponse.body().contains("\"calculationRunId\":"));
+            assertTrue(firstRunResponse.body().contains("\"executionDurationMs\":"));
+            assertTrue(firstRunResponse.body().contains("\"finishedAt\":"));
             assertTrue(secondRunResponse.body().contains("\"resultCount\":2"));
 
             Integer firstRunId = extractJsonInteger(firstRunResponse.body(), "id");
@@ -1297,6 +1478,7 @@ class RemoteApiServerTest {
             assertTrue(resultsResponse.body().contains("\"calculationRunId\":" + firstRunId));
             assertTrue(resultsResponse.body().contains("\"deltaFrameId\":1"));
             assertTrue(resultsResponse.body().contains("\"deltaFrameId\":2"));
+            assertTrue(resultsResponse.body().contains("\"processingTimeMs\":"));
 
             HttpResponse<String> traceResponse = context.get(
                     "/admin/camera/calculation-runs/" + firstRunId + "/trace?printerId=printer-1");
@@ -1315,6 +1497,32 @@ class RemoteApiServerTest {
             assertFalse(traceResponse.body().contains("latest.jpg"));
             assertFalse(traceResponse.body().contains("previous.jpg"));
             assertFalse(traceResponse.body().contains("/delta.jpg"));
+
+            Path firstSnapshotPath = cameraStorageDirectory
+                    .resolve("printer-1")
+                    .resolve("camera")
+                    .resolve("snapshots")
+                    .resolve(cameraJobId)
+                    .resolve("000001_snapshot.jpg");
+            assertTrue(Files.deleteIfExists(firstSnapshotPath));
+
+            HttpResponse<String> summaryResponse = context.get(
+                    "/admin/printers/printer-1/camera/storage/summary");
+            assertEquals(200, summaryResponse.statusCode());
+            assertTrue(summaryResponse.body().contains("\"printerId\":\"printer-1\""));
+            assertTrue(summaryResponse.body().contains("\"cameraJobCount\":1"));
+            assertTrue(summaryResponse.body().contains("\"snapshotCount\":3"));
+            assertTrue(summaryResponse.body().contains("\"retainedSnapshotCount\":3"));
+            assertTrue(summaryResponse.body().contains("\"deltaSetCount\":1"));
+            assertTrue(summaryResponse.body().contains("\"deltaFrameCount\":2"));
+            assertTrue(summaryResponse.body().contains("\"calculationRunCount\":2"));
+            assertTrue(summaryResponse.body().contains("\"calculationResultCount\":4"));
+            assertTrue(summaryResponse.body().contains("\"missingFileCount\":1"));
+            assertTrue(summaryResponse.body().contains("\"latestSnapshotAvailable\":true"));
+            assertTrue(summaryResponse.body().contains("\"previousSnapshotAvailable\":true"));
+            assertTrue(summaryResponse.body().contains("\"deltaPreviewAvailable\":false"));
+            assertTrue(summaryResponse.body().contains(
+                    "\"message\":\"Camera storage summary includes missing files\""));
 
             assertEquals(200, context.request(
                     "POST",
@@ -1351,17 +1559,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s","captureIntervalSeconds":1,"retentionSnapshotCount":20}
-                            """
-                            .formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","captureIntervalSeconds":1,"retentionSnapshotCount":20}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             String printer1CameraJobId = startCameraJobAndWaitForSnapshots(
@@ -1374,6 +1593,11 @@ class RemoteApiServerTest {
             assertEquals(200, jobsResponse.statusCode());
             assertTrue(jobsResponse.body().contains("\"jobId\":\"" + printer1CameraJobId + "\""));
             assertTrue(jobsResponse.body().contains("\"fileCount\":2"));
+
+            HttpResponse<String> scopedJobsResponse = context.get("/admin/printers/printer-1/camera/jobs");
+            assertEquals(200, scopedJobsResponse.statusCode());
+            assertTrue(scopedJobsResponse.body().contains("\"jobId\":\"" + printer1CameraJobId + "\""));
+            assertTrue(scopedJobsResponse.body().contains("\"printerId\":\"printer-1\""));
 
             assertEquals(200, context.request(
                     "POST",
@@ -1389,12 +1613,13 @@ class RemoteApiServerTest {
                     20,
                     "simulated",
                     "default",
-                    cameraStorageDirectory.resolve("printer-2").resolve("snapshots").resolve("2").toString(),
+                    cameraStorageDirectory.resolve("printer-2").resolve("camera").resolve("snapshots").resolve("2").toString(),
                     "test"));
             long printer2CameraJobId = printer2CameraJob.requireId();
 
             Path printer2SnapshotDirectory = cameraStorageDirectory
                     .resolve("printer-2")
+                    .resolve("camera")
                     .resolve("snapshots")
                     .resolve(Long.toString(printer2CameraJobId));
             Files.createDirectories(printer2SnapshotDirectory);
@@ -1418,11 +1643,39 @@ class RemoteApiServerTest {
                     "/admin/camera/snapshot/jobs/" + printer1CameraJobId + "/timeline?printerId=printer-1");
             assertEquals(200, timelineResponse.statusCode());
             assertTrue(timelineResponse.body().contains("\"timeline\":["));
-            assertTrue(timelineResponse.body().contains("\"snapshotPath\":"));
-            assertTrue(timelineResponse.body().contains("\"printerId\":\"printer-1\""));
-            assertFalse(timelineResponse.body().contains("\"printerId\":\"printer-2\""));
+            assertTrue(timelineResponse.body().contains("\"eventType\":\"SNAPSHOT_CAPTURED\""));
+            assertTrue(timelineResponse.body().contains("\"snapshotId\":"));
 
-            Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "id");
+            HttpResponse<String> scopedJobResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId);
+            assertEquals(200, scopedJobResponse.statusCode());
+            assertTrue(scopedJobResponse.body().contains("\"cameraJobId\":" + printer1CameraJobId));
+            assertTrue(scopedJobResponse.body().contains("\"printerId\":\"printer-1\""));
+
+            HttpResponse<String> scopedTimelineResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId + "/timeline");
+            assertEquals(200, scopedTimelineResponse.statusCode());
+            assertTrue(scopedTimelineResponse.body().contains("\"timeline\":["));
+            assertTrue(scopedTimelineResponse.body().contains("\"eventType\":\"SNAPSHOT_CAPTURED\""));
+            assertTrue(scopedTimelineResponse.body().contains("\"snapshotId\":"));
+
+            HttpResponse<String> progressResponse = context.get(
+                    "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId + "/progress");
+            assertEquals(200, progressResponse.statusCode());
+            assertTrue(progressResponse.body().contains("\"jobId\":" + printer1CameraJobId));
+            assertTrue(progressResponse.body().contains("\"cameraId\":null"));
+            assertTrue(progressResponse.body().contains("\"finishedAt\":"));
+            assertTrue(progressResponse.body().contains("\"snapshotCount\":2"));
+            assertTrue(progressResponse.body().contains("\"deltaCount\":0"));
+            assertTrue(progressResponse.body().contains("\"retainedSnapshotCount\":2"));
+            assertTrue(progressResponse.body().contains("\"durationMs\":"));
+            assertTrue(progressResponse.body().contains("\"snapshotsPerSecond\":"));
+            assertTrue(progressResponse.body().contains("\"errorType\":null"));
+
+            assertEquals(404, context.get(
+                    "/admin/printers/printer-2/camera/jobs/" + printer1CameraJobId + "/progress").statusCode());
+
+            Integer snapshotEntryId = extractJsonInteger(timelineResponse.body(), "snapshotId");
             assertNotNull(snapshotEntryId);
 
             HttpResponse<String> fileResponse = context.get("/admin/camera/snapshot/files/" + snapshotEntryId);
@@ -1438,6 +1691,7 @@ class RemoteApiServerTest {
 
             Path snapshotsDirectory = cameraStorageDirectory
                     .resolve("printer-1")
+                    .resolve("camera")
                     .resolve("snapshots")
                     .resolve(printer1CameraJobId);
             try (var snapshots = Files.list(snapshotsDirectory)) {
@@ -1446,10 +1700,12 @@ class RemoteApiServerTest {
 
             HttpResponse<String> deleteResponse = context.request(
                     "DELETE",
-                    "/admin/camera/snapshot/jobs/" + printer1CameraJobId + "?printerId=printer-1",
-                    null);
+                    "/admin/printers/printer-1/camera/jobs/" + printer1CameraJobId,
+                    """
+                            {"requiredConfirmation":"DELETE_CAMERA_JOB"}
+                            """);
             assertEquals(200, deleteResponse.statusCode());
-            assertTrue(deleteResponse.body().contains("\"deletedMetadataRows\":2"));
+            assertTrue(deleteResponse.body().contains("\"deletedSnapshotRows\":2"));
 
             HttpResponse<String> jobsAfterDeleteResponse = context
                     .get("/admin/camera/snapshot/jobs?printerId=printer-1");
@@ -1474,16 +1730,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s"}
-                            """.formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default"}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             HttpResponse<String> captureResponse = context.request(
@@ -1514,16 +1782,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","storageDirectory":"%s"}
-                            """.formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default"}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             HttpResponse<String> captureResponse = context.request(
@@ -1550,17 +1830,28 @@ class RemoteApiServerTest {
 
         try {
             context.configurationStore.save(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
             context.printerRegistry.register(
-                    PrinterRuntimeNodeFactory.create("printer-1", "Printer 1", "SIM_PORT", "sim", true));
+                    PrinterRuntimeNodeFactory.create(
+                            "printer-1",
+                            "Printer 1",
+                            "SIM_PORT",
+                            "sim",
+                            cameraStorageDirectory.toString(),
+                            true));
 
             HttpResponse<String> settingsResponse = context.request(
                     "PUT",
                     "/printers/printer-1/camera/settings",
                     """
-                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","analysisEnabled":true,"storageDirectory":"%s"}
-                            """
-                            .formatted(cameraStorageDirectory));
+                            {"enabled":true,"sourceType":"simulated","sourceValue":"default","analysisEnabled":true}
+                            """);
             assertEquals(200, settingsResponse.statusCode());
 
             HttpResponse<String> startResponse = context.request(
@@ -3208,7 +3499,7 @@ class RemoteApiServerTest {
     private String startCameraJobAndWaitForSnapshots(
             TestContext context,
             String printerId,
-            Path cameraStorageDirectory,
+            Path printerStorageRoot,
             long expectedSnapshotCount) throws Exception {
         HttpResponse<String> startResponse = context.request(
                 "POST",
@@ -3222,8 +3513,9 @@ class RemoteApiServerTest {
         String cameraJobId = extractJsonString(startResponse.body(), "jobId");
         assertNotNull(cameraJobId);
 
-        Path snapshotsDirectory = cameraStorageDirectory
+        Path snapshotsDirectory = printerStorageRoot
                 .resolve(printerId)
+                .resolve("camera")
                 .resolve("snapshots")
                 .resolve(cameraJobId);
 

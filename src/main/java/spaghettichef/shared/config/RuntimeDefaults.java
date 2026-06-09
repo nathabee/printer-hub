@@ -27,6 +27,7 @@ public final class RuntimeDefaults {
     public static final String SQLITE_JDBC_PREFIX = "jdbc:sqlite:";
     public static final String PRINT_FILE_STORAGE_DIRECTORY_PROPERTY = "spaghettichef.printFileStorageDirectory";
     public static final String DEFAULT_PRINT_FILE_STORAGE_DIRECTORY = "spaghettichef-print-files";
+    public static final String DEFAULT_PRINTER_STORAGE_DIRECTORY = "printers";
 
     public static final boolean DEFAULT_SNAPSHOT_ON_STATE_CHANGE = true;
     public static final double DEFAULT_TEMPERATURE_THRESHOLD = 1.0;
@@ -48,7 +49,7 @@ public final class RuntimeDefaults {
     public static final String DEFAULT_CAMERA_FFMPEG_VIDEO_SIZE = "640x480";
     public static final int DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS = 5000;
     public static final int DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY = 3;
-    public static final String DEFAULT_CAMERA_STORAGE_DIRECTORY = "camera";
+    public static final String CAMERA_STORAGE_SUBDIRECTORY = "camera";
     public static final String DEFAULT_CAMERA_CALCULATION_ENGINE_NAME = "JAVA_BASIC_DELTA";
     public static final String DEFAULT_CAMERA_CALCULATION_METHOD_NAME = "spaghetti-heuristic";
     public static final double DEFAULT_CAMERA_CALCULATION_CONFIDENCE_THRESHOLD = 0.85;

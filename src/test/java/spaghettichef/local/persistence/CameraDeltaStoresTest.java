@@ -128,7 +128,8 @@ class CameraDeltaStoresTest {
                 true,
                 "HIGH_VISUAL_DELTA",
                 "possible spaghetti",
-                CREATED_AT.plusSeconds(1)));
+                CREATED_AT.plusSeconds(1),
+                12L));
 
         List<CameraCalculationRun> runs = runStore.findByDeltaSetId(3L);
         assertEquals(2, runs.size());
@@ -140,6 +141,7 @@ class CameraDeltaStoresTest {
         assertEquals(savedResult.requireId(), results.get(0).requireId());
         assertTrue(results.get(0).suspected());
         assertEquals("HIGH_VISUAL_DELTA", results.get(0).reasonCodesOptional().orElseThrow());
+        assertEquals(12L, results.get(0).processingTimeMs());
     }
 
     @Test

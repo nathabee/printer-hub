@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PRINTER_ID="${1:-p1}"
-
-BASE_DIR="${CAMERA_BASE_DIR:-./data/camera}"
+BASE_DIR="${CAMERA_BASE_DIR:-./data/printers/p1/camera}"
 INTERVAL_SECONDS="${CAMERA_INTERVAL_SECONDS:-2}"
 ARCHIVE_INTERVAL_SECONDS="${CAMERA_ARCHIVE_INTERVAL_SECONDS:-300}"
 RETENTION_HOURS="${CAMERA_RETENTION_HOURS:-24}"
@@ -11,7 +9,7 @@ RETENTION_HOURS="${CAMERA_RETENTION_HOURS:-24}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CAPTURE_ONCE="${SCRIPT_DIR}/camera-capture-once.sh"
 
-PRINTER_DIR="${BASE_DIR}/${PRINTER_ID}"
+PRINTER_DIR="${BASE_DIR}"
 ARCHIVE_DIR="${PRINTER_DIR}/snapshots"
 
 LATEST="${PRINTER_DIR}/latest.jpg"
@@ -27,7 +25,6 @@ mkdir -p "${ARCHIVE_DIR}"
 last_archive_epoch=0
 
 echo "[camera] loop started"
-echo "[camera] printer=${PRINTER_ID}"
 echo "[camera] baseDir=${BASE_DIR}"
 echo "[camera] latest=${LATEST}"
 echo "[camera] previous=${PREVIOUS}"

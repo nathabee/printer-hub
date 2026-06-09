@@ -63,9 +63,8 @@ public final class CameraDeltaSetDeletionService {
         CameraDeltaSet deltaSet = deltaSetStore.findByPrinterIdAndId(normalizedPrinterId, deltaSetId)
                 .orElseThrow(() -> new IllegalArgumentException("camera delta set not found: " + deltaSetId));
 
-        CameraSettings settings = settingsService.load(normalizedPrinterId);
+        settingsService.load(normalizedPrinterId);
         Path expectedDeltaDirectory = CameraStoragePaths.deltasDirectory(
-                settings.storageDirectory(),
                 normalizedPrinterId,
                 deltaSet.cameraJobId(),
                 deltaSet.requireId())

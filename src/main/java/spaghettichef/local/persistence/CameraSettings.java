@@ -44,7 +44,6 @@ public final class CameraSettings {
     private final String ffmpegVideoSize;
     private final int ffmpegTimeoutMs;
     private final int ffmpegJpegQuality;
-    private final String storageDirectory;
     private final boolean diagnosticLoggingEnabled;
     private final Instant updatedAt;
 
@@ -78,7 +77,6 @@ public final class CameraSettings {
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_VIDEO_SIZE,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY,
-                RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY,
                 false,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -102,7 +100,6 @@ public final class CameraSettings {
             String ffmpegVideoSize,
             int ffmpegTimeoutMs,
             int ffmpegJpegQuality,
-            String storageDirectory,
             Instant updatedAt) {
         this(
                 printerId,
@@ -121,7 +118,6 @@ public final class CameraSettings {
                 ffmpegVideoSize,
                 ffmpegTimeoutMs,
                 ffmpegJpegQuality,
-                storageDirectory,
                 false,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -145,7 +141,6 @@ public final class CameraSettings {
             String ffmpegVideoSize,
             int ffmpegTimeoutMs,
             int ffmpegJpegQuality,
-            String storageDirectory,
             boolean diagnosticLoggingEnabled,
             Instant updatedAt) {
         this(
@@ -165,7 +160,6 @@ public final class CameraSettings {
                 ffmpegVideoSize,
                 ffmpegTimeoutMs,
                 ffmpegJpegQuality,
-                storageDirectory,
                 diagnosticLoggingEnabled,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -189,7 +183,6 @@ public final class CameraSettings {
             String ffmpegVideoSize,
             int ffmpegTimeoutMs,
             int ffmpegJpegQuality,
-            String storageDirectory,
             boolean diagnosticLoggingEnabled,
             boolean purgeAutomatically,
             int purgeRetentionFrequency,
@@ -211,7 +204,6 @@ public final class CameraSettings {
                 ffmpegVideoSize,
                 ffmpegTimeoutMs,
                 ffmpegJpegQuality,
-                storageDirectory,
                 diagnosticLoggingEnabled,
                 purgeAutomatically,
                 purgeRetentionFrequency,
@@ -240,7 +232,6 @@ public final class CameraSettings {
             String ffmpegVideoSize,
             int ffmpegTimeoutMs,
             int ffmpegJpegQuality,
-            String storageDirectory,
             boolean diagnosticLoggingEnabled,
             boolean purgeAutomatically,
             int purgeRetentionFrequency,
@@ -276,10 +267,6 @@ public final class CameraSettings {
         this.ffmpegVideoSize = normalizeNullableText(ffmpegVideoSize);
         this.ffmpegTimeoutMs = requirePositive(ffmpegTimeoutMs, "ffmpegTimeoutMs");
         this.ffmpegJpegQuality = requirePositive(ffmpegJpegQuality, "ffmpegJpegQuality");
-        this.storageDirectory = requireTextOrDefault(
-                storageDirectory,
-                RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY,
-                "storageDirectory");
         this.diagnosticLoggingEnabled = diagnosticLoggingEnabled;
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
 
@@ -315,7 +302,6 @@ public final class CameraSettings {
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_VIDEO_SIZE,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY,
-                RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY,
                 false,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -340,7 +326,6 @@ public final class CameraSettings {
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_VIDEO_SIZE,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_TIMEOUT_MS,
                 RuntimeDefaults.DEFAULT_CAMERA_FFMPEG_JPEG_QUALITY,
-                RuntimeDefaults.DEFAULT_CAMERA_STORAGE_DIRECTORY,
                 false,
                 DEFAULT_PURGE_AUTOMATICALLY,
                 DEFAULT_PURGE_RETENTION_FREQUENCY,
@@ -437,10 +422,6 @@ public final class CameraSettings {
 
     public int ffmpegJpegQuality() {
         return ffmpegJpegQuality;
-    }
-
-    public String storageDirectory() {
-        return storageDirectory;
     }
 
     public boolean diagnosticLoggingEnabled() {

@@ -19,13 +19,13 @@
           "label": "spaghetti",
           "expectedResult": "spaghetti",
           "failureStage": "clear",
-          "snapshotDirectory": "snapshots/1",
+          "snapshotDirectory": "camera/snapshots/1",
           "snapshotCount": 20,
           "deltaSets": [
             {
               "datasetDeltaSetKey": "1",
               "deltaSnapshotStep": 1,
-              "deltaDirectory": "deltas/1/1",
+              "deltaDirectory": "camera/deltas/1/1",
               "deltaCount": 19
             }
           ]

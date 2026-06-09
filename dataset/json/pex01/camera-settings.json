@@ -1,8 +1,7 @@
 {
   "enabled": true,
   "sourceType": "snapshot-folder",
-  "sourceValue": "dataset/pex01",
-  "storageDirectory": "dataset/pex01",
+  "sourceValue": "dataset/pex01/camera",
   "captureIntervalSeconds": 5,
   "retentionSnapshotCount": 100,
   "analysisEnabled": true,

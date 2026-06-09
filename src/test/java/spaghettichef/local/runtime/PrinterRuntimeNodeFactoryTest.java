@@ -120,6 +120,34 @@ class PrinterRuntimeNodeFactoryTest {
     }
 
     @Test
+    void createAppendsPrinterIdToStorageBaseDirectory() {
+        PrinterRuntimeNode node = PrinterRuntimeNodeFactory.create(
+                "printer-1",
+                "Printer 1",
+                "SIM_PORT",
+                "sim",
+                "camera",
+                true
+        );
+
+        assertEquals("camera/printer-1", node.storageDirectory());
+    }
+
+    @Test
+    void createKeepsStorageDirectoryThatAlreadyEndsWithPrinterId() {
+        PrinterRuntimeNode node = PrinterRuntimeNodeFactory.create(
+                "printer-1",
+                "Printer 1",
+                "SIM_PORT",
+                "sim",
+                "camera/printer-1",
+                true
+        );
+
+        assertEquals("camera/printer-1", node.storageDirectory());
+    }
+
+    @Test
     void createFailsForInvalidMode() {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,

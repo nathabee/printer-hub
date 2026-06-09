@@ -9,7 +9,7 @@ BIN="${PROJECT_DIR}/target/debug/img-analyzer"
 PRINTER_ID="p1"
 CAMERA_JOB_ID="1"
 DELTA_SET_ID="1"
-CAMERA_ROOT="${REPO_ROOT}/camera"
+CAMERA_ROOT=""
 FROM_SEQUENCE="1"
 TO_SEQUENCE="2"
 FROM_SNAPSHOT=""
@@ -28,7 +28,7 @@ Options:
   --printer-id <id>       Printer id used for conventional camera paths. Default: p1
   --camera-job-id <id>    Camera job id used for conventional camera paths. Default: 1
   --delta-set-id <id>     Delta set id used for conventional camera paths. Default: 1
-  --camera-root <path>    Configured camera storage directory. Default: <repo>/camera
+  --camera-root <path>    Printer camera storage directory. Default: <repo>/data/printers/<printer-id>/camera
   --from-sequence <n>     Snapshot entry id for default from path. Default: 1
   --to-sequence <n>       Snapshot entry id for default to path. Default: 2
   --from-snapshot <path>  First snapshot image.
@@ -42,8 +42,8 @@ Options:
 
 Examples:
   ./scripts/analyze-sample.sh --printer-id p1 --camera-job-id 1 --from-sequence 2523 --to-sequence 2524
-  ./scripts/analyze-sample.sh --camera-root ../../camera --printer-id p1 --camera-job-id 1 --from-sequence 2523 --to-sequence 2524
-  ./scripts/analyze-sample.sh --from-snapshot ../../camera/p1/snapshots/1/002523_snapshot.jpg --to-snapshot ../../camera/p1/snapshots/1/002524_snapshot.jpg --no-delta-frame
+  ./scripts/analyze-sample.sh --camera-root ../../data/printers/p1/camera --printer-id p1 --camera-job-id 1 --from-sequence 2523 --to-sequence 2524
+  ./scripts/analyze-sample.sh --from-snapshot ../../data/printers/p1/camera/snapshots/1/002523_snapshot.jpg --to-snapshot ../../data/printers/p1/camera/snapshots/1/002524_snapshot.jpg --no-delta-frame
 USAGE
 }
 
@@ -61,8 +61,8 @@ require_file() {
   local path="$2"
   if [[ ! -f "${path}" ]]; then
     echo "Missing ${label}: ${path}" >&2
-    if [[ "${path}" == "${REPO_ROOT}/data/camera/"* ]]; then
-      echo "Expected SpaghettiChef camera data under: ${REPO_ROOT}/data/camera" >&2
+    if [[ "${path}" == "${REPO_ROOT}/data/printers/"* ]]; then
+      echo "Expected SpaghettiChef camera data under: ${REPO_ROOT}/data/printers/<printer-id>/camera" >&2
       echo "Capture snapshots first, or pass explicit paths to existing image files." >&2
     fi
     exit 2
@@ -135,16 +135,20 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "${CAMERA_ROOT}" ]]; then
+  CAMERA_ROOT="${REPO_ROOT}/data/printers/${PRINTER_ID}/camera"
+fi
+
 if [[ -z "${FROM_SNAPSHOT}" ]]; then
-  FROM_SNAPSHOT="${CAMERA_ROOT}/${PRINTER_ID}/snapshots/${CAMERA_JOB_ID}/$(printf '%06d' "${FROM_SEQUENCE}")_snapshot.jpg"
+  FROM_SNAPSHOT="${CAMERA_ROOT}/snapshots/${CAMERA_JOB_ID}/$(printf '%06d' "${FROM_SEQUENCE}")_snapshot.jpg"
 fi
 
 if [[ -z "${TO_SNAPSHOT}" ]]; then
-  TO_SNAPSHOT="${CAMERA_ROOT}/${PRINTER_ID}/snapshots/${CAMERA_JOB_ID}/$(printf '%06d' "${TO_SEQUENCE}")_snapshot.jpg"
+  TO_SNAPSHOT="${CAMERA_ROOT}/snapshots/${CAMERA_JOB_ID}/$(printf '%06d' "${TO_SEQUENCE}")_snapshot.jpg"
 fi
 
 if [[ -z "${DELTA_FRAME}" ]]; then
-  DEFAULT_DELTA="${CAMERA_ROOT}/${PRINTER_ID}/deltas/${CAMERA_JOB_ID}/${DELTA_SET_ID}/$(printf '%06d' "${FROM_SEQUENCE}")_$(printf '%06d' "${TO_SEQUENCE}")_delta.jpg"
+  DEFAULT_DELTA="${CAMERA_ROOT}/deltas/${CAMERA_JOB_ID}/${DELTA_SET_ID}/$(printf '%06d' "${FROM_SEQUENCE}")_$(printf '%06d' "${TO_SEQUENCE}")_delta.jpg"
   if [[ -f "${DEFAULT_DELTA}" ]]; then
     DELTA_FRAME="${DEFAULT_DELTA}"
   else

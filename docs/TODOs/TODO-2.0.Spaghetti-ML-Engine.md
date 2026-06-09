@@ -1,12 +1,12 @@
-## TODO 0.9.x — Spaghetti ML Engine
+## TODO 2.0.x — Spaghetti ML Engine
 
  
-The 0.9.x series focuses on machine-learning based detection, trained and validated against the datasets created during 0.7.x. 
+The 2.0.x series focuses on machine-learning based detection, trained and validated against the datasets created during 0.7.x. 
 
  
-# 0.9.x — Spaghetti ML Engine
+# 2.0.x — Spaghetti ML Engine
 
-## 0.9.0 — ML Dataset Preparation and First Model
+## 2.0.0 — ML Dataset Preparation and First Model
 
 ### Status
 
@@ -59,7 +59,7 @@ The final architecture should keep the backend independent from one specific ML 
 
 ---
 
-## 0.9.1 — ML Engine Integration
+## 2.0.1 — ML Engine Integration
 
 ### Status
 
@@ -100,7 +100,7 @@ Each inference result should be traceable:
 
 ---
 
-## 0.9.2 — ML Performance Baseline
+## 2.0.2 — ML Performance Baseline
 
 ### Status
 
@@ -139,7 +139,7 @@ Compare the ML engine against:
 
 ---
 
-## 0.9.3+ — ML Optimization Iterations
+## 2.0.3+ — ML Optimization Iterations
 
 ### Status
 

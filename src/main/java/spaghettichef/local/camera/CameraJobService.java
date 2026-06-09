@@ -56,11 +56,7 @@ public final class CameraJobService {
                 pendingSnapshotDirectory(settings.printerId()),
                 "Camera job created from camera capture"));
 
-        Path snapshotDirectory = CameraStoragePaths
-                .resolveBaseDirectory(settings.storageDirectory())
-                .resolve(safePathSegment(settings.printerId()))
-                .resolve("snapshots")
-                .resolve(Long.toString(created.requireId()));
+        Path snapshotDirectory = CameraStoragePaths.snapshotsDirectory(settings.printerId(), created.requireId());
 
         return cameraJobStore.updateSnapshotDirectory(
                 settings.printerId(),
@@ -97,11 +93,7 @@ public final class CameraJobService {
                 pendingSnapshotDirectory(settings.printerId()),
                 "Camera job started from dashboard"));
 
-        Path snapshotDirectory = CameraStoragePaths
-                .resolveBaseDirectory(settings.storageDirectory())
-                .resolve(safePathSegment(settings.printerId()))
-                .resolve("snapshots")
-                .resolve(Long.toString(created.requireId()));
+        Path snapshotDirectory = CameraStoragePaths.snapshotsDirectory(settings.printerId(), created.requireId());
 
         return cameraJobStore.updateSnapshotDirectory(
                 settings.printerId(),
