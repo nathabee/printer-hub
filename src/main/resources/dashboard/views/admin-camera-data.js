@@ -50,6 +50,7 @@ export function renderAdminCameraDataPage(
           ${renderPrinterOptions(printers, selectedPrinterId)}
         </select>
       </label>
+      ${renderStorageSyncPanel(selectedPrinterId, actionResult)}
     </section>
 
     <section class="two-column-grid">
@@ -159,6 +160,25 @@ function renderPrinterOptions(printers, selectedPrinterId) {
       ${escapeHtml(printer.displayName || printer.name || printer.id)}
     </option>
   `).join("");
+}
+
+function renderStorageSyncPanel(selectedPrinterId, actionResult) {
+  return `
+    <div class="action-row">
+      <button
+        type="button"
+        class="button-primary"
+        data-admin-camera-sync-storage
+        ${selectedPrinterId ? "" : "disabled"}
+      >Sync storage</button>
+      <span class="muted">Scan the selected printer camera storage and import missing snapshot or delta rows.</span>
+    </div>
+    ${isStorageSyncResult(actionResult) ? renderActionResult(actionResult) : ""}
+  `;
+}
+
+function isStorageSyncResult(result) {
+  return result && (result.operation === "camera-storage-sync" || result.storageRoot);
 }
 
 function renderJobTable(jobs) {

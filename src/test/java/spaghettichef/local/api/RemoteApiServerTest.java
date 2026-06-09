@@ -3520,8 +3520,34 @@ class RemoteApiServerTest {
                 .resolve(cameraJobId);
 
         waitForCameraSnapshotCount(snapshotsDirectory, expectedSnapshotCount);
+        waitForLatestCameraSnapshotAvailable(context, printerId);
 
         return cameraJobId;
+    }
+
+    private void waitForLatestCameraSnapshotAvailable(TestContext context, String printerId) throws Exception {
+        long deadline = System.currentTimeMillis() + 8_000L;
+        int statusCode = 0;
+        String responseBody = "";
+
+        while (System.currentTimeMillis() < deadline) {
+            HttpResponse<String> response = context.get("/printers/" + printerId + "/camera/snapshot");
+            statusCode = response.statusCode();
+            responseBody = response.body();
+
+            if (statusCode == 200) {
+                return;
+            }
+
+            Thread.sleep(100L);
+        }
+
+        fail("Timed out waiting for latest camera snapshot API for "
+                + printerId
+                + ". Last status: "
+                + statusCode
+                + ", last response: "
+                + responseBody);
     }
 
     private void waitForCameraSnapshotCount(Path snapshotsDirectory, long expectedSnapshotCount) throws Exception {
