@@ -57,6 +57,7 @@ import {
   setPrinterSdFileEnabled,
   setPrinterEnabled,
   startJob,
+  syncCameraStorage,
   updatePrinter,
   uploadPrintFile,
   getActiveCameraJob,
@@ -288,6 +289,32 @@ async function loadAdminCameraTimeline(jobId) {
     setAdminCameraActionResult({ message: `Loaded ${timeline.length} camera snapshot entries for ${jobId}.` });
   } catch (error) {
     setAdminCameraActionResult({ error: `Failed to load camera snapshot timeline: ${error.message}` });
+  }
+}
+
+async function handleAdminCameraSyncStorage() {
+  if (!state.adminCameraPrinterId) {
+    setAdminCameraActionResult({ error: "Select a printer before syncing camera storage." });
+    return;
+  }
+
+  try {
+    const result = await syncCameraStorage(state.adminCameraPrinterId, {
+      dryRun: false,
+      syncSnapshots: true,
+      syncDeltas: true,
+      deleteRowsForMissingFiles: true,
+      reactivateDeletedSnapshotRows: true,
+      createMissingCameraJobs: true,
+      createMissingDeltaSets: true
+    });
+    setAdminCameraActionResult({
+      operation: "camera-storage-sync",
+      ...result
+    });
+    await refreshCameraSnapshotJobs();
+  } catch (error) {
+    setAdminCameraActionResult({ error: `Failed to sync camera storage: ${error.message}` });
   }
 }
 
@@ -1264,6 +1291,13 @@ function bindGlobalListeners() {
     const adminCameraLoadJobButton = event.target.closest("[data-admin-camera-load-job]");
     if (adminCameraLoadJobButton) {
       await loadAdminCameraTimeline(adminCameraLoadJobButton.dataset.adminCameraLoadJob);
+      renderApp();
+      return;
+    }
+
+    const adminCameraSyncStorageButton = event.target.closest("[data-admin-camera-sync-storage]");
+    if (adminCameraSyncStorageButton) {
+      await handleAdminCameraSyncStorage();
       renderApp();
       return;
     }

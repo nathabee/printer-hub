@@ -465,6 +465,28 @@ export async function getCameraSnapshotJobs(printerId) {
   return Array.isArray(data.jobs) ? data.jobs : [];
 }
 
+export async function syncCameraStorage(printerId, options = {}) {
+  const body = {
+    layout: "runtime-camera-storage",
+    dryRun: options.dryRun === true,
+    syncSnapshots: options.syncSnapshots !== false,
+    syncDeltas: options.syncDeltas !== false,
+    deleteRowsForMissingFiles: options.deleteRowsForMissingFiles !== false,
+    reactivateDeletedSnapshotRows: options.reactivateDeletedSnapshotRows !== false,
+    createMissingCameraJobs: options.createMissingCameraJobs !== false,
+    createMissingDeltaSets: options.createMissingDeltaSets !== false,
+    requiredConfirmation: options.requiredConfirmation || "SYNC_CAMERA_DATASET"
+  };
+
+  return requestJson(`/admin/camera/storage/${encodeURIComponent(printerId)}/sync`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+}
+
 export async function getCameraSnapshotJobEntries(jobId, printerId) {
   const query = printerId ? `?printerId=${encodeURIComponent(printerId)}` : "";
   const data = await requestJson(`/admin/camera/snapshot/jobs/${encodeURIComponent(jobId)}${query}`);
